@@ -32,12 +32,17 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The shader storage buffers a pack declared with {@code bufferObject.N}, allocated on the Vulkan
- * device.
+ * The shader storage buffers a pack declared with {@code bufferObject.N}.
  * <p>
- * The Java buffer facade has no storage bit, so these go through VMA the way the custom images do:
- * a dummy {@code USAGE_UNIFORM} slice satisfies {@code setUniform}, and mixins swap the real
- * {@code VkBuffer} and {@code VK_DESCRIPTOR_TYPE_STORAGE_BUFFER} while pushing descriptors.
+ * Minecraft 26.2 has no storage-buffer usage bit. Vulkan therefore keeps the established VMA path:
+ * a dummy {@code USAGE_UNIFORM} slice satisfies {@code setUniform}, and Vulkan mixins swap the real
+ * {@code VkBuffer}, range and descriptor type while pushing descriptors. A backend implementing
+ * {@link StorageBufferBackend} instead creates a real backend-owned {@link GpuBuffer}; that buffer
+ * travels through the same public {@link RenderPass#setUniform} call, while the backend's compiled
+ * shader resource decides that the binding is storage rather than uniform.
+ * <p>
+ * No native handle crosses the second path. Allocation lifetime remains the backend buffer's own,
+ * while the shader-pack layer keeps only the size and declaration semantics it already owned.
  *
  * @see <a href="https://github.com/IrisShaders/Iris">Iris ShaderStorageBuffer, LGPL-3.0</a>
  */
@@ -47,9 +52,13 @@ public final class StorageBuffers implements AutoCloseable {
 
 	private final BufferObject.Reading declared;
 	private final List<Allocated> allocated = new ArrayList<>();
+	private final List<BackendAllocated> backendAllocated = new ArrayList<>();
 
-	/** Each allocation under the index the pack declared it at, rebuilt with {@link #allocated}. */
+	/** Each Vulkan allocation under the index the pack declared it at, rebuilt with {@link #allocated}. */
 	private Map<Integer, Bound> bindings = Map.of();
+
+	/** The backend-owned allocation under the same declared index. Only one allocation path is live. */
+	private Map<Integer, GpuBuffer> backendBindings = Map.of();
 	private GpuBuffer dummy;
 	private int lastWidth;
 	private int lastHeight;
@@ -68,8 +77,8 @@ public final class StorageBuffers implements AutoCloseable {
 	}
 
 	/**
-	 * The VMA buffer currently allocated for this GLSL name. Mixins look it up while pushing
-	 * descriptors.
+	 * The VMA buffer currently allocated for this GLSL name. Vulkan mixins look it up while pushing
+	 * descriptors. Backend-owned buffers never appear here.
 	 */
 	public static Bound bound(String name) {
 		return current.lookup(name);
@@ -84,6 +93,15 @@ public final class StorageBuffers implements AutoCloseable {
 		return index < 0 ? null : this.bindings.get(index);
 	}
 
+	private GpuBuffer backendBuffer(String name) {
+		if (this.backendBindings.isEmpty()) {
+			return null;
+		}
+
+		int index = CustomStorage.indexOf(name);
+		return index < 0 ? null : this.backendBindings.get(index);
+	}
+
 	private void rebind() {
 		Map<Integer, Bound> bound = new HashMap<>();
 		for (Allocated buffer : this.allocated) {
@@ -93,8 +111,17 @@ public final class StorageBuffers implements AutoCloseable {
 		this.bindings = Map.copyOf(bound);
 	}
 
+	private void rebindBackend() {
+		Map<Integer, GpuBuffer> bound = new HashMap<>();
+		for (BackendAllocated buffer : this.backendAllocated) {
+			bound.putIfAbsent(buffer.declared.index(), buffer.buffer);
+		}
+
+		this.backendBindings = Map.copyOf(bound);
+	}
+
 	/**
-	 * One bound buffer. {@code range} is the whole allocation: Complementary indexes
+	 * One Vulkan bound buffer. {@code range} is the whole allocation: Complementary indexes
 	 * {@code blockDataSSBO.data[face]} across hundreds of megabytes, and a 16-byte dummy would OOB.
 	 */
 	public record Bound(long buffer, long range) {
@@ -115,16 +142,39 @@ public final class StorageBuffers implements AutoCloseable {
 			return;
 		}
 
-		boolean first = this.allocated.isEmpty();
+		GpuDevice device = RenderSystem.tryGetDevice();
+		if (device == null) {
+			return;
+		}
+		GpuDeviceBackend deviceBackend = ((GpuDeviceAccessor) device).vitrail$backend();
+		boolean first = this.allocated.isEmpty() && this.backendAllocated.isEmpty();
 		boolean resized = screenWidth != this.lastWidth || screenHeight != this.lastHeight;
 		if (!first && !resized) {
 			return;
 		}
 
-		VulkanDevice vulkan = vulkan();
-		GpuDevice device = RenderSystem.tryGetDevice();
-		if (vulkan == null || device == null) {
+		if (deviceBackend instanceof StorageBufferBackend storageBackend) {
+			if (!this.allocated.isEmpty()) {
+				throw new IllegalStateException("The storage-buffer backend changed after Vulkan allocations were created");
+			}
+
+			// The backend owns native allocation details and returns each buffer already initialized
+			// to zero, so there is no dummy UBO and no Vulkan transfer command on this road.
+			try {
+				allocateBackend(storageBackend, first, resized, screenWidth, screenHeight);
+			} finally {
+				rebindBackend();
+			}
+			this.lastWidth = screenWidth;
+			this.lastHeight = screenHeight;
 			return;
+		}
+
+		if (!(deviceBackend instanceof VulkanDevice vulkan)) {
+			return;
+		}
+		if (!this.backendAllocated.isEmpty()) {
+			throw new IllegalStateException("The storage-buffer backend changed after backend allocations were created");
 		}
 
 		ensurePlaceholder(device);
@@ -140,6 +190,48 @@ public final class StorageBuffers implements AutoCloseable {
 		this.lastWidth = screenWidth;
 		this.lastHeight = screenHeight;
 		zero(device);
+	}
+
+	private void allocateBackend(StorageBufferBackend backend, boolean first, boolean resized,
+			int screenWidth, int screenHeight) {
+		if (first) {
+			for (BufferObject buffer : this.declared.buffers()) {
+				if (buffer.relative()) {
+					continue;
+				}
+
+				long bytes = aligned(buffer.size());
+				this.backendAllocated.add(BackendAllocated.create(backend, buffer, bytes));
+				Vitrail.logger().info("storage buffer {} through the active GPU backend", buffer.describe());
+			}
+		}
+
+		if (first || resized) {
+			List<BackendAllocated> kept = new ArrayList<>();
+			for (BackendAllocated buffer : this.backendAllocated) {
+				if (buffer.relative) {
+					buffer.close();
+				} else {
+					kept.add(buffer);
+				}
+			}
+
+			this.backendAllocated.clear();
+			this.backendAllocated.addAll(kept);
+			for (BufferObject buffer : this.declared.buffers()) {
+				if (!buffer.relative()) {
+					continue;
+				}
+
+				long bytes = aligned((long) (screenWidth * buffer.scaleX())
+						* (long) (screenHeight * buffer.scaleY())
+						* buffer.size());
+				bytes = Math.max(bytes, 4L);
+				this.backendAllocated.add(BackendAllocated.create(backend, buffer, bytes));
+				Vitrail.logger().info("storage buffer {} at {} bytes through the active GPU backend",
+						buffer.describe(), bytes);
+			}
+		}
 	}
 
 	private void allocate(VulkanDevice vulkan, boolean first, boolean resized, int screenWidth,
@@ -189,21 +281,25 @@ public final class StorageBuffers implements AutoCloseable {
 	}
 
 	/**
-	 * Binds a dummy uniform slice for every storage-buffer name this program's layout carries.
-	 * Mixins replace the {@code VkBuffer} and the range while the descriptors are pushed.
+	 * Binds every storage-buffer name this program's layout carries.
+	 * <p>
+	 * A backend-owned allocation is itself handed to {@link RenderPass#setUniform}; the backend's
+	 * compiled resource kind makes that buffer a storage binding. Vulkan keeps its historical dummy
+	 * uniform slice, which the descriptor mixins replace with the real VMA buffer and full range.
 	 */
 	public static void bind(RenderPass pass, List<String> names) {
 		if (names.isEmpty()) {
 			return;
 		}
 
-		GpuBufferSlice slice = current.placeholder();
-		if (slice == null) {
-			return;
-		}
-
+		GpuBufferSlice placeholder = current.placeholder();
 		for (String name : names) {
-			pass.setUniform(name, slice);
+			GpuBuffer backend = current.backendBuffer(name);
+			if (backend != null) {
+				pass.setUniform(name, backend);
+			} else if (placeholder != null) {
+				pass.setUniform(name, placeholder);
+			}
 		}
 	}
 
@@ -212,7 +308,7 @@ public final class StorageBuffers implements AutoCloseable {
 	}
 
 	/**
-	 * Zeros every buffer {@link #ensure} has just made, whole and in one fill.
+	 * Zeros every Vulkan buffer {@link #ensure} has just made, whole and in one fill.
 	 * <p>
 	 * <strong>A pack reads a cell it never wrote and expects zero.</strong> Complementary indexes
 	 * {@code blockDataSSBO.data[]} by face rather than by voxel, and its reader tests the cell it
@@ -231,7 +327,8 @@ public final class StorageBuffers implements AutoCloseable {
 	 * a relative one ({@code :64}), and never again. The same holds here: this runs at the tail of
 	 * {@link #ensure}, which makes the absolute buffers once per pack load and the relative ones
 	 * again on every resize, and the fill goes on the command buffer there, ahead of everything the
-	 * frame that made them goes on to draw.
+	 * frame that made them goes on to draw. Backend-owned buffers make the same zero-at-birth promise
+	 * in {@link StorageBufferBackend#vitrail$createStorageBuffer} and never enter this Vulkan method.
 	 * <p>
 	 * <strong>It is one fill and not a spread of them.</strong> The pack's shadow vertex stage
 	 * stores into the buffer from the first frame the world is drawn
@@ -288,9 +385,12 @@ public final class StorageBuffers implements AutoCloseable {
 		if (vulkan != null) {
 			this.allocated.forEach(buffer -> buffer.destroy(vulkan));
 		}
+		this.backendAllocated.forEach(BackendAllocated::close);
 
 		this.allocated.clear();
+		this.backendAllocated.clear();
 		this.bindings = Map.of();
+		this.backendBindings = Map.of();
 		if (this.dummy != null) {
 			this.dummy.close();
 			this.dummy = null;
@@ -308,6 +408,36 @@ public final class StorageBuffers implements AutoCloseable {
 
 		GpuDeviceBackend backend = ((GpuDeviceAccessor) device).vitrail$backend();
 		return backend instanceof VulkanDevice vulkan ? vulkan : null;
+	}
+
+	private static final class BackendAllocated {
+
+		private final BufferObject declared;
+		private final boolean relative;
+		private final long bytes;
+		private final GpuBuffer buffer;
+
+		private BackendAllocated(BufferObject declared, long bytes, GpuBuffer buffer) {
+			this.declared = declared;
+			this.relative = declared.relative();
+			this.bytes = bytes;
+			this.buffer = buffer;
+		}
+
+		private static BackendAllocated create(StorageBufferBackend backend, BufferObject declared,
+				long bytes) {
+			GpuBuffer buffer = backend.vitrail$createStorageBuffer(bytes);
+			if (buffer.size() < bytes) {
+				buffer.close();
+				throw new IllegalStateException("Storage backend returned " + buffer.size()
+						+ " bytes for a " + bytes + " byte storage buffer");
+			}
+			return new BackendAllocated(declared, bytes, buffer);
+		}
+
+		private void close() {
+			this.buffer.close();
+		}
 	}
 
 	private static final class Allocated {
