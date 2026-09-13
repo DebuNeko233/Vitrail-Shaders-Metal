@@ -84,6 +84,16 @@ public final class StorageBuffers implements AutoCloseable {
 		return current.lookup(name);
 	}
 
+	/**
+	 * The backend-owned Minecraft buffer slice for this GLSL name, or null when the active storage
+	 * allocation is the direct Vulkan/VMA path. Compute backends use this facade rather than a
+	 * native buffer handle, preserving the same ownership boundary as render-pass binding.
+	 */
+	public static GpuBufferSlice facadeSlice(String name) {
+		GpuBuffer buffer = current.backendBuffer(name);
+		return buffer == null ? null : buffer.slice();
+	}
+
 	private Bound lookup(String name) {
 		if (this.bindings.isEmpty()) {
 			return null;
