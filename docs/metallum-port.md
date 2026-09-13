@@ -28,13 +28,14 @@ The current backend foundation includes:
 - selective compiled-pipeline eviction with deferred native release;
 - backend-owned zero-initialized shader-storage buffers;
 - backend-owned writable 1D, 2D and true-3D textures;
+- an optional bridge that creates an otherwise ordinary Minecraft texture with Metal `ShaderWrite` usage for writable colour targets;
 - raw SPIR-V storage-buffer and storage-image reflection;
 - storage-texture zero clear and exact region-copy primitives;
 - a general shader-pack compute bridge that compiles SPIR-V to MSL, owns `MTLComputePipelineState`, binds Minecraft facade resources by reflected name/binding, and dispatches exact workgroup counts.
 
 This remains backend GPU behaviour. Shader-pack target selection, ping-pong/history, custom-image policy, camera reanchor policy, program scheduling and resource naming remain Vitrail responsibilities.
 
-The current Metallum compute-foundation head is `eb0b9e1d52a49158f4f6565d09aed3d5e993ba9e`. GitHub Actions merge workflow `34765312322` completed successfully. This is compile validation only; Apple-Silicon runtime validation is still outstanding.
+The current Metallum writable-target head is `81295f043f9f8dd3d13f349c14b6189daa625082`. GitHub Actions merge workflow `34768563289` completed successfully. This is compile validation only; Apple-Silicon runtime validation is still outstanding.
 
 ## Vitrail backend-neutralization
 
@@ -46,7 +47,7 @@ Sodium 0.9.2 calls `pass.setPipeline(...)` before `DrawContext#setContext(...)`.
 
 ### Optional Metal capability providers
 
-Optional `@Pseudo` mixins bridge package-private Metallum classes without putting Metallum on Vitrail's common compile classpath. Current providers cover independent blending, mipmap generation, selective pipeline eviction, shader-storage-buffer allocation, writable storage-image allocation, storage-image clear/copy commands, and compute pipeline/dispatch.
+Optional `@Pseudo` mixins bridge package-private Metallum classes without putting Metallum on Vitrail's common compile classpath. Current providers cover independent blending, mipmap generation, selective pipeline eviction, shader-storage-buffer allocation, writable storage-image allocation, ordinary shader-writable texture allocation, storage-image clear/copy commands, and compute pipeline/dispatch.
 
 Missing capabilities remain explicit narrow interfaces rather than backend-name guesses.
 
@@ -61,6 +62,14 @@ For backend-neutral compute:
 - `CustomImages.storage(name)` decides whether a custom-image name is the writable image uniform rather than a sampled alias. That answer comes from the pack declaration, not from whether a Vulkan-native handle exists.
 
 No `VkBuffer`, `VkImageView`, `MTLBuffer`, `MTLTexture` or backend argument index crosses these facade paths.
+
+### Shader-writable colour targets
+
+A compute can write a normal pack colour target through `colorimgN`, so the target has to be created with writable-image usage before any dispatch can safely use it. Minecraft 26.2 has no public storage-image usage bit.
+
+`TargetSurface` continues to decide whether a target is compute-writable. It unwraps the `GpuDeviceBackend` through the existing `GpuDeviceAccessor` and, when the backend implements `ShaderWritableTextureBackend`, asks for the same ordinary target texture with the one missing allocation fact added. The result remains a normal `GpuTexture`, including the existing render-attachment, sampled, copy and mip-chain semantics.
+
+Vulkan remains unchanged: when no explicit capability is present, `TargetSurface` still raises `TextureUsage` around the ordinary `GpuDevice.createTexture(...)` call and `VulkanConstMixin` adds `VK_IMAGE_USAGE_STORAGE_BIT`. Metallum instead uses its optional `MetalTextureBridge`, which selects the already-existing `MetalGpuTexture(..., shaderWrite=true)` path and therefore adds `MTLTextureUsageShaderWrite` without teaching Metallum any `colorimgN` naming or pack policy.
 
 ### Backend-neutral compute seam
 
@@ -80,7 +89,7 @@ Metallum remains responsible for SPIR-V-to-MSL translation, resource binding ind
 
 ### Caller-side compute split
 
-The caller-side migration is now split into three backend-neutral pieces before `PackCompute` itself is routed:
+The caller-side migration is split into three backend-neutral pieces before `PackCompute` itself is routed:
 
 1. `ComputeResources` reflects only the resource names actually present in an already-compiled SPIR-V module. It inventories uniform buffers, storage buffers, sampled images and storage images without rewriting any binding decoration or creating a native object.
 2. `PackComputeBindings` resolves those names to Minecraft facade resources. It preserves the existing Vulkan policy order: custom-image resources and pack texture overrides first, then the selected ping-pong colour target, pass depth/distant/centre depth, engine textures, the stage default target and finally the existing black fallback.
@@ -110,13 +119,13 @@ Both repositories remain Draft and unmerged.
 
 ### Metallum
 
-Head `eb0b9e1d52a49158f4f6565d09aed3d5e993ba9e` passed merge workflow `34765312322`.
+Writable ordinary texture bridge head `81295f043f9f8dd3d13f349c14b6189daa625082` passed merge workflow `34768563289`. The earlier general compute bridge was already compile-validated before it.
 
 ### Vitrail
 
-Before the caller-side helpers, compute capability/provider head `9ecf5e3bb020b1a30960e6856a2dee25b8ae4a1c` passed build `34765441999` and commit-policy `34765441998`; later documentation head `7382b5c99766a2b63da4fbc078b75315775b81f8` also passed both gates.
+The caller-side helper baseline `3b53b58086f5db42c526070a30216515917abead` passed both repository gates. Writable-target capability head `a39a54f36eb0a44fdb9b2075c708759673f0c6d0` then passed commit-policy `34768637464` and full build `34768637511`.
 
-Caller-helper head `31183c792c537f973b4e23392dbd1b51e2207cb3` passed commit policy but build `34766668269` reached Java compilation and exposed one checked-exception mismatch: Minecraft 26.2's `IntermediaryShaderModule.createFromSpirv(...)` declares `ShaderCompileException`, while the new backend pass initially caught only `RuntimeException`. Commit `15a6d7c626a1a2e28508685a8426dd3333edf3b2` now catches the reflection/compile failure under the same `Exception` boundary as the established Vulkan path. The new head is not called compile-validated until its current build completes successfully.
+The actual `PackCompute` dispatch routing is still pending and is not claimed by these green builds.
 
 ## Runtime validation required before merge
 
@@ -132,8 +141,9 @@ Before either Draft PR becomes ready, the combined path still needs at least:
 8. writable storage-image zero/write/read using a true 3D texture;
 9. sampled alias of the same storage-image resource reading the expected contents;
 10. scratch-based storage-volume camera reanchor;
-11. shader-pack compute writing storage resources and a later render/compute stage consuming them after `PackCompute` is routed through the new backend seam;
-12. Vulkan regression coverage for every shared path touched by backend-neutralization.
+11. `colorimgN` compute write proving its ordinary render target was created with Metal shader-write usage;
+12. shader-pack compute writing storage resources and a later render/compute stage consuming them after `PackCompute` is routed through the new backend seam;
+13. Vulkan regression coverage for every shared path touched by backend-neutralization.
 
 A green Gradle build is necessary but is not evidence that these rendering semantics are correct.
 
@@ -141,7 +151,6 @@ A green Gradle build is necessary but is not evidence that these rendering seman
 
 Immediate work is:
 
-- complete the build gate for the compute caller helpers;
 - route `PackCompute` to `BackendComputePass` only when both `ComputeDeviceBackend` and `ComputeCommands` are present;
 - leave the existing Vulkan branch and its barriers/descriptors unchanged;
 - close backend passes through their backend-owned lifetime while retaining the existing Vulkan deferred destruction;
