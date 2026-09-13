@@ -42,7 +42,8 @@ final class BackendComputePass implements AutoCloseable {
 	private static final int SHADERC_VULKAN_1_2 = 4202496;
 	private static final int SHADERC_COMPUTE = 2;
 	private static final String MODULE_CACHE_STAGE = "COMPUTE/shaderc-opt2-vulkan1.2";
-	private static final Pattern LOCAL_SIZE = Pattern.compile("\\blocal_size_([xyz])\\s*=\\s*(\\d+)\\b");
+	private static final Pattern LOCAL_AXIS = Pattern.compile("\\blocal_size_([xyz])\\s*=\\s*");
+	private static final Pattern LOCAL_LITERAL = Pattern.compile("\\d+");
 
 	private final PackProgram.Compute compute;
 	private final PackUniforms uniforms;
@@ -126,9 +127,12 @@ final class BackendComputePass implements AutoCloseable {
 		if (SharedMemory.mentioned(source)) {
 			SharedMemory.Reading shared = SharedMemory.read(preprocessed);
 			if (shared.unread() != null) {
-				Vitrail.logger().warn("compute {} declares shared memory this engine cannot size on "
-						+ "native Metal: {}", this.path, shared.unread());
-			} else if (shared.over()) {
+				Vitrail.logger().warn("compute {} is not dispatched on native Metal: its shared "
+						+ "declaration cannot be sized reliably: {}", this.path, shared.unread());
+				this.localSize = null;
+				return;
+			}
+			if (shared.over()) {
 				Vitrail.logger().warn("compute {} is not dispatched on native Metal: it asks for {} "
 						+ "bytes of threadgroup memory, past the verified {} byte limit; the MoltenVK "
 						+ "single-workgroup storage-buffer rewrite is intentionally not reused here",
@@ -288,14 +292,26 @@ final class BackendComputePass implements AutoCloseable {
 
 	private record LocalSize(int x, int y, int z) {
 		private static LocalSize read(String source, String path) {
-			int x = -1;
-			int y = 1;
-			int z = 1;
-			Matcher matcher = LOCAL_SIZE.matcher(source);
+			int[] local = { -1, 1, 1 };
+			boolean[] mentioned = { false, false, false };
+			Matcher matcher = LOCAL_AXIS.matcher(source);
 			while (matcher.find()) {
+				int axis = switch (matcher.group(1)) {
+					case "x" -> 0;
+					case "y" -> 1;
+					case "z" -> 2;
+					default -> throw new IllegalStateException("Unexpected local-size axis");
+				};
+				mentioned[axis] = true;
+				String argument = argumentAt(source, matcher.end());
+				if (!LOCAL_LITERAL.matcher(argument).matches()) {
+					throw new IllegalStateException("Compute " + path + " writes local_size_"
+							+ matcher.group(1) + " as an unreadable expression after preprocessing: "
+							+ argument);
+				}
 				int value;
 				try {
-					value = Integer.parseInt(matcher.group(2));
+					value = Integer.parseInt(argument);
 				} catch (NumberFormatException e) {
 					throw new IllegalStateException("Compute " + path + " local size is too wide", e);
 				}
@@ -303,18 +319,28 @@ final class BackendComputePass implements AutoCloseable {
 					throw new IllegalStateException("Compute " + path + " local_size_"
 							+ matcher.group(1) + " must be positive");
 				}
-				switch (matcher.group(1)) {
-					case "x" -> x = value;
-					case "y" -> y = value;
-					case "z" -> z = value;
-					default -> throw new IllegalStateException("Unexpected local-size axis");
-				}
+				local[axis] = value;
 			}
-			if (x <= 0) {
+			if (!mentioned[0] || local[0] <= 0) {
 				throw new IllegalStateException("Compute " + path
 						+ " has no readable local_size_x after preprocessing");
 			}
-			return new LocalSize(x, y, z);
+			return new LocalSize(local[0], local[1], local[2]);
+		}
+
+		private static String argumentAt(String source, int from) {
+			int depth = 0;
+			for (int at = from; at < source.length(); at++) {
+				char letter = source.charAt(at);
+				if (letter == '(') {
+					depth++;
+				} else if (letter == ')' && depth > 0) {
+					depth--;
+				} else if (letter == ')' || (letter == ',' && depth == 0)) {
+					return source.substring(from, at).trim();
+				}
+			}
+			return source.substring(from).trim();
 		}
 	}
 }
