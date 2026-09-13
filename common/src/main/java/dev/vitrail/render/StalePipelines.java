@@ -1,6 +1,11 @@
 package dev.vitrail.render;
 
+import dev.vitrail.mixin.access.RenderPipelineAccessor;
+
 import com.mojang.blaze3d.pipeline.RenderPipeline;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import org.jspecify.annotations.Nullable;
 
 import java.util.List;
 import java.util.function.Predicate;
@@ -24,4 +29,26 @@ public interface StalePipelines {
 	 * precompile replacements against the state now in force.
 	 */
 	List<RenderPipeline> vitrail$dropPipelines(Predicate<RenderPipeline> predicate);
+
+	/**
+	 * Vitrail policy for the current live mesh transition: drop the game's entity pipelines, read
+	 * from their declared formats rather than the getter that Vitrail itself rewrites while the
+	 * wider mesh is active. Backends receive only the predicate and remain unaware of entity rules.
+	 */
+	default List<RenderPipeline> vitrail$dropEntityPipelines() {
+		return vitrail$dropPipelines(StalePipelines::vitrail$declaresGameEntity);
+	}
+
+	private static boolean vitrail$declaresGameEntity(RenderPipeline pipeline) {
+		@Nullable VertexFormat[] declared = ((RenderPipelineAccessor) pipeline).vitrail$declaredFormats();
+		for (VertexFormat format : declared) {
+			@SuppressWarnings("ReferenceEquality")
+			boolean entity = format == DefaultVertexFormat.ENTITY;
+			if (entity) {
+				return true;
+			}
+		}
+
+		return false;
+	}
 }
