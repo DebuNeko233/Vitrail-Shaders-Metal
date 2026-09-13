@@ -6,6 +6,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 ADAPTER = ROOT / 'common/src/main/java/dev/vitrail/render/MetallumStatus.java'
+PACK_SCREENS = ROOT / 'common/src/main/java/dev/vitrail/screen/PackScreens.java'
+BACKEND_PLACEHOLDER = ROOT / 'common/src/main/java/dev/vitrail/screen/BackendPlaceholder.java'
 
 BUFFER_BLENDING = '''package dev.vitrail.render;
 public final class BufferBlending {
@@ -135,6 +137,21 @@ class MetallumStatusTest(unittest.TestCase):
 
     def test_preference_capability_and_explicit_smoke_gate_are_all_required(self):
         self.run_fixture('preference-on')
+
+    def test_metal_blocked_ui_does_not_reuse_opengl_switch_prompt(self):
+        routing = PACK_SCREENS.read_text(encoding='utf-8')
+        placeholder = BACKEND_PLACEHOLDER.read_text(encoding='utf-8')
+
+        self.assertIn('METAL.equals(HostReport.backend())', routing)
+        self.assertIn('BackendPlaceholder.metalValidation(parent)', routing)
+        self.assertIn('MetallumStatus.SMOKE_PROPERTY', placeholder)
+        self.assertIn('HostReport.metalCandidate()', placeholder)
+        self.assertIn('Vitrail will not change your Graphics API here', placeholder)
+
+        branch = placeholder.split('if (this.metalValidation) {', 1)[1].split('\n\t\t}', 1)[0]
+        self.assertIn('ScreenText.BACKEND_RETURN', branch)
+        self.assertIn('return;', branch)
+        self.assertNotIn('switchToVulkan', branch)
 
     def test_malformed_api_shape_fails_closed(self):
         self.run_fixture('shape')
