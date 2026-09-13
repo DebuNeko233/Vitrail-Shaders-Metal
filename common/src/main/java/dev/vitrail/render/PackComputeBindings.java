@@ -140,7 +140,7 @@ final class PackComputeBindings {
 			return new Sampled(read, samplerFor(targets, samplers, name));
 		}
 
-		GpuTextureView engine = PackCompute.engineViewForBackend(targets, name);
+		GpuTextureView engine = engineView(targets, name);
 		if (engine != null) {
 			return new Sampled(engine, samplerFor(targets, samplers, name));
 		}
@@ -180,6 +180,24 @@ final class PackComputeBindings {
 
 		boolean mipmaps = surface.chainWritten() && targets.lodReads(program).contains(target);
 		return new Sampled(surface.view(), PackPass.sampler(false, targets.filter(target), mipmaps));
+	}
+
+	private static GpuTextureView engineView(ColorTargets targets, String name) {
+		ShadowTargets shadow = targets.shadow();
+		return switch (name) {
+			case "noisetex" -> targets.noise();
+			case "shadowtex0", "shadowtex0HW" ->
+					orWhite(targets, shadow == null ? null : shadow.depth());
+			case "shadowtex1", "shadowtex1HW" ->
+					orWhite(targets, shadow == null ? null : shadow.depthWithoutTranslucents());
+			default -> SamplerPlan.isShadowColour(name)
+					? orWhite(targets, shadow == null ? null : shadow.colour(SamplerPlan.shadowColour(name)))
+					: null;
+		};
+	}
+
+	private static GpuTextureView orWhite(ColorTargets targets, GpuTextureView view) {
+		return view == null ? targets.white() : view;
 	}
 
 	private static GpuSampler samplerFor(ColorTargets targets, SamplerPlan samplers, String name) {
