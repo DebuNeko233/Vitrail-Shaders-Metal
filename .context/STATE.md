@@ -15,8 +15,10 @@ The active work is making Vitrail's backend-specific seams usable with Metallum/
 - `StorageImages` now uses the backend-neutral storage-image seam when the active backend provides it. Vulkan keeps its direct VMA/native-descriptor path; Metal carries backend-owned `GpuTexture`/`GpuTextureView` objects through the Minecraft facade.
 - Storage-image policy remains in one Vitrail implementation: clear-at-birth selection, per-shadow-stage clears, relative resize, movable-volume detection, scratch allocation, and camera reanchor decisions are not duplicated in Metallum.
 - The common `RenderPass.bindTexture` seam substitutes a backend-owned storage-image view only for names held by `StorageImages`; the original backend call and existing particle tail hook still run.
-- Metallum companion code now reflects storage images, binds a storage resource as a texture without sampler state, creates writable 1D/2D/3D Metal textures, clears them with typed compute kernels, and copies exact regions with its blit encoder. Backend build head `881c4337426fe2dd88b08bcad2d029a00bfa3d71` passed GitHub Actions run `34761479404`.
-- Vitrail head `0592b2b0097f5deeeca1250de4cbbc37701dc579` fixes the LWJGL `VkDependencyInfo` single-struct allocation error exposed by build run #33. Build/commit workflows for run #34 are pending at this checkpoint.
+- Storage-image birth preparation now commits each allocation's `laidOut` state only after the backend preparation path succeeds. If preparation throws, the whole allocated set is destroyed through the active backend's safe lifetime path, bindings are cleared, and the next attempt must allocate from scratch. This landed at `8b30e6f9788aca8c04b439e91f62b253df02f1d6`.
+- Metallum companion code reflects storage images, binds a storage resource as a texture without sampler state, creates writable 1D/2D/3D Metal textures, clears them with typed compute kernels, and copies exact regions with its blit encoder. Backend build head `881c4337426fe2dd88b08bcad2d029a00bfa3d71` passed GitHub Actions run `34761479404`.
+- Metallum commit `f9bc3aee46e1491536ce0601a15d354e0c4e4cce` wires `MTLStorageTexturePipelines.close()` into `MetalDevice.close()` so the storage-zero compute pipeline cache cannot outlive device teardown; its CI is pending at this checkpoint.
+- Vitrail commit `0592b2b0097f5deeeca1250de4cbbc37701dc579` fixes the LWJGL `VkDependencyInfo` single-struct allocation error exposed by build run #33. The final storage-image lifecycle head has not yet completed a green full build at this checkpoint.
 - Vitrail's custom shader-pack `ComputeShader` path is still Vulkan-specific: it accepts `VulkanDevice`, builds `VulkanBindGroupLayout.Entry` objects, and creates a Vulkan shader module. Storage-image resource plumbing therefore does not yet mean shader-pack compute programs can execute on Metal.
 - Metal is not a fully supported shader-pack backend yet. Startup/backend guards remain conservative.
 - Companion backend work lives in `DebuNeko233/metallum`, branch `feat/mc26.2-mrt-foundation`, draft PR #1. Treat that repository/PR as external evidence and re-check it before relying on its current state.
@@ -27,7 +29,7 @@ The active work is making Vitrail's backend-specific seams usable with Metallum/
 - Metal depth/stencil mipmap handling is still incomplete; the safe base-level fallback must remain until a correct path is implemented and validated.
 - Shader-pack compute compilation/dispatch is still Vulkan-specific and is now the next hard backend boundary exposed by the storage-image work.
 - Geometry-stage handling and remaining synchronization/startup boundaries are still part of the active migration.
-- Metallum's storage-zero compute pipeline cache has an explicit `close()` and still needs to be wired into device teardown before this slice is considered lifecycle-complete.
+- Final compile gates for the current Vitrail storage-image lifecycle head and the Metallum teardown head must complete successfully before those slices are called compile-validated.
 
 ## Repository evidence to verify first
 
