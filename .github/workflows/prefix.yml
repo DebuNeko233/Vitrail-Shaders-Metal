@@ -29,7 +29,7 @@ permissions:
 
 jobs:
   prefix:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
       - name: Take both long-lived branches
         uses: actions/checkout@v4
