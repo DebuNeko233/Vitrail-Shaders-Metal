@@ -43,6 +43,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Verify Apple Silicon runner
+        run: |
+          sw_vers
+          uname -a
+          test "$(uname -m)" = "arm64"
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
