@@ -1,5 +1,6 @@
 package dev.vitrail;
 
+import dev.vitrail.render.MetallumStatus;
 
 import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -39,13 +40,11 @@ import java.util.List;
  */
 public final class HostReport {
 
-	/**
-	 * The word {@code DeviceInfo.backendName()} holds on the backend this mod is written for, which
-	 * each backend passes in itself: {@code VulkanDevice} passes this one and {@code GlHeuristics}
-	 * passes {@code OpenGL}. Compared rather than matched against a list, so a backend nobody here
-	 * has heard of is treated as one this mod was not written for, which is what it would be.
-	 */
+	/** The backend name reported by Minecraft's Vulkan device. */
 	private static final String VULKAN = "Vulkan";
+
+	/** The backend name reported by Metallum's Metal device. */
+	private static final String METAL = "Metal";
 
 	/**
 	 * Answered where the device is not up yet, which at client setup cannot happen: the game builds
@@ -129,15 +128,29 @@ public final class HostReport {
 	}
 
 	/**
-	 * Whether the game is known to have come up on a backend this mod was not written for. No both
-	 * on Vulkan and before the device exists, {@link #UNKNOWN} being a word rather than a backend:
-	 * what answers yes here is refused a picture, and a backend nobody can name is not one to refuse
-	 * it over.
+	 * Whether this session is a valid Metal smoke-test candidate before the final developer opt-in.
+	 * The backend must actually be Metal, Metallum's versioned API must match and report Prefer Metal,
+	 * and Vitrail's Metal capability provider must already have published after device creation.
+	 */
+	public static boolean metalCandidate() {
+		return METAL.equals(backend())
+				&& MetallumStatus.compatibleAndPreferred()
+				&& dev.vitrail.render.BufferBlending.served();
+	}
+
+	/**
+	 * Whether the game is known to have come up on a backend this mod will not draw a pack on.
+	 * Vulkan is the production path. Metal remains validation-only: it is accepted here only when
+	 * the compatible Metallum preference/device checks pass and the explicit developer smoke switch
+	 * is enabled. Unknown is not refused because the device may simply not exist yet.
 	 */
 	public static boolean otherBackend() {
 		String backend = backend();
+		if (UNKNOWN.equals(backend) || VULKAN.equals(backend)) {
+			return false;
+		}
 
-		return !UNKNOWN.equals(backend) && !VULKAN.equals(backend);
+		return !METAL.equals(backend) || !MetallumStatus.renderingEnabled();
 	}
 
 	/**
@@ -225,6 +238,17 @@ public final class HostReport {
 					+ "(Experimental)\" under Options, Video Settings, and restart to draw them with {} "
 					+ "instead", backend(), Vitrail.MOD_NAME, Vitrail.MOD_NAME);
 
+			return;
+		}
+
+		if (metalCandidate() && !MetallumStatus.smokeEnabled()) {
+			Vitrail.logger().warn("This game is running Metal through compatible Metallum API v{} and "
+					+ "Prefer Metal is selected, but {} keeps the Metal shader-pack path disabled by "
+					+ "default until the Apple-Silicon runtime acceptance matrix is complete. For a "
+					+ "developer smoke run only, launch with -D{}=true; this flag is not a support "
+					+ "guarantee and is intentionally not persisted in game settings",
+					MetallumStatus.SUPPORTED_API_VERSION, Vitrail.MOD_NAME,
+					MetallumStatus.SMOKE_PROPERTY);
 			return;
 		}
 
