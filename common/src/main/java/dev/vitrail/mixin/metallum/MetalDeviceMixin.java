@@ -1,6 +1,7 @@
 package dev.vitrail.mixin.metallum;
 
 import dev.vitrail.render.StalePipelines;
+import dev.vitrail.render.compute.ComputeDeviceBackend;
 import dev.vitrail.render.storage.StorageBufferBackend;
 import dev.vitrail.render.storage.StorageImageBackend;
 
@@ -12,6 +13,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.Shadow;
 
+import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.function.Predicate;
 
@@ -22,13 +24,13 @@ import java.util.function.Predicate;
  * Selective pipeline eviction keeps native lifetime inside Metallum: a matching cache entry leaves
  * the map immediately while its compiled Metal object waits for the next full cache clear and the
  * GPU-completion wait guarding that release point. Storage resources likewise cross the seam only
- * through Minecraft's {@link GpuBuffer}/{@link GpuTexture} facades; no MTL handle, descriptor, or
- * Metal argument index is exposed to Vitrail.
+ * through Minecraft's {@link GpuBuffer}/{@link GpuTexture} facades; compute pipelines cross as
+ * opaque backend-owned tokens rather than MTL handles or Metal argument indices.
  */
 @Pseudo
 @Mixin(targets = "com.metallum.render.MetalDevice", remap = false)
 public abstract class MetalDeviceMixin implements StalePipelines, StorageBufferBackend,
-		StorageImageBackend {
+		StorageImageBackend, ComputeDeviceBackend {
 
 	@Shadow(remap = false)
 	public abstract List<RenderPipeline> evictCachedPipelines(Predicate<RenderPipeline> predicate);
@@ -59,5 +61,15 @@ public abstract class MetalDeviceMixin implements StalePipelines, StorageBufferB
 	public GpuTexture vitrail$createStorageImage(String label, GpuFormat format, int width,
 			int height, int depth, int dimensions) {
 		return createStorageTextureResource(label, format, width, height, depth, dimensions);
+	}
+
+	@Override
+	public Object vitrail$compileCompute(String label, ByteBuffer spirv) {
+		return MetallumComputeBridge.compile(this, label, spirv);
+	}
+
+	@Override
+	public void vitrail$closeCompute(Object pipeline) {
+		MetallumComputeBridge.close(pipeline);
 	}
 }
