@@ -61,6 +61,7 @@ jobs:
           python3 tests/test_metallum_compute_bridge.py
           python3 tests/test_metallum_status.py
           python3 tests/test_mrt_smoke_fixture.py
+          java tests/VerifyMrtScreenshot.java --self-test
 
       # What this refuses is whatever build.gradle refuses on the day it runs. Naming the gates here
       # as well would only give them a third home to drift out of step with.
