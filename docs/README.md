@@ -19,6 +19,7 @@ The short version lives in the [README](../README.md) and the install steps in
 | Understand the sky and the shadow map | [Sky and shadows](sky-and-shadows.md) |
 | Work out what to turn down when a pack runs slowly, and what turning it down misses | [The render scale](render-scale.md) |
 | Change a pack's own settings, and know where they are kept | [The settings screen](settings-screen.md) |
+| Follow the Minecraft 26.2 Metallum / Metal port | [Metallum port status](metallum-port.md) |
 | Work on the engine | [Developing](developing.md) |
 
 ### Going deeper
