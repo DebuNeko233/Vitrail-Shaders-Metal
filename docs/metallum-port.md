@@ -36,7 +36,8 @@ The draft currently covers:
 - depth-only render-pass sizing;
 - Sodium 0.9.2 stable alignment in Metallum;
 - backend-native colour mipmap generation through `MTLBlitCommandEncoder.generateMipmapsForTexture:` for eligible colour textures;
-- selective pipeline-cache eviction with deferred native-pipeline release at the next safe full cache clear.
+- selective pipeline-cache eviction with deferred native-pipeline release at the next safe full cache clear;
+- backend-owned, zero-initialized shader-storage buffers and raw SPIR-V storage-buffer reflection.
 
 The mipmap path deliberately refuses depth/stencil textures. Vitrail's shadow-depth mip chain therefore still falls back to level zero on Metal until a correct depth reduction path is implemented and validated.
 
@@ -60,11 +61,11 @@ Concretely:
 
 ### Optional Metal capability provider
 
-The second slice adds `mixin.metallum.MetalBackendMixin`, an optional `@Pseudo` mixin targeting Metallum's `com.metallum.render.MetalBackend` by name. This keeps Metallum off Vitrail's compile classpath and lets Vitrail still run when Metallum is absent.
+The second slice adds optional `@Pseudo` providers for the package-private Metallum backend classes. This keeps Metallum off Vitrail's compile classpath and lets Vitrail still run when Metallum is absent.
 
-The provider currently publishes exactly one Metal capability: `BufferBlending.serve(true)` after `MetalBackend#createDevice` returns successfully. This is justified by the MRT implementation itself: Metallum now configures pixel format, write mask, and blend state independently for each indexed color target. The provider deliberately does not infer any other Metal feature.
+`mixin.metallum.MetalBackendMixin` publishes `BufferBlending.serve(true)` only after `MetalBackend#createDevice` returns successfully. This is justified by the MRT implementation itself: Metallum configures pixel format, write mask, and blend state independently for each indexed color target. If Metal device construction fails and Minecraft falls back to Vulkan, no Metal capability is left behind and the existing Vulkan provider publishes the capabilities of the backend that actually won.
 
-Publishing on successful return rather than method entry is important. Metallum's default backend order is Metal, then Vulkan, then OpenGL. If Metal device construction fails and Minecraft falls back to Vulkan, no Metal capability is left behind; the existing Vulkan provider then publishes the capabilities of the backend that actually won.
+`mixin.metallum.MetalDeviceMixin` now carries two backend commands without exposing a Metal native type: selective pipeline eviction and shader-storage buffer allocation. The latter crosses the seam as Minecraft's own `GpuBuffer`, not an `MTLBuffer` handle.
 
 Minecraft 26.2's public `DeviceInfo`/`DeviceFeatures` API remains useful for backend identity and generic draw capabilities, but it does not expose several shader-pack facts Vitrail needs, including independent per-target blending and geometry-shader availability. Those facts therefore remain explicit Vitrail-owned capabilities supplied by thin backend providers instead of being guessed from backend names.
 
@@ -96,39 +97,59 @@ The boundary is now split by responsibility without changing the existing `Entit
 - `StalePipelines.vitrail$dropEntityPipelines()` is Vitrail policy. It builds that predicate from each pipeline's declared vertex bindings and `DefaultVertexFormat.ENTITY`, deliberately reading the declaration rather than Vitrail's rewritten getter.
 - The optional adoption method now accepts Mojang's backend-neutral `CompiledRenderPipeline` and defaults to `false`. The Vulkan provider recognizes `VulkanRenderPipeline` and keeps the existing worker optimization; Metal does not imitate that optimization and safely falls back to its normal first-draw compile.
 - `VulkanDeviceMixin` keeps the old compiled Vulkan pipelines alive in its set-aside list until the next full cache purge, exactly as before.
-- `mixin.metallum.MetalDeviceMixin` is an optional soft target that forwards only the predicate to Metallum's `MetalDevice.evictCachedPipelines(...)`.
+- `mixin.metallum.MetalDeviceMixin` forwards only the predicate to Metallum's `MetalDevice.evictCachedPipelines(...)`.
 - Metallum removes matching keys immediately but retains their `MetalCompiledRenderPipeline` values until `clearPipelineCache()`. That method already waits for submitted GPU work before releasing native pipelines, so an already-recorded frame cannot lose a pipeline underneath it.
 
 This Metal invalidation is required by source, not by analogy alone. `MetalCompiledRenderPipeline.buildVertexDescriptor(...)` copies `VertexFormat.getVertexSize()` into the Metal vertex-buffer layout stride when the native pipeline is compiled. Because `MetalDevice` caches compiled pipelines by `RenderPipeline` identity, a live mesh-layout change must invalidate the matching compiled entries or the old stride can survive under the same Java pipeline key.
 
 Minecraft 26.2's public `GpuDeviceBackend` exposes `precompilePipeline(...)` and full `clearPipelineCache()`, but no selective cache invalidation operation. The selective operation therefore remains a thin backend extension while the decision about which keys are stale remains in Vitrail.
 
-This is still only part of the backend boundary. Vulkan-only synchronization special cases, descriptor-set/binding handling, geometry-stage implementation, and startup/backend selection still need explicit provider or capability boundaries before the port can be called backend-neutral.
+### Shader-storage buffers
+
+The next slice removes the first large Vulkan-native resource allocation from shader-pack semantics without pretending Minecraft 26.2 has a storage-buffer API that it does not have.
+
+Minecraft 26.2's `GpuBuffer` usage flags stop at mapped, copy, vertex, index, uniform and texel-buffer usage; there is no storage-buffer flag. Vitrail therefore defines one narrow capability, `StorageBufferBackend.vitrail$createStorageBuffer(long)`, for the missing allocation operation only.
+
+The bind path remains public Minecraft API:
+
+- Vitrail still places each shader-storage name in the bind-group layout as a placeholder uniform because the 26.2 layout API has no storage-buffer entry type.
+- `StorageBuffers.ensure(...)` uses `StorageBufferBackend` when the active backend provides it. Metallum returns a zero-initialized backend-owned `GpuBuffer`; no Metal native handle enters Vitrail.
+- `StorageBuffers.bind(...)` hands that whole buffer to `RenderPass.setUniform(name, buffer)`. Minecraft 26.2 checks slice alignment on the slice overload but does not require a uniform usage bit before forwarding a buffer to the backend.
+- Metallum reflects `SPVC_RESOURCE_TYPE_STORAGE_BUFFER` from the raw SPIR-V, reuses the same binding index as the placeholder entry, and classifies that resource as `STORAGE_BUFFER` rather than `UNIFORM_BUFFER` when it builds its Metal resource table.
+- Metal therefore binds the resource through its ordinary vertex/fragment buffer argument path. There is no Metal descriptor-set emulation.
+- Vitrail's existing Vulkan/VMA path remains unchanged: it allocates `VK_BUFFER_USAGE_STORAGE_BUFFER_BIT`, binds the 16-byte dummy uniform, and the Vulkan descriptor mixins replace the native handle, range and descriptor type.
+
+The shared binding index is important because `IntermediaryShaderModuleMixin` already appends SPIR-V storage buffers to the vanilla module's uniform-buffer reflection so Minecraft's Vulkan rebind can see them. Metallum's additional raw-SPIR-V reflection identifies the real resource kind but does not create a duplicate argument slot. Its storage-buffer and uniform-buffer indices are both included when choosing the first free Metal vertex-buffer index because all three use Metal's `buffer(index)` namespace.
+
+Storage images are intentionally still unsupported by this slice. They require `MTLTextureUsageShaderWrite`, correct 3D texture construction, storage-image reflection/binding and a backend-native clear implementation that preserves Vitrail's existing clear-at-birth, per-shadow-stage clear and camera-following volume semantics. `WideSamplerSets` remains a Vulkan/MoltenVK push-descriptor workaround and is not a Metal requirement.
+
+This is still only part of the backend boundary. Vulkan-only synchronization special cases, storage-image handling, geometry-stage implementation, and startup/backend selection still need explicit provider or capability boundaries before the port can be called backend-neutral.
 
 ## Validation status
 
 The Metallum changes are **not yet considered runtime-complete**.
 
-The fork still has no confirmed successful build for this feature branch. The local execution environment used during this work cannot download the dependencies needed to substitute for CI.
+Vitrail draft PR #1 had both its commit-policy and full Gradle `build` workflow green at the pre-SSBO head `d98e219d9fa4166d7be5ece954d7683065779db5`. That proves the terrain hook, Metal capability providers, colour mipmaps, dead-viewport cleanup and selective pipeline-cache boundary compiled under the repository's Java/lint/doclint gates. The new SSBO slice is a later head and must pass the same checks before it inherits that status.
 
-Vitrail draft PR #1 now has a working commit-policy check and has reached the Gradle dependency-resolution stage. The first build attempt was stopped by the repository text gate because the imported `AGENTS.md` migration contract preserves the user's typographic punctuation. The build now excludes that single non-shipped instruction file while leaving source and `docs/**` text checks unchanged. The following build passed `checkText` but was blocked before Java compilation because `https://maven.neoforged.net/mojang-meta/` returned HTTP 502 for `net.neoforged:minecraft-dependencies:26.2` in all three modules. That failure is recorded as an upstream dependency-service block, not as a successful or failed Java compile.
+Metallum draft PR #1 now has a pull-request workflow running for the SSBO head. Until that run completes successfully, the new Metal storage-buffer compiler/resource changes remain source-reviewed rather than compile-validated.
 
 Before the Metallum PR is ready to merge, it still needs:
 
-1. a successful `./gradlew build` against Minecraft 26.2 and Sodium 0.9.2;
+1. a successful `./gradlew build` against Minecraft 26.2 and Sodium 0.9.2 for the current head;
 2. a macOS/Apple-Silicon MRT smoke test that writes distinct values to at least four targets and reads them back or visualizes them;
 3. confirmation that a pass with an unused middle attachment slot preserves fragment-output locations;
 4. confirmation that ordinary single-target vanilla/Sodium rendering is unchanged;
 5. a colour-mipmap smoke test that samples non-zero LODs after a Metal-generated chain;
 6. a regression check that unsupported shadow/depth mip generation cleanly stays on Vitrail's base-level fallback;
-7. an entity-mesh transition smoke test proving that the Metal pipeline cache recompiles the changed stride and does not release the evicted native pipeline before the safe full-cache purge.
+7. an entity-mesh transition smoke test proving that the Metal pipeline cache recompiles the changed stride and does not release the evicted native pipeline before the safe full-cache purge;
+8. an SSBO smoke test that starts from known zero contents, writes through a shader, and reads a nontrivial range back through a later shader stage without aliasing a vertex/uniform argument slot.
 
-The Vitrail backend-neutral Sodium hook, optional Metal providers, colour-mipmap adapter, dead-viewport cleanup, and selective pipeline-cache boundary are source-checked against Sodium tag `mc26.2-0.9.2`, the current Metallum MRT branch, Minecraft 26.2 `GpuFormat` and `GpuDeviceBackend`, Metal's blit mipmap API, the Mixin soft-target contract, and the Vitrail commit history. They still need a dependency-successful repository build plus Vulkan and Metal runtime smoke coverage before the draft PR is ready.
+Storage-image support needs its own compile/runtime validation after it is implemented and is not implied by the SSBO work.
 
 ## Next Vitrail work
 
 Continue Phase 1 without yet treating Metal as a fully supported shader-pack backend. `HostReport.otherBackend()`, `PackScreens`, `GraphicsApiChoice`, `StartupGuard`, and the backend placeholder must continue to prevent the incomplete Metal path from being presented as finished until the remaining required capabilities are bridged and validated.
 
-The next backend slices should isolate descriptor/binding internals, synchronization special cases, and geometry-stage support, then establish a Metal implementation or conservative fallback for each. The existing Vitrail capability classes should remain the policy boundary: Vulkan and Metal providers publish facts, while shader-pack scheduling and render-target semantics stay in Vitrail.
+The next backend slice should be storage images: Metal 3D texture construction, shader-read/write usage, storage-image reflection and a correct native clear path. Geometry-stage handling and the remaining synchronization/startup boundaries follow after that. The existing Vitrail capability classes should remain the policy boundary: Vulkan and Metal providers publish facts, while shader-pack scheduling and render-target semantics stay in Vitrail.
 
-Any new Minecraft, Sodium, Mixin, or Metallum API used by that bridge must be checked against the exact Minecraft 26.2 / Sodium 0.9.2 source or published API before code is committed, as required by `AGENTS.md`.
+Any new Minecraft, Sodium, Mixin, Metallum, SPIRV-Cross or Metal API used by that bridge must be checked against the exact Minecraft 26.2 / Sodium 0.9.2 source or published API before code is committed, as required by `AGENTS.md`.
