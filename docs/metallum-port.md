@@ -50,7 +50,7 @@ Phase 1 is active on branch `feat/backend-neutral-sodium-terrain-hook` and draft
 
 Sodium 0.9.2 calls `DrawContext#setContext(RenderPass, RenderPipeline)` from `DefaultChunkRenderer` after choosing its concrete draw context. Metallum supplies a `MetalDrawContext` from the same common abstraction. Vitrail therefore hooks the common `DefaultChunkRenderer` invocation rather than the Vulkan-only `VKDrawContext` implementation.
 
-The replacement must preserve the original Vulkan ordering: Sodium sets the pipeline first, then Vitrail binds pack resources, then chunk draws begin. The hook imports neither Vulkan nor Metallum classes. This ordering remains a required regression check before the port is called ready.
+The replacement preserves the original Vulkan ordering. The exact Sodium 0.9.2 source calls `pass.setPipeline(...)` before `DrawContext#setContext(...)`; the old Vulkan mixin injected `TerrainDraw.bind(...)` at the head of that `setContext`, and the common wrapper does the same bind immediately before delegating to the original method. The resulting order remains pipeline set, pack resources bound, draw-context native state captured, then chunk draws.
 
 ### Optional Metal capability providers
 
@@ -86,10 +86,11 @@ On Metal:
 
 - `StorageBuffers` asks the backend for a zero-initialized backend-owned `GpuBuffer`;
 - the resource is passed to public `RenderPass.setUniform(...)` under the existing placeholder name;
+- `StorageBuffers.facadeSlice(name)` now exposes that same backend-owned resource to backend-neutral compute code strictly as a `GpuBufferSlice`, never as a native handle;
 - Metallum reflects `SPVC_RESOURCE_TYPE_STORAGE_BUFFER` from raw SPIR-V and classifies that shared binding index as `STORAGE_BUFFER`;
 - Metal binds it through the ordinary buffer argument namespace.
 
-On Vulkan the existing direct VMA allocation, dummy facade binding and native descriptor replacement remain unchanged.
+On Vulkan the existing direct VMA allocation, dummy facade binding and native descriptor replacement remain unchanged. The new facade accessor returns null on that direct-Vulkan allocation path, so it does not alter the established descriptor ABI.
 
 ### Shader-storage images
 
@@ -108,7 +109,8 @@ The backend boundary contains only resource and command facts:
 
 - Vulkan keeps the existing direct VMA images, native image views, `GENERAL` layout handling, transfer barriers and descriptor replacement.
 - A backend implementing `StorageImageBackend` may instead return a real Minecraft `GpuTexture`. Vitrail creates a normal `GpuTextureView` through `GpuDevice.createTextureView(...)` and never carries an `MTLTexture` handle or Metal argument index.
-- `StorageImages` stores the backend-owned view under both the image uniform name and the optional sampler alias while retaining the existing Vulkan-native `Bound` map separately.
+- `StorageImages` stores the backend-owned view under both the image uniform name and its optional sampler alias while retaining the existing Vulkan-native `Bound` map separately.
+- Whether a custom-image declaration is the writable image uniform versus its sampled alias comes from `CustomImages.storage(name)`, i.e. the pack declaration itself, rather than from whether a Vulkan-native `Bound` happens to exist. This is the semantic test used by the compute migration.
 - `RenderPassMixin` substitutes a backend-owned storage-image view only when `StorageImages` has one for that name and still calls the original public bind operation.
 - Metallum reflects the real storage-image resource kind from SPIR-V. The storage binding receives only a Metal texture argument; an optional sampled alias remains a sampled texture plus sampler.
 - `StorageImageCommands` exposes zero clear and exact region copy. Vitrail decides when to invoke them; Metallum encodes the operation with its compute/blit encoders and existing `MTLFence` ordering.
@@ -166,7 +168,9 @@ This is compile validation only. Apple-Silicon runtime validation of MRT, mipmap
 
 ### Vitrail
 
-Before the new compute seam, head `1ce612755028a470aa5a1625c35d36c444fb0eeb` had a green build and commit-policy gate. The compute capability/provider head `9ecf5e3bb020b1a30960e6856a2dee25b8ae4a1c` has a successful commit-policy workflow; its build workflow `34765441999` is still running at this documentation checkpoint and must not be called compile-validated until it completes successfully.
+The compute capability/provider code head `9ecf5e3bb020b1a30960e6856a2dee25b8ae4a1c` passed both commit-policy workflow `34765441998` and build workflow `34765441999`. Documentation head `7382b5c99766a2b63da4fbc078b75315775b81f8` also passed build `34765513824` and commit-policy `34765513829`.
+
+The later `StorageBuffers.facadeSlice(name)` accessor at `213b115e3913c44fd31e6ac1a8ac4bb87af50d3b` is the first caller-side compute resource-resolution change. It has not yet been called compile-validated at this documentation checkpoint; its CI must complete before the next claim.
 
 ## Runtime validation required before merge
 
@@ -191,7 +195,7 @@ A green Gradle build is necessary but is not evidence that these rendering seman
 
 Immediate work is now:
 
-- finish the current Vitrail compute-seam build gate;
+- compile-gate the facade SSBO accessor;
 - refactor `PackCompute` so Vitrail continues to own pack resource-name resolution, ping-pong target selection, dispatch sizing and scheduling while Vulkan retains its existing native branch and Metal receives facade resources through `ComputeDeviceBackend` / `ComputeCommands`;
 - keep `WideSamplerSets` and Vulkan barrier code on the Vulkan branch only;
 - explicitly handle or reject native-Metal shared/threadgroup-memory cases that exceed verified limits;
