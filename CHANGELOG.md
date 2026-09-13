@@ -11,6 +11,13 @@ publishing a jar named after one thing and built from another.
 Everything is a pre-release while the version stays under `1.0.0`. Nothing here is a promise about
 what the next one holds.
 
+## Unreleased
+
+### Fixed
+
+- An unavailable or incompatible optional Metallum compute bridge now reaches the compute
+  program failure handler instead of causing a Java class-initialization error.
+
 ## 0.11.0-beta
 
 ### Added

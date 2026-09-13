@@ -1,43 +1,30 @@
 # Project State
 
-Updated: 2026-09-13
-Scope: active topic branch `feat/backend-neutral-sodium-terrain-hook` and draft PR #1
+Updated: 2026-09-14
+Scope: `feat/backend-neutral-sodium-terrain-hook`
 
-## Current focus
+## Confirmed from the current checkout
 
-The active work is making Vitrail's backend-specific seams usable with Metallum/Metal while keeping shader-pack semantics in Vitrail and preserving the existing Vulkan behavior.
+- The migration preserves Vitrail shader-pack policy and the existing Vulkan path, with narrow optional Metallum capabilities for terrain binding, blending, mipmaps, pipeline eviction, storage resources, writable colour targets and compute.
+- `PackCompute` routes shadow, chained and standalone computes through `BackendComputePass` when both `ComputeDeviceBackend` and `ComputeCommands` are present. Routing landed at `5e84c045332c3687dd0c7be94c894353bdfebcca`; Vulkan retains its direct descriptor/barrier implementation.
+- Backend compute owns the uniform ring and opaque pipeline lifetime; Vitrail retains resource-name resolution, target-half selection and dispatch scheduling. Metallum owns native compilation, binding and synchronization.
+- Optional compute bridge method lookup now happens inside a normal call and caches only the complete method set. Missing classes/signatures remain catchable and do not poison adapter initialization. Backend runtime exceptions and fatal errors propagate unchanged.
+- The isolated adapter regression suite passes all three cases; running it against the original adapter reproduces both unavailable/incompatible bridge failures. Its facade stubs do not validate Minecraft or Metal ABI.
+- Local JDK 25 full `./gradlew build` passed on 2026-09-14. This is local compile validation, not CI or real-device verification.
 
-## Confirmed now
+## Open validation boundaries
 
-- Draft PR #1 targets `dev`; it is intentionally not ready to merge yet.
-- The branch contains a backend-neutral Sodium terrain hook plus optional Metallum adapters for independent blending, mipmap generation, selective pipeline-cache eviction, shader-storage-buffer allocation, and storage-image allocation/commands.
-- Shader-storage-buffer support is bridged end-to-end at the Vitrail boundary: Vitrail carries Minecraft `GpuBuffer` objects while Metallum determines the real storage resource kind from raw SPIR-V.
-- `StorageImages` now uses the backend-neutral storage-image seam when the active backend provides it. Vulkan keeps its direct VMA/native-descriptor path; Metal carries backend-owned `GpuTexture`/`GpuTextureView` objects through the Minecraft facade.
-- Storage-image policy remains in one Vitrail implementation: clear-at-birth selection, per-shadow-stage clears, relative resize, movable-volume detection, scratch allocation, and camera reanchor decisions are not duplicated in Metallum.
-- The common `RenderPass.bindTexture` seam substitutes a backend-owned storage-image view only for names held by `StorageImages`; the original backend call and existing particle tail hook still run.
-- Storage-image birth preparation now commits each allocation's `laidOut` state only after the backend preparation path succeeds. If preparation throws, the whole allocated set is destroyed through the active backend's safe lifetime path, bindings are cleared, and the next attempt must allocate from scratch. This landed at `8b30e6f9788aca8c04b439e91f62b253df02f1d6`.
-- Metallum companion code reflects storage images, binds a storage resource as a texture without sampler state, creates writable 1D/2D/3D Metal textures, clears them with typed compute kernels, and copies exact regions with its blit encoder. Backend build head `881c4337426fe2dd88b08bcad2d029a00bfa3d71` passed GitHub Actions run `34761479404`.
-- Metallum commit `f9bc3aee46e1491536ce0601a15d354e0c4e4cce` wires `MTLStorageTexturePipelines.close()` into `MetalDevice.close()` so the storage-zero compute pipeline cache cannot outlive device teardown; its CI is pending at this checkpoint.
-- Vitrail commit `0592b2b0097f5deeeca1250de4cbbc37701dc579` fixes the LWJGL `VkDependencyInfo` single-struct allocation error exposed by build run #33. The final storage-image lifecycle head has not yet completed a green full build at this checkpoint.
-- Vitrail's custom shader-pack `ComputeShader` path is still Vulkan-specific: it accepts `VulkanDevice`, builds `VulkanBindGroupLayout.Entry` objects, and creates a Vulkan shader module. Storage-image resource plumbing therefore does not yet mean shader-pack compute programs can execute on Metal.
-- Metal is not a fully supported shader-pack backend yet. Startup/backend guards remain conservative.
-- Companion backend work lives in `DebuNeko233/metallum`, branch `feat/mc26.2-mrt-foundation`, draft PR #1. Treat that repository/PR as external evidence and re-check it before relying on its current state.
+- No Apple-Silicon in-game compute, MRT, lifetime or Vulkan regression run was performed in this task. Preserve conservative startup/backend guards.
+- Metal depth/stencil mipmaps, geometry-stage handling and remaining synchronization/startup seams need further work; do not infer support from compilation.
+- `docs/metallum-port.md` owns the runtime validation matrix and historical CI evidence. Remote PR/check status was not reverified in this task.
+- Companion repository: `DebuNeko233/metallum`, branch `feat/mc26.2-mrt-foundation`. Recheck its current code and checks before relying on native bridge behavior.
 
-## Important incomplete areas
+## Recovery entry points
 
-- Apple-Silicon runtime validation is still required; a green Java/Gradle build is not evidence that Metal rendering semantics are correct.
-- Metal depth/stencil mipmap handling is still incomplete; the safe base-level fallback must remain until a correct path is implemented and validated.
-- Shader-pack compute compilation/dispatch is still Vulkan-specific and is now the next hard backend boundary exposed by the storage-image work.
-- Geometry-stage handling and remaining synchronization/startup boundaries are still part of the active migration.
-- Final compile gates for the current Vitrail storage-image lifecycle head and the Metallum teardown head must complete successfully before those slices are called compile-validated.
+- `.context/TASKS.md` and `.context/architecture/metallum-port.md`
+- `docs/metallum-port.md`, `CONTRIBUTING.md`, `gradle.properties`
+- `render/PackCompute.java`, `render/BackendComputePass.java`, `render/PackComputeBindings.java`
+- `mixin/metallum/MetallumComputeBridge.java`
+- `tests/test_metallum_compute_bridge.py`
 
-## Repository evidence to verify first
-
-- `README.md` — project purpose and supported user-facing scope.
-- `docs/README.md` — documentation router and the project's core translation model.
-- `docs/metallum-port.md` — current Metal-port implementation and validation status.
-- `gradle.properties` — active Minecraft/Java/Sodium and toolchain versions.
-- `CONTRIBUTING.md` plus `.github/workflows/` — branch, commit, changelog, and build gates.
-- `common/src/main/java/dev/vitrail/render/storage/StorageImages.java` — current shared storage-image policy and Vulkan/Metal allocation paths.
-- `common/src/main/java/dev/vitrail/render/ComputeShader.java` — remaining Vulkan-only shader-pack compute boundary.
-- Draft PR #1 and the active branch diff against `dev` — what the current migration branch actually changes.
+Java paths above are relative to `common/src/main/java/dev/vitrail/`.

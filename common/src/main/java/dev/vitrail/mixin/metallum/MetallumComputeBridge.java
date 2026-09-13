@@ -20,18 +20,13 @@ final class MetallumComputeBridge {
 
 	private static final String CLASS_NAME = "com.metallum.render.MetalComputeBridge";
 
-	private static final Method COMPILE = method("compile",
-			Object.class, String.class, ByteBuffer.class);
-	private static final Method DISPATCH = method("dispatch",
-			Object.class, Object.class, Map.class, Map.class, Map.class,
-			int.class, int.class, int.class, int.class, int.class, int.class);
-	private static final Method CLOSE = method("close", Object.class);
+	private static Methods methods;
 
 	private MetallumComputeBridge() {
 	}
 
 	static Object compile(Object backend, String label, ByteBuffer spirv) {
-		return invoke(COMPILE, backend, label, spirv);
+		return invoke(methods().compile(), backend, label, spirv);
 	}
 
 	static boolean dispatch(
@@ -46,13 +41,29 @@ final class MetallumComputeBridge {
 			int localX,
 			int localY,
 			int localZ) {
-		Object result = invoke(DISPATCH, encoder, pipeline, buffers, textures, samplers,
+		Object result = invoke(methods().dispatch(), encoder, pipeline, buffers, textures, samplers,
 				groupsX, groupsY, groupsZ, localX, localY, localZ);
 		return result instanceof Boolean accepted && accepted;
 	}
 
 	static void close(Object pipeline) {
-		invoke(CLOSE, pipeline);
+		invoke(methods().close(), pipeline);
+	}
+
+	private static synchronized Methods methods() {
+		// Resolve inside the call, not class initialization: an optional backend mismatch
+		// must reach the pass's exception handler without poisoning this adapter class.
+		if (methods == null) {
+			methods = new Methods(
+					method("compile", Object.class, String.class, ByteBuffer.class),
+					method("dispatch", Object.class, Object.class, Map.class, Map.class, Map.class,
+							int.class, int.class, int.class, int.class, int.class, int.class),
+					method("close", Object.class));
+		}
+		return methods;
+	}
+
+	private record Methods(Method compile, Method dispatch, Method close) {
 	}
 
 	private static Method method(String name, Class<?>... parameterTypes) {

@@ -89,11 +89,15 @@ Metallum remains responsible for SPIR-V-to-MSL translation, resource binding ind
 
 ### Caller-side compute split
 
-The caller-side migration is split into three backend-neutral pieces before `PackCompute` itself is routed:
+The caller-side migration uses three backend-neutral pieces:
 
 1. `ComputeResources` reflects only the resource names actually present in an already-compiled SPIR-V module. It inventories uniform buffers, storage buffers, sampled images and storage images without rewriting any binding decoration or creating a native object.
 2. `PackComputeBindings` resolves those names to Minecraft facade resources. It preserves the existing Vulkan policy order: custom-image resources and pack texture overrides first, then the selected ping-pong colour target, pass depth/distant/centre depth, engine textures, the stage default target and finally the existing black fallback.
 3. `BackendComputePass` owns the non-Vulkan pass state: the uniform ring, opaque backend pipeline token, resource inventory and resolved dispatch. Existing Vulkan layout creation, push descriptors, barriers, `WideSamplerSets`, native pipeline and destruction stay in `PackCompute.Pass` and have not been moved into this class.
+
+`PackCompute` routes shadow, chained and standalone computes through this path when both device and command capabilities are present. Otherwise it retains the existing Vulkan route. Pass teardown closes the backend-owned pipeline and uniform ring.
+
+The optional Metallum adapter resolves all three bridge methods inside a normal call and caches them only after every lookup succeeds. A missing class or incompatible signature raises a catchable exception without poisoning class initialization; backend runtime exceptions and fatal errors retain their original type.
 
 This split is deliberate: Vitrail decides what a resource name means; the backend decides how that already-resolved facade object is bound natively.
 
@@ -125,7 +129,9 @@ Writable ordinary texture bridge head `81295f043f9f8dd3d13f349c14b6189daa625082`
 
 The caller-side helper baseline `3b53b58086f5db42c526070a30216515917abead` passed both repository gates. Writable-target capability head `a39a54f36eb0a44fdb9b2075c708759673f0c6d0` then passed commit-policy `34768637464` and full build `34768637511`.
 
-The actual `PackCompute` dispatch routing is still pending and is not claimed by these green builds.
+The actual `PackCompute` dispatch routing landed at `5e84c045332c3687dd0c7be94c894353bdfebcca`; the earlier green builds do not validate that later change.
+
+`python3 tests/test_metallum_compute_bridge.py` checks the real Java adapter against isolated fixtures: missing bridge, missing close method, repeated lookup failure, successful dispatch argument forwarding, and propagation of backend exceptions/errors. Facade stubs make this independent of Minecraft; it does not validate the Minecraft ABI or Metal execution. All three cases pass locally, and the pre-fix adapter reproduces both lookup-failure regressions. The full local JDK 25 `./gradlew build` passed on 2026-09-14; this is not a remote CI or runtime claim.
 
 ## Runtime validation required before merge
 
@@ -142,7 +148,7 @@ Before either Draft PR becomes ready, the combined path still needs at least:
 9. sampled alias of the same storage-image resource reading the expected contents;
 10. scratch-based storage-volume camera reanchor;
 11. `colorimgN` compute write proving its ordinary render target was created with Metal shader-write usage;
-12. shader-pack compute writing storage resources and a later render/compute stage consuming them after `PackCompute` is routed through the new backend seam;
+12. shader-pack compute writing storage resources and a later render/compute stage consuming them through the routed `PackCompute` backend seam;
 13. Vulkan regression coverage for every shared path touched by backend-neutralization.
 
 A green Gradle build is necessary but is not evidence that these rendering semantics are correct.
@@ -151,10 +157,8 @@ A green Gradle build is necessary but is not evidence that these rendering seman
 
 Immediate work is:
 
-- route `PackCompute` to `BackendComputePass` only when both `ComputeDeviceBackend` and `ComputeCommands` are present;
-- leave the existing Vulkan branch and its barriers/descriptors unchanged;
-- close backend passes through their backend-owned lifetime while retaining the existing Vulkan deferred destruction;
-- then run Apple-Silicon compute smoke tests before changing any startup support gate.
+- verify remote CI and the current companion bridge before publishing the combined change;
+- run Apple-Silicon compute smoke tests and Vulkan regression coverage before changing any startup support gate.
 
 Geometry-stage support and the remaining synchronization/startup boundaries follow. `HostReport.otherBackend()`, `PackScreens`, `GraphicsApiChoice`, `StartupGuard`, and the backend placeholder remain conservative until the required capabilities and Apple-Silicon validation are complete.
 
