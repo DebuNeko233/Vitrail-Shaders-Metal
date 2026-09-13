@@ -247,7 +247,15 @@ public final class StorageImages implements AutoCloseable {
 		this.lastWidth = screenWidth;
 		this.lastHeight = screenHeight;
 		rebind();
-		layoutIfNeeded();
+		try {
+			layoutIfNeeded();
+		} catch (RuntimeException e) {
+			this.allocated.forEach(image -> image.destroy(vulkan));
+			this.allocated.clear();
+			this.laidOut = false;
+			rebind();
+			throw e;
+		}
 	}
 
 	private void allocate(GpuDevice device, @Nullable VulkanDevice vulkan,
@@ -638,6 +646,7 @@ public final class StorageImages implements AutoCloseable {
 				clearBornImages(commands, stack, born);
 			}
 
+			markBornPrepared(born);
 			this.laidOut = true;
 			return;
 		}
@@ -649,6 +658,7 @@ public final class StorageImages implements AutoCloseable {
 
 		List<Allocated> born = newlyBorn();
 		clearBornImages(storageCommands, born);
+		markBornPrepared(born);
 		this.laidOut = true;
 	}
 
@@ -656,14 +666,18 @@ public final class StorageImages implements AutoCloseable {
 	private List<Allocated> newlyBorn() {
 		List<Allocated> born = new ArrayList<>();
 		for (Allocated image : this.allocated) {
-			if (image.laidOut) {
-				continue;
+			if (!image.laidOut) {
+				born.add(image);
 			}
-
-			image.laidOut = true;
-			born.add(image);
 		}
 		return born;
+	}
+
+	/** Commits birth preparation only after the backend has recorded it successfully. */
+	private static void markBornPrepared(List<Allocated> born) {
+		for (Allocated image : born) {
+			image.laidOut = true;
+		}
 	}
 
 	/**
