@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ADAPTER = ROOT / 'common/src/main/java/dev/vitrail/render/MetallumStatus.java'
 PACK_SCREENS = ROOT / 'common/src/main/java/dev/vitrail/screen/PackScreens.java'
 BACKEND_PLACEHOLDER = ROOT / 'common/src/main/java/dev/vitrail/screen/BackendPlaceholder.java'
+HOST_REPORT = ROOT / 'common/src/main/java/dev/vitrail/HostReport.java'
 
 BUFFER_BLENDING = '''package dev.vitrail.render;
 public final class BufferBlending {
@@ -152,6 +153,15 @@ class MetallumStatusTest(unittest.TestCase):
         self.assertIn('ScreenText.BACKEND_RETURN', branch)
         self.assertIn('return;', branch)
         self.assertNotIn('switchToVulkan', branch)
+
+    def test_metal_validation_gate_does_not_emit_vulkan_switch_chat(self):
+        source = HOST_REPORT.read_text(encoding='utf-8')
+        in_world = source.split('public static void sayInWorld() {', 1)[1].split(
+            '\n\t/**\n\t * Says what an install decides', 1)[0]
+
+        candidate_guard = 'metalCandidate() && !MetallumStatus.smokeEnabled()'
+        self.assertIn(candidate_guard, in_world)
+        self.assertLess(in_world.index(candidate_guard), in_world.index('ScreenText.OTHER_BACKEND'))
 
     def test_malformed_api_shape_fails_closed(self):
         self.run_fixture('shape')

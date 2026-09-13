@@ -193,6 +193,14 @@ public final class HostReport {
 			return;
 		}
 
+		// A valid Metal candidate with only the developer smoke switch closed is not OpenGL and is
+		// not a reason to tell the player to replace their graphics preference with Vulkan. The
+		// startup log and the pack screen explain the validation-only gate; keep the old red switch
+		// guidance for genuinely unsupported/fallback backends only.
+		if (metalCandidate() && !MetallumStatus.smokeEnabled()) {
+			return;
+		}
+
 		minecraft.gui.hud.getChat().addClientSystemMessage(Component.translatable(
 				ScreenText.OTHER_BACKEND, backend(), Component.translatable(ScreenText.GRAPHICS_API),
 				Component.translatable(ScreenText.GRAPHICS_API_VULKAN))
