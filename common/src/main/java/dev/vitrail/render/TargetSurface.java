@@ -1,7 +1,11 @@
 package dev.vitrail.render;
 
+import dev.vitrail.mixin.access.GpuDeviceAccessor;
+import dev.vitrail.render.storage.ShaderWritableTextureBackend;
+
 import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.systems.GpuDevice;
+import com.mojang.blaze3d.systems.GpuDeviceBackend;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
@@ -192,15 +196,21 @@ final class TargetSurface implements AutoCloseable {
 		// gets it back. The chain makes this real rather than theoretical, since one surface now
 		// creates up to a dozen views instead of one.
 		try {
-			// The flag is read by the mixin on the game's usage conversion, inside this one call,
-			// and lowered whatever the call did: a throw that left it up would mark the next
-			// texture anybody creates.
-			TextureUsage.requestStorage(this.storage);
-			try {
-				this.texture = device.createTexture(this.label, USAGE, this.format, width, height, 1,
-						levels);
-			} finally {
-				TextureUsage.requestStorage(false);
+			GpuDeviceBackend backend = ((GpuDeviceAccessor) device).vitrail$backend();
+			if (this.storage && backend instanceof ShaderWritableTextureBackend writable) {
+				this.texture = writable.vitrail$createShaderWritableTexture(this.label, USAGE,
+						this.format, width, height, 1, levels);
+			} else {
+				// The flag is read by the Vulkan usage conversion, inside this one call, and lowered
+				// whatever the call did. Backends with an explicit allocation capability never rely
+				// on this thread-local side channel.
+				TextureUsage.requestStorage(this.storage);
+				try {
+					this.texture = device.createTexture(this.label, USAGE, this.format, width, height, 1,
+							levels);
+				} finally {
+					TextureUsage.requestStorage(false);
+				}
 			}
 
 			this.view = device.createTextureView(this.texture);
