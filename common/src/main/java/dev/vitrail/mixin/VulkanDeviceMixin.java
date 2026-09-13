@@ -1,13 +1,11 @@
 package dev.vitrail.mixin;
 
-import dev.vitrail.mixin.access.RenderPipelineAccessor;
 import dev.vitrail.render.PackChain;
 import dev.vitrail.render.StalePipelines;
+import dev.vitrail.render.VulkanPipelineAdoption;
 import dev.vitrail.Vitrail;
 
 import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vulkan.VulkanDevice;
 import com.mojang.blaze3d.vulkan.VulkanRenderPipeline;
 import net.minecraft.resources.Identifier;
@@ -24,16 +22,13 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
-import org.jspecify.annotations.Nullable;
+import java.util.function.Predicate;
 
 /**
- * Lets the game's compiled entity pipelines leave the cache without dying, which is what
- * {@code EntityMesh.settle} needs when its answer moves in a running world: the pipelines standing
- * in {@code pipelineCache} were compiled against the bindings of the OTHER answer, their stride is
- * baked ({@code VulkanRenderPipeline:99}), and every draw they serve reads the mesh at the wrong
- * offsets from then on. Giant triangles off the hand and every mob, for as long as the session
- * lasts, is what that looks like.
+ * Lets selected compiled pipelines leave the Vulkan cache without dying immediately, which is what
+ * {@code EntityMesh.settle} needs when its answer moves in a running world: a compiled pipeline
+ * bakes its vertex stride, so a cache hit under the new mesh answer can otherwise keep the old
+ * offsets for the rest of the session.
  * <p>
  * <strong>Dropped from the map, never destroyed here.</strong> Destruction is the half of issue
  * 111 that lives in this engine: the cache's own emptying waits the device idle and there is no
@@ -41,6 +36,10 @@ import org.jspecify.annotations.Nullable;
  * so no NEW draw binds it; whatever an already-recorded frame still names stays alive in
  * {@code vitrail$setAside} until {@code clearPipelineCache}, which the game only reaches after
  * quiescing rendering, frees the whole cache anyway, and now frees these with it.
+ * <p>
+ * Which keys are stale is deliberately not decided here. {@link StalePipelines} carries a predicate
+ * from Vitrail's policy layer so the same cache-lifecycle contract can be implemented by another
+ * backend without copying entity semantics into it.
  * <p>
  * <strong>And the live pack's own pipelines are carried over that emptying.</strong> A resource
  * reload, F3+T included, empties the whole cache, and a pack's programs come from a shader archive
@@ -57,7 +56,7 @@ import org.jspecify.annotations.Nullable;
  * moment it returns, so a pipeline that left the map there would outlive its own device.
  */
 @Mixin(VulkanDevice.class)
-public abstract class VulkanDeviceMixin implements StalePipelines {
+public abstract class VulkanDeviceMixin implements StalePipelines, VulkanPipelineAdoption {
 
 	/**
 	 * Whether the live pack's pipelines cross a resource reload rather than being compiled again
@@ -100,13 +99,13 @@ public abstract class VulkanDeviceMixin implements StalePipelines {
 	private boolean vitrail$closing;
 
 	@Override
-	public List<RenderPipeline> vitrail$dropEntityPipelines() {
+	public List<RenderPipeline> vitrail$dropPipelines(Predicate<RenderPipeline> predicate) {
 		List<RenderPipeline> dropped = new ArrayList<>();
 		Iterator<Map.Entry<RenderPipeline, VulkanRenderPipeline>> held =
 				this.pipelineCache.entrySet().iterator();
 		while (held.hasNext()) {
 			Map.Entry<RenderPipeline, VulkanRenderPipeline> entry = held.next();
-			if (!declaresGameEntity(entry.getKey())) {
+			if (!predicate.test(entry.getKey())) {
 				continue;
 			}
 
@@ -115,27 +114,7 @@ public abstract class VulkanDeviceMixin implements StalePipelines {
 			held.remove();
 		}
 
-		return dropped;
-	}
-
-	/**
-	 * Whether this is one of the game's entity pipelines, read off the DECLARED formats and not the
-	 * getter: {@code RenderPipelineMixin} rewrites the getter while the mesh carries, which would
-	 * make a pack's own pipelines answer yes here. Those follow their chain, not this cache walk.
-	 * By identity, the same question {@code EntityMesh.binding} asks.
-	 */
-	@Unique
-	private static boolean declaresGameEntity(RenderPipeline pipeline) {
-		@Nullable VertexFormat[] declared = ((RenderPipelineAccessor) pipeline).vitrail$declaredFormats();
-		for (VertexFormat format : declared) {
-			@SuppressWarnings("ReferenceEquality")
-			boolean entity = format == DefaultVertexFormat.ENTITY;
-			if (entity) {
-				return true;
-			}
-		}
-
-		return false;
+		return List.copyOf(dropped);
 	}
 
 	@Override
