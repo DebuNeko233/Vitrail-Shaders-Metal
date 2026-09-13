@@ -1,21 +1,28 @@
 package dev.vitrail.mixin.metallum;
 
 import dev.vitrail.render.MipmapCommands;
+import dev.vitrail.render.compute.ComputeCommands;
 import dev.vitrail.render.storage.StorageImageCommands;
 
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.blaze3d.textures.GpuSampler;
 import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.blaze3d.textures.GpuTextureView;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Pseudo;
 import org.spongepowered.asm.mixin.Shadow;
 
+import java.util.Map;
+
 /**
- * Adapts Metallum's backend-native texture commands to Vitrail without a compile-time Metallum
- * dependency. Metallum owns Metal encoder/fence rules; Vitrail owns when shader-pack resources are
- * cleared, copied, or mipmapped.
+ * Adapts Metallum's backend-native texture and compute commands to Vitrail without a compile-time
+ * Metallum dependency. Metallum owns Metal encoder/fence rules; Vitrail owns when shader-pack
+ * resources are cleared, copied, mipmapped, or dispatched and what each declared resource means.
  */
 @Pseudo
 @Mixin(targets = "com.metallum.render.MetalCommandEncoder", remap = false)
-public abstract class MetalCommandEncoderMixin implements MipmapCommands, StorageImageCommands {
+public abstract class MetalCommandEncoderMixin implements MipmapCommands, StorageImageCommands,
+		ComputeCommands {
 
 	@Shadow(remap = false)
 	public abstract boolean generateMipmaps(GpuTexture texture);
@@ -64,5 +71,21 @@ public abstract class MetalCommandEncoderMixin implements MipmapCommands, Storag
 				sourceX, sourceY, sourceZ,
 				destinationX, destinationY, destinationZ,
 				width, height, depth);
+	}
+
+	@Override
+	public boolean vitrail$dispatchCompute(
+			Object pipeline,
+			Map<String, GpuBufferSlice> buffers,
+			Map<String, GpuTextureView> textures,
+			Map<String, GpuSampler> samplers,
+			int groupsX,
+			int groupsY,
+			int groupsZ,
+			int localX,
+			int localY,
+			int localZ) {
+		return MetallumComputeBridge.dispatch(this, pipeline, buffers, textures, samplers,
+				groupsX, groupsY, groupsZ, localX, localY, localZ);
 	}
 }
