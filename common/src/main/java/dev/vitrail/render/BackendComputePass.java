@@ -169,7 +169,7 @@ final class BackendComputePass implements AutoCloseable {
 			this.owner = backend;
 		} catch (GpuDeviceLossException e) {
 			throw e;
-		} catch (RuntimeException e) {
+		} catch (Exception e) {
 			Vitrail.logger().warn("compute {} backend pipeline failed: {}", this.path, e.toString());
 			closePipeline();
 		} finally {
