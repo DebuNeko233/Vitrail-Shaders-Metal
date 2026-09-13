@@ -39,7 +39,7 @@ The current backend foundation includes:
 
 This remains backend GPU behavior. Shader-pack concepts such as `colortex*`, draw-buffer routing, ping-pong/history, custom-image clear policy, camera reanchor policy, program scheduling and pack semantics remain Vitrail responsibilities.
 
-The latest compile-validated Metallum code head for storage-image render binding is `881c4337426fe2dd88b08bcad2d029a00bfa3d71`; GitHub Actions run `34761479404` completed `./gradlew build` successfully with Java 25. Documentation commits follow that code head.
+The latest compile-validated Metallum code head for storage-image render binding is `881c4337426fe2dd88b08bcad2d029a00bfa3d71`; GitHub Actions run `34761479404` completed `./gradlew build` successfully with Java 25. Documentation commits follow that code head. The later teardown fix `f9bc3aee46e1491536ce0601a15d354e0c4e4cce` connects the storage-zero pipeline cache to device shutdown and is awaiting its own build result.
 
 ## Vitrail backend-neutralization
 
@@ -112,6 +112,7 @@ The backend boundary contains only resource and command facts:
 - Metallum reflects the real storage-image resource kind from SPIR-V. The storage binding receives only a Metal texture argument; it does not receive sampler state. An optional sampled alias remains an ordinary sampled texture plus sampler.
 - `StorageImageCommands` exposes zero clear and exact region copy. Vitrail decides when to invoke them; Metallum encodes the operation with its compute/blit encoders and existing `MTLFence` ordering.
 - Camera reanchor uses two copies through a distinct scratch texture on both backends, so no backend is asked to define overlapping in-place texture-copy semantics.
+- Birth preparation is transactional at the Vitrail level: `laidOut` is committed only after backend preparation succeeds. If preparation throws, Vitrail destroys the complete allocated set through the active backend lifetime path, clears its binding maps, and forces any later attempt to allocate fresh resources rather than treating a partial preparation as valid.
 
 This is a resource/lifecycle bridge, not proof that custom shader-pack compute programs run on Metal.
 
@@ -131,15 +132,15 @@ The two repositories are still Draft and unmerged.
 
 Storage-image reflection and render binding are compile-validated at code head `881c4337426fe2dd88b08bcad2d029a00bfa3d71` by GitHub Actions run `34761479404` on Java 25.
 
-The storage-texture primitives still require Apple-Silicon runtime validation. In addition, the cached storage-zero compute pipelines have an explicit `MTLStorageTexturePipelines.close()` and that teardown still needs to be connected to `MetalDevice.close()` before the lifecycle slice is considered complete.
+The storage-texture primitives still require Apple-Silicon runtime validation. Commit `f9bc3aee46e1491536ce0601a15d354e0c4e4cce` now calls `MTLStorageTexturePipelines.close()` from `MetalDevice.close()` so the typed zero-clear pipeline cache follows device lifetime; that commit is not called compile-validated until its current CI completes successfully.
 
 ### Vitrail
 
-Build run #33 reached Java compilation and exposed two incorrect LWJGL single-structure allocations in `GpuRecording`: `VkDependencyInfo.calloc(1, stack)` returns a buffer, not a single `VkDependencyInfo`. Code head `0592b2b0097f5deeeca1250de4cbbc37701dc579` corrected both sites to the single-structure allocator. Later documentation and repository-memory commits follow that fix.
+Build run #33 reached Java compilation and exposed two incorrect LWJGL single-structure allocations in `GpuRecording`: `VkDependencyInfo.calloc(1, stack)` returns a buffer, not a single `VkDependencyInfo`. Code head `0592b2b0097f5deeeca1250de4cbbc37701dc579` corrected both sites to the single-structure allocator.
 
-At this documentation checkpoint, the latest full Gradle build for the current branch head has not yet completed successfully, so the storage-image Vitrail slice must not be described as compile-validated yet.
+A later code review found that `StorageImages.newlyBorn()` marked allocations prepared before backend birth preparation completed. Commit `8b30e6f9788aca8c04b439e91f62b253df02f1d6` fixes that state transition and tears down the allocated set if preparation fails. Later documentation/repository-memory commits follow that code head.
 
-A code review also identified one state-machine cleanup still to make: `StorageImages.newlyBorn()` currently marks an allocation prepared before backend birth preparation has succeeded. The state should be committed only after the backend preparation path completes so an explicit provider refusal cannot leave a failed allocation looking initialized.
+At this documentation checkpoint, the latest full Gradle build for the final storage-image lifecycle head has not yet completed successfully, so this Vitrail slice must not yet be described as compile-validated.
 
 ## Runtime validation required before merge
 
@@ -162,12 +163,11 @@ A green Gradle build is necessary but is not evidence that these rendering seman
 
 ## Next work
 
-The immediate closure tasks for the storage-image slice are:
+The immediate closure tasks for the storage-image slice are now the two compile gates and the durable checkpoint:
 
-- complete a green Vitrail build on the final code head;
-- connect `MTLStorageTexturePipelines.close()` to Metal device teardown;
-- commit `laidOut` only after storage-image birth preparation succeeds;
-- refresh the repository-memory checkpoint with the final build/run identifiers.
+- complete a green Vitrail build on the final storage-image lifecycle head;
+- complete a green Metallum build on the device-teardown head;
+- refresh Repository Memory with the final build/run identifiers and run the repository's documented memory audit.
 
 After those are closed, continue with the backend-neutral shader-pack compute boundary. Geometry-stage support and the remaining synchronization/startup boundaries follow. `HostReport.otherBackend()`, `PackScreens`, `GraphicsApiChoice`, `StartupGuard`, and the backend placeholder must remain conservative until the required capabilities and Apple-Silicon validation are complete.
 
