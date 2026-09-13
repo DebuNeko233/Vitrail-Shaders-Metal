@@ -17,6 +17,8 @@ import dev.vitrail.pack.source.OpenedPack;
 import dev.vitrail.pack.target.SamplerPlan;
 import dev.vitrail.pack.target.TargetSchedule;
 import dev.vitrail.pack.texture.CustomImages;
+import dev.vitrail.render.compute.ComputeCommands;
+import dev.vitrail.render.compute.ComputeDeviceBackend;
 import dev.vitrail.render.storage.GpuRecording;
 import dev.vitrail.render.storage.StorageBuffers;
 import dev.vitrail.render.storage.StorageImages;
@@ -100,9 +102,10 @@ import java.util.regex.Pattern;
  * reading and storing the colour targets on the halves that pass reads. Photon builds its sky
  * lighting in one, and without it everything in shadow was black.
  * <p>
- * The Java facade has no compute, so the pipeline is built the way the storage probe was: shaderc
- * kind 2, push descriptors, and a storage image that is either the pack's own through VMA or a
- * colour target created with the usage for it.
+ * The Java facade has no compute, so the Vulkan pipeline is built the way the storage probe was:
+ * shaderc kind 2, push descriptors, and a storage image that is either the pack's own through VMA
+ * or a colour target created with the usage for it. Backends exposing the compute capability use
+ * the same pack scheduling and resource policy through {@link BackendComputePass} instead.
  *
  * @see <a href="https://github.com/IrisShaders/Iris">Iris ComputeProgram, LGPL-3.0</a>
  */
@@ -411,6 +414,27 @@ final class PackCompute implements AutoCloseable {
 		// underneath would leave that object to close a pass the encoder no longer has.
 		GeometryHold.flush(() -> "the compute dispatch at " + program);
 		GpuRecording.endPass(encoder);
+		BackendRoute backend = backendRoute(encoder, device);
+		if (backend != null) {
+			for (Pass pass : attached) {
+				try {
+					pass.dispatch(backend.device(), backend.commands(), values, targets, width, height,
+							step, depth, distant);
+				} catch (GpuDeviceLossException e) {
+					throw e;
+				} catch (RuntimeException e) {
+					if (pass.failed.add(e.toString())) {
+						Vitrail.logger().warn("compute {} failed: {}", pass.path, e.toString());
+					}
+				}
+			}
+
+			if (this.announcedChains.add(program)) {
+				Vitrail.logger().info("Dispatched {} compute pass(es) at {}", attached.size(), program);
+			}
+			return;
+		}
+
 		VulkanCommandEncoder recorder = recorder(encoder);
 		VulkanDevice vulkan = vulkan(device);
 		if (recorder == null || vulkan == null) {
@@ -464,6 +488,39 @@ final class PackCompute implements AutoCloseable {
 		// encoder no longer has, which is a crash at the next flush and not here.
 		GeometryHold.flush(() -> "the shadow compute dispatch");
 		GpuRecording.endPass(encoder);
+		BackendRoute backend = backendRoute(encoder, device);
+		if (backend != null) {
+			values.convention(ClipSpace.FORWARD);
+			values.modelView(null, null);
+			values.projection(null);
+			values.passColour(null);
+			values.renderStage(RenderStage.NONE);
+
+			Minecraft minecraft = Minecraft.getInstance();
+			RenderTarget main = minecraft == null ? null : minecraft.gameRenderer.mainRenderTarget();
+			int width = main == null ? 0 : main.width;
+			int height = main == null ? 0 : main.height;
+			for (Pass pass : this.passes) {
+				try {
+					pass.dispatch(backend.device(), backend.commands(), values, targets, width, height,
+							null, null, null);
+				} catch (GpuDeviceLossException e) {
+					throw e;
+				} catch (RuntimeException e) {
+					if (pass.failed.add(e.toString())) {
+						Vitrail.logger().warn("shadow compute {} failed: {}", pass.path, e.toString());
+					}
+				}
+			}
+
+			if (!this.announced) {
+				this.announced = true;
+				Vitrail.logger().info("Dispatched {} shadow compute pass(es) at the head of the frame",
+						this.passes.size());
+			}
+			return;
+		}
+
 		VulkanCommandEncoder recorder = recorder(encoder);
 		VulkanDevice vulkan = vulkan(device);
 		if (recorder == null || vulkan == null) {
@@ -536,6 +593,19 @@ final class PackCompute implements AutoCloseable {
 		this.passes.forEach(Pass::close);
 		this.chained.values().forEach(list -> list.forEach(Pass::close));
 		this.alone.values().forEach(list -> list.forEach(Pass::close));
+	}
+
+	private static BackendRoute backendRoute(CommandEncoder encoder, GpuDevice device) {
+		GpuDeviceBackend deviceBackend = ((GpuDeviceAccessor) device).vitrail$backend();
+		Object commandBackend = ((CommandEncoderAccessor) encoder).vitrail$backend();
+		if (deviceBackend instanceof ComputeDeviceBackend computeDevice
+				&& commandBackend instanceof ComputeCommands computeCommands) {
+			return new BackendRoute(computeDevice, computeCommands);
+		}
+		return null;
+	}
+
+	private record BackendRoute(ComputeDeviceBackend device, ComputeCommands commands) {
 	}
 
 	private static VulkanCommandEncoder recorder(CommandEncoder encoder) {
@@ -734,6 +804,7 @@ final class PackCompute implements AutoCloseable {
 		private final TextureStage textureStage;
 
 		private final String label;
+		private final BackendComputePass backendPass;
 		private final Set<String> failed = new LinkedHashSet<>();
 		private MappableRingBuffer block;
 		private long shaderModule;
@@ -764,6 +835,15 @@ final class PackCompute implements AutoCloseable {
 					: TextureStage.of(program).orElse(null);
 			this.label = "pack/" + load + "/" + path + "/compute";
 			this.uniforms = new PackUniforms(compute.loaded().program().uniforms(), catalog);
+			this.backendPass = new BackendComputePass(compute, this.uniforms, path, this.label,
+					this.program, this.textureStage);
+		}
+
+		private void dispatch(ComputeDeviceBackend deviceBackend, ComputeCommands commands,
+				PackValues values, ColorTargets targets, int width, int height,
+				TargetSchedule.Bound step, GpuTextureView depth, GpuTextureView distant) {
+			this.backendPass.dispatch(deviceBackend, commands, values, targets, width, height,
+					step, depth, distant);
 		}
 
 		/**
@@ -1406,6 +1486,7 @@ final class PackCompute implements AutoCloseable {
 		}
 
 		private void close() {
+			this.backendPass.close();
 			GpuDevice device = RenderSystem.tryGetDevice();
 			VulkanDevice vulkan = device == null ? null : vulkan(device);
 			if (vulkan != null) {
