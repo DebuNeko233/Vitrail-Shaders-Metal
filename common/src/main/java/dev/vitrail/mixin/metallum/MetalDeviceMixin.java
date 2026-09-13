@@ -2,6 +2,7 @@ package dev.vitrail.mixin.metallum;
 
 import dev.vitrail.render.StalePipelines;
 import dev.vitrail.render.compute.ComputeDeviceBackend;
+import dev.vitrail.render.storage.ShaderWritableTextureBackend;
 import dev.vitrail.render.storage.StorageBufferBackend;
 import dev.vitrail.render.storage.StorageImageBackend;
 
@@ -30,7 +31,7 @@ import java.util.function.Predicate;
 @Pseudo
 @Mixin(targets = "com.metallum.render.MetalDevice", remap = false)
 public abstract class MetalDeviceMixin implements StalePipelines, StorageBufferBackend,
-		StorageImageBackend, ComputeDeviceBackend {
+		StorageImageBackend, ShaderWritableTextureBackend, ComputeDeviceBackend {
 
 	@Shadow(remap = false)
 	public abstract List<RenderPipeline> evictCachedPipelines(Predicate<RenderPipeline> predicate);
@@ -61,6 +62,13 @@ public abstract class MetalDeviceMixin implements StalePipelines, StorageBufferB
 	public GpuTexture vitrail$createStorageImage(String label, GpuFormat format, int width,
 			int height, int depth, int dimensions) {
 		return createStorageTextureResource(label, format, width, height, depth, dimensions);
+	}
+
+	@Override
+	public GpuTexture vitrail$createShaderWritableTexture(String label, int usage, GpuFormat format,
+			int width, int height, int depthOrLayers, int mipLevels) {
+		return MetallumTextureBridge.createShaderWritable(this, label, usage, format,
+				width, height, depthOrLayers, mipLevels);
 	}
 
 	@Override
