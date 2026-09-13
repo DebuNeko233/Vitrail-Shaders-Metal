@@ -429,9 +429,6 @@ final class PackCompute implements AutoCloseable {
 				}
 			}
 
-			if (this.announcedChains.add(program)) {
-				Vitrail.logger().info("Dispatched {} compute pass(es) at {}", attached.size(), program);
-			}
 			return;
 		}
 
@@ -513,11 +510,6 @@ final class PackCompute implements AutoCloseable {
 				}
 			}
 
-			if (!this.announced) {
-				this.announced = true;
-				Vitrail.logger().info("Dispatched {} shadow compute pass(es) at the head of the frame",
-						this.passes.size());
-			}
 			return;
 		}
 

@@ -58,6 +58,7 @@ final class BackendComputePass implements AutoCloseable {
 	private ComputeResources resources;
 	private LocalSize localSize;
 	private boolean compiled;
+	private boolean announced;
 
 	BackendComputePass(PackProgram.Compute compute, PackUniforms uniforms, String path, String label,
 			String program, TextureStage textureStage) {
@@ -105,6 +106,15 @@ final class BackendComputePass implements AutoCloseable {
 		}
 		if (this.block != null) {
 			this.block.rotate();
+		}
+		// Acceptance of a zero-sized dispatch is a no-op, not runtime evidence. Announce
+		// each program only after the backend has accepted work with non-zero dimensions.
+		if (!this.announced && groups[0] > 0 && groups[1] > 0 && groups[2] > 0) {
+			this.announced = true;
+			Vitrail.logger().info("Dispatched compute {} through the active backend: "
+					+ "groups=({}, {}, {}), local=({}, {}, {})", this.path,
+					groups[0], groups[1], groups[2],
+					this.localSize.x(), this.localSize.y(), this.localSize.z());
 		}
 	}
 

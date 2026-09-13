@@ -12,7 +12,8 @@ Implementation and local compilation are present; runtime acceptance is open.
 - [x] Close backend compute state through its owning backend.
 - [x] Make missing/incompatible optional compute bridge lookup catchable without class-initialization poisoning.
 - [x] Verify bridge failure regressions and full local Gradle build.
-- [ ] Verify current remote CI and companion Metallum API/build status before publishing or treating both repositories as validated together.
+- [x] Verify companion Metallum bridge signatures and successful build at `81295f0`.
+- [ ] Verify Vitrail remote CI on the published head before treating both repositories as compile-validated together.
 - [ ] Exercise compute writes to storage images/buffers and subsequent render/compute reads on Apple Silicon.
 - [ ] Execute the runtime matrix and Vulkan regression coverage in `docs/metallum-port.md`.
 

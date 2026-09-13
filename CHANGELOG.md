@@ -15,6 +15,8 @@ what the next one holds.
 
 ### Fixed
 
+- Backend compute logs now identify programs with accepted non-zero dispatches, instead of
+  counting programs that failed compilation or never dispatched any work.
 - An unavailable or incompatible optional Metallum compute bridge now reaches the compute
   program failure handler instead of causing a Java class-initialization error.
 
