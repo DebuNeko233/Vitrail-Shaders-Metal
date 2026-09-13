@@ -63,6 +63,7 @@ jobs:
           python3 tests/test_mrt_smoke_fixture.py
           python3 tests/test_terrain_pass_semantics.py
           python3 tests/test_terrain_vertex_abi.py
+          python3 tests/test_sodium_pass_routing.py
           java tests/VerifyMrtScreenshot.java --self-test
 
       # What this refuses is whatever build.gradle refuses on the day it runs. Naming the gates here
