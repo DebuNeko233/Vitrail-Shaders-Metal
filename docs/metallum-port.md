@@ -35,11 +35,12 @@ The current backend foundation includes:
 - backend-owned writable 1D, 2D and true-3D textures;
 - raw SPIR-V storage-image reflection and texture-only storage binding;
 - typed storage-texture zero clears through Metal compute kernels;
-- exact storage-texture region copies through the Metal blit encoder.
+- exact storage-texture region copies through the Metal blit encoder;
+- a general shader-pack compute bridge that compiles SPIR-V to MSL, owns `MTLComputePipelineState`, binds Minecraft facade resources by reflected name/binding, and dispatches exact workgroup counts.
 
 This remains backend GPU behavior. Shader-pack concepts such as `colortex*`, draw-buffer routing, ping-pong/history, custom-image clear policy, camera reanchor policy, program scheduling and pack semantics remain Vitrail responsibilities.
 
-The latest compile-validated Metallum code head for storage-image render binding is `881c4337426fe2dd88b08bcad2d029a00bfa3d71`; GitHub Actions run `34761479404` completed `./gradlew build` successfully with Java 25. Documentation commits follow that code head. The later teardown fix `f9bc3aee46e1491536ce0601a15d354e0c4e4cce` connects the storage-zero pipeline cache to device shutdown and is awaiting its own build result.
+The current Metallum compute-foundation head is `eb0b9e1d52a49158f4f6565d09aed3d5e993ba9e`. GitHub Actions merge workflow `34765312322` completed successfully, so the current MRT/storage/compute backend slice is compile-validated on the repository CI. Runtime validation is still outstanding.
 
 ## Vitrail backend-neutralization
 
@@ -49,11 +50,11 @@ Phase 1 is active on branch `feat/backend-neutral-sodium-terrain-hook` and draft
 
 Sodium 0.9.2 calls `DrawContext#setContext(RenderPass, RenderPipeline)` from `DefaultChunkRenderer` after choosing its concrete draw context. Metallum supplies a `MetalDrawContext` from the same common abstraction. Vitrail therefore hooks the common `DefaultChunkRenderer` invocation rather than the Vulkan-only `VKDrawContext` implementation.
 
-The replacement preserves the original Vulkan ordering: Sodium sets the pipeline first, then Vitrail binds pack resources, then chunk draws begin. The hook imports neither Vulkan nor Metallum classes.
+The replacement must preserve the original Vulkan ordering: Sodium sets the pipeline first, then Vitrail binds pack resources, then chunk draws begin. The hook imports neither Vulkan nor Metallum classes. This ordering remains a required regression check before the port is called ready.
 
 ### Optional Metal capability providers
 
-Optional `@Pseudo` mixins bridge package-private Metallum classes without putting Metallum on Vitrail's compile classpath. The current providers cover independent blending, native mipmap generation, selective pipeline eviction, shader-storage-buffer allocation, writable storage-image allocation, and storage-image clear/copy commands.
+Optional `@Pseudo` mixins bridge package-private Metallum classes without putting Metallum on Vitrail's common compile classpath. The current providers cover independent blending, native mipmap generation, selective pipeline eviction, shader-storage-buffer allocation, writable storage-image allocation, storage-image clear/copy commands, and the new compute pipeline/dispatch capability.
 
 Minecraft 26.2's public `DeviceInfo` and `DeviceFeatures` are still used where they describe real generic capabilities, but they do not expose every shader-pack fact Vitrail needs. Missing facts remain explicit narrow capabilities rather than backend-name guesses.
 
@@ -67,12 +68,12 @@ The old unused `vitrail$viewport(width, height)` command was removed after histo
 
 ### Backend-neutral selective pipeline-cache eviction
 
-`StalePipelines` now separates Vitrail policy from backend action:
+`StalePipelines` separates Vitrail policy from backend action:
 
 - Vitrail chooses which `RenderPipeline` keys are stale;
 - Vulkan and Metal receive only a predicate;
 - Vulkan keeps its existing worker adoption optimization;
-- Metal simply evicts the matching compiled entries and lets the next compile rebuild them;
+- Metal evicts the matching compiled entries and lets the next compile rebuild them;
 - old native pipelines remain alive until a safe full cache purge.
 
 The Metal invalidation is required because `MetalCompiledRenderPipeline` bakes each vertex binding's stride into the compiled `MTLVertexDescriptor`; a live mesh-layout change cannot safely retain the old compiled pipeline under the same Java key.
@@ -92,7 +93,7 @@ On Vulkan the existing direct VMA allocation, dummy facade binding and native de
 
 ### Shader-storage images
 
-The storage-image resource path is now wired through the same narrow-capability model instead of duplicating shader-pack policy in Metallum.
+The storage-image resource path uses the same narrow-capability model instead of duplicating shader-pack policy in Metallum.
 
 `StorageImages` remains the one owner of pack semantics:
 
@@ -108,21 +109,50 @@ The backend boundary contains only resource and command facts:
 - Vulkan keeps the existing direct VMA images, native image views, `GENERAL` layout handling, transfer barriers and descriptor replacement.
 - A backend implementing `StorageImageBackend` may instead return a real Minecraft `GpuTexture`. Vitrail creates a normal `GpuTextureView` through `GpuDevice.createTextureView(...)` and never carries an `MTLTexture` handle or Metal argument index.
 - `StorageImages` stores the backend-owned view under both the image uniform name and the optional sampler alias while retaining the existing Vulkan-native `Bound` map separately.
-- `RenderPassMixin` wraps the public `RenderPassBackend.bindTexture(...)` call. It substitutes a backend-owned storage-image view only when `StorageImages` has one for that name, and always calls the original operation so existing wrappers and the particle tail hook retain their ordering.
-- Metallum reflects the real storage-image resource kind from SPIR-V. The storage binding receives only a Metal texture argument; it does not receive sampler state. An optional sampled alias remains an ordinary sampled texture plus sampler.
+- `RenderPassMixin` substitutes a backend-owned storage-image view only when `StorageImages` has one for that name and still calls the original public bind operation.
+- Metallum reflects the real storage-image resource kind from SPIR-V. The storage binding receives only a Metal texture argument; an optional sampled alias remains a sampled texture plus sampler.
 - `StorageImageCommands` exposes zero clear and exact region copy. Vitrail decides when to invoke them; Metallum encodes the operation with its compute/blit encoders and existing `MTLFence` ordering.
 - Camera reanchor uses two copies through a distinct scratch texture on both backends, so no backend is asked to define overlapping in-place texture-copy semantics.
-- Birth preparation is transactional at the Vitrail level: `laidOut` is committed only after backend preparation succeeds. If preparation throws, Vitrail destroys the complete allocated set through the active backend lifetime path, clears its binding maps, and forces any later attempt to allocate fresh resources rather than treating a partial preparation as valid.
+- Birth preparation is transactional at the Vitrail level: `laidOut` is committed only after backend preparation succeeds. If preparation throws, Vitrail destroys the complete allocated set through the active backend lifetime path and forces a later attempt to allocate fresh resources.
 
-This is a resource/lifecycle bridge, not proof that custom shader-pack compute programs run on Metal.
+### Backend-neutral compute seam
 
-### Remaining compute boundary
+The first compute boundary is now present without changing the established Vulkan execution path yet.
 
-Vitrail's custom `ComputeShader` path is still Vulkan-specific. It currently accepts `VulkanDevice`, constructs `VulkanBindGroupLayout.Entry` objects, and produces a Vulkan shader module. Therefore a pack that depends on `shadowcomp` or another custom compute stage cannot yet exercise the new Metal storage resources end-to-end merely because allocation, render binding, clear and copy now exist.
+`ComputeDeviceBackend` owns only native pipeline lifetime:
 
-The next hard Phase 1 boundary is a narrow backend-neutral compute compile/dispatch capability. Vitrail must retain program scheduling, SPIR-V resource names and shader-pack semantics; Metallum should own SPIR-V-to-MSL translation, `MTLComputePipelineState`, Metal argument binding, encoder transitions and native object lifetime. The Vulkan provider must keep the current behavior unchanged.
+- `vitrail$compileCompute(label, spirv)` receives Vitrail's already-translated SPIR-V and returns an opaque backend-owned token;
+- `vitrail$closeCompute(token)` returns that token to the backend for deferred native destruction.
+
+`ComputeCommands` owns only one resolved dispatch:
+
+- buffer bindings are supplied as `Map<String, GpuBufferSlice>`;
+- texture bindings are supplied as `Map<String, GpuTextureView>`;
+- sampler bindings are supplied as `Map<String, GpuSampler>`;
+- the dispatch carries exact workgroup counts plus the shader's local workgroup size.
+
+The optional Metallum provider is late-bound through `com.metallum.render.MetalComputeBridge`, so Vitrail still has no compile-time Metallum dependency. The opaque token is not a Metal pointer and Vitrail never observes `MTLComputePipelineState`, MSL source, native argument indices, `MTLBuffer`, or `MTLTexture` handles.
+
+Metallum's implementation keeps native responsibilities on the backend side:
+
+- SPIR-V to MSL conversion and compute entry-point resolution;
+- reflection of uniform buffers, storage buffers, combined sampled images and storage images;
+- `MTLComputePipelineState` creation and deferred release;
+- compute buffer/texture/sampler argument binding;
+- `dispatchThreadgroups:threadsPerThreadgroup:` for Vulkan-equivalent workgroup-count semantics;
+- render/blit/compute ordering through the existing encoder-ending `MTLFence` chain rather than Vulkan barriers.
+
+The distinction between `dispatchThreadgroups` and `dispatchThreads` is deliberate. Vitrail's current Vulkan `vkCmdDispatch(groupsX, groupsY, groupsZ)` passes workgroup counts, so feeding those values to Metal's arbitrary-thread-grid `dispatchThreads` would execute the wrong grid. The Metal bridge therefore takes both the workgroup counts and local size explicitly.
+
+This seam is not yet the end-to-end switch. `PackCompute` still contains the current Vulkan layout, push-descriptor, barrier, dispatch and destruction implementation. The next code step is to keep that Vulkan branch unchanged while adding a Metal branch that resolves the same names and target halves into the new facade maps and then invokes the capability above.
 
 `WideSamplerSets` remains a Vulkan/MoltenVK push-descriptor workaround and is not a Metal feature to port.
+
+### Compute limitations still explicit
+
+The current Metal bridge intentionally claims only the resource classes already reflected and bound correctly: uniform buffers, storage buffers, combined sampled images and storage images. It does not silently claim support for every possible SPIR-V resource class.
+
+The old MoltenVK-specific oversized `shared`-memory rewrite also has not been generalized to native Metal. If a pack's compute kernel exceeds native Metal threadgroup-memory limits, that must be handled by a separately verified policy or refused explicitly; the backend must not guess a semantically different substitute.
 
 ## Current validation status
 
@@ -130,17 +160,13 @@ The two repositories are still Draft and unmerged.
 
 ### Metallum
 
-Storage-image reflection and render binding are compile-validated at code head `881c4337426fe2dd88b08bcad2d029a00bfa3d71` by GitHub Actions run `34761479404` on Java 25.
+Current head `eb0b9e1d52a49158f4f6565d09aed3d5e993ba9e` passed GitHub Actions merge workflow `34765312322`. This includes the general compute bridge, Metal compute buffer/sampler binding, and workgroup-count dispatch additions.
 
-The storage-texture primitives still require Apple-Silicon runtime validation. Commit `f9bc3aee46e1491536ce0601a15d354e0c4e4cce` now calls `MTLStorageTexturePipelines.close()` from `MetalDevice.close()` so the typed zero-clear pipeline cache follows device lifetime; that commit is not called compile-validated until its current CI completes successfully.
+This is compile validation only. Apple-Silicon runtime validation of MRT, mipmaps, SSBO/storage-image behavior and general compute remains required.
 
 ### Vitrail
 
-Build run #33 reached Java compilation and exposed two incorrect LWJGL single-structure allocations in `GpuRecording`: `VkDependencyInfo.calloc(1, stack)` returns a buffer, not a single `VkDependencyInfo`. Code head `0592b2b0097f5deeeca1250de4cbbc37701dc579` corrected both sites to the single-structure allocator.
-
-A later code review found that `StorageImages.newlyBorn()` marked allocations prepared before backend birth preparation completed. Commit `8b30e6f9788aca8c04b439e91f62b253df02f1d6` fixes that state transition and tears down the allocated set if preparation fails. Later documentation/repository-memory commits follow that code head.
-
-At this documentation checkpoint, the latest full Gradle build for the final storage-image lifecycle head has not yet completed successfully, so this Vitrail slice must not yet be described as compile-validated.
+Before the new compute seam, head `1ce612755028a470aa5a1625c35d36c444fb0eeb` had a green build and commit-policy gate. The compute capability/provider head `9ecf5e3bb020b1a30960e6856a2dee25b8ae4a1c` has a successful commit-policy workflow; its build workflow `34765441999` is still running at this documentation checkpoint and must not be called compile-validated until it completes successfully.
 
 ## Runtime validation required before merge
 
@@ -156,19 +182,21 @@ Before either Draft PR becomes ready, the combined path still needs at least:
 8. writable storage-image zero/write/read using a true 3D texture;
 9. sampled alias of the same storage-image resource reading the expected contents;
 10. scratch-based storage-volume camera reanchor;
-11. custom shader-pack compute writing storage resources and a later render/compute stage consuming the result once the compute bridge exists;
+11. custom shader-pack compute writing storage resources and a later render/compute stage consuming the result after `PackCompute` is routed through the new backend seam;
 12. Vulkan regression coverage for every shared path touched by the backend-neutralization.
 
 A green Gradle build is necessary but is not evidence that these rendering semantics are correct.
 
 ## Next work
 
-The immediate closure tasks for the storage-image slice are now the two compile gates and the durable checkpoint:
+Immediate work is now:
 
-- complete a green Vitrail build on the final storage-image lifecycle head;
-- complete a green Metallum build on the device-teardown head;
-- refresh Repository Memory with the final build/run identifiers and run the repository's documented memory audit.
+- finish the current Vitrail compute-seam build gate;
+- refactor `PackCompute` so Vitrail continues to own pack resource-name resolution, ping-pong target selection, dispatch sizing and scheduling while Vulkan retains its existing native branch and Metal receives facade resources through `ComputeDeviceBackend` / `ComputeCommands`;
+- keep `WideSamplerSets` and Vulkan barrier code on the Vulkan branch only;
+- explicitly handle or reject native-Metal shared/threadgroup-memory cases that exceed verified limits;
+- then run Apple-Silicon compute smoke tests before changing any startup support gate.
 
-After those are closed, continue with the backend-neutral shader-pack compute boundary. Geometry-stage support and the remaining synchronization/startup boundaries follow. `HostReport.otherBackend()`, `PackScreens`, `GraphicsApiChoice`, `StartupGuard`, and the backend placeholder must remain conservative until the required capabilities and Apple-Silicon validation are complete.
+Geometry-stage support and the remaining synchronization/startup boundaries follow. `HostReport.otherBackend()`, `PackScreens`, `GraphicsApiChoice`, `StartupGuard`, and the backend placeholder must remain conservative until the required capabilities and Apple-Silicon validation are complete.
 
 Any new Minecraft, Sodium, Mixin, Metallum, SPIRV-Cross or Metal API used by the next bridge must be checked against the exact Minecraft 26.2 / Sodium 0.9.2 source or published API before code is committed, as required by `AGENTS.md`.
