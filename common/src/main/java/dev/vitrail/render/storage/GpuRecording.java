@@ -89,7 +89,7 @@ public final class GpuRecording {
 		barrier.dstAccessMask(VK13.VK_ACCESS_2_SHADER_STORAGE_READ_BIT
 				| VK13.VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT
 				| VK13.VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
-		VkDependencyInfo dependency = VkDependencyInfo.calloc(1, stack).sType$Default();
+		VkDependencyInfo dependency = VkDependencyInfo.calloc(stack).sType$Default();
 		dependency.pMemoryBarriers(barrier);
 		KHRSynchronization2.vkCmdPipelineBarrier2KHR(commands, dependency);
 	}
@@ -106,7 +106,7 @@ public final class GpuRecording {
 		barrier.dstStageMask(VK13.VK_PIPELINE_STAGE_2_TRANSFER_BIT);
 		barrier.dstAccessMask(VK13.VK_ACCESS_2_TRANSFER_READ_BIT
 				| VK13.VK_ACCESS_2_TRANSFER_WRITE_BIT);
-		VkDependencyInfo dependency = VkDependencyInfo.calloc(1, stack).sType$Default();
+		VkDependencyInfo dependency = VkDependencyInfo.calloc(stack).sType$Default();
 		dependency.pMemoryBarriers(barrier);
 		KHRSynchronization2.vkCmdPipelineBarrier2KHR(commands, dependency);
 	}
