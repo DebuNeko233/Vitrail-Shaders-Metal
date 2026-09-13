@@ -16,7 +16,7 @@ The two Sodium strings are intentionally different because the two repositories 
 
 ## Metallum foundation
 
-A dedicated Metallum branch and draft pull request implement the Minecraft 26.2 multi-render-target contract:
+A dedicated Metallum branch and draft pull request implement the Minecraft 26.2 multi-render-target contract and the backend primitives Vitrail needs:
 
 - repository: `DebuNeko233/metallum`
 - branch: `feat/mc26.2-mrt-foundation`
@@ -35,7 +35,8 @@ The draft currently covers:
 - common attachment extent validation;
 - depth-only render-pass sizing;
 - Sodium 0.9.2 stable alignment in Metallum;
-- backend-native colour mipmap generation through `MTLBlitCommandEncoder.generateMipmapsForTexture:` for eligible colour textures.
+- backend-native colour mipmap generation through `MTLBlitCommandEncoder.generateMipmapsForTexture:` for eligible colour textures;
+- selective pipeline-cache eviction with deferred native-pipeline release at the next safe full cache clear.
 
 The mipmap path deliberately refuses depth/stencil textures. Vitrail's shadow-depth mip chain therefore still falls back to level zero on Metal until a correct depth reduction path is implemented and validated.
 
@@ -85,13 +86,32 @@ The Mixin usage follows the upstream soft-target contract: `@Pseudo` permits tar
 
 The dead method has therefore been removed from `MipmapCommands`, `VulkanCommandEncoderMixin`, and the Metal adapter instead of inventing a Metal implementation for an operation Vitrail no longer requests. The PR build is the compile-time guard against a missed Java reference; any surviving caller would fail compilation immediately.
 
-This is still only part of the backend boundary. Vulkan-only pipeline-cache handling, synchronization special cases, descriptor-set handling, geometry-stage implementation, and startup/backend selection still need explicit provider or capability boundaries before the port can be called backend-neutral.
+### Backend-neutral selective pipeline-cache eviction
+
+The entity-mesh transition exposed another Vulkan leak in what looked like a capability interface. `StalePipelines` previously imported `VulkanRenderPipeline`, chose the game's entity pipelines inside `VulkanDeviceMixin`, and mixed selective invalidation with the Vulkan-only background warm-up adoption path.
+
+The boundary is now split by responsibility without changing the existing `EntityMesh` call site:
+
+- `StalePipelines.vitrail$dropPipelines(Predicate<RenderPipeline>)` is the backend command. A backend receives only a predicate and returns the keys it actually removed.
+- `StalePipelines.vitrail$dropEntityPipelines()` is Vitrail policy. It builds that predicate from each pipeline's declared vertex bindings and `DefaultVertexFormat.ENTITY`, deliberately reading the declaration rather than Vitrail's rewritten getter.
+- The optional adoption method now accepts Mojang's backend-neutral `CompiledRenderPipeline` and defaults to `false`. The Vulkan provider recognizes `VulkanRenderPipeline` and keeps the existing worker optimization; Metal does not imitate that optimization and safely falls back to its normal first-draw compile.
+- `VulkanDeviceMixin` keeps the old compiled Vulkan pipelines alive in its set-aside list until the next full cache purge, exactly as before.
+- `mixin.metallum.MetalDeviceMixin` is an optional soft target that forwards only the predicate to Metallum's `MetalDevice.evictCachedPipelines(...)`.
+- Metallum removes matching keys immediately but retains their `MetalCompiledRenderPipeline` values until `clearPipelineCache()`. That method already waits for submitted GPU work before releasing native pipelines, so an already-recorded frame cannot lose a pipeline underneath it.
+
+This Metal invalidation is required by source, not by analogy alone. `MetalCompiledRenderPipeline.buildVertexDescriptor(...)` copies `VertexFormat.getVertexSize()` into the Metal vertex-buffer layout stride when the native pipeline is compiled. Because `MetalDevice` caches compiled pipelines by `RenderPipeline` identity, a live mesh-layout change must invalidate the matching compiled entries or the old stride can survive under the same Java pipeline key.
+
+Minecraft 26.2's public `GpuDeviceBackend` exposes `precompilePipeline(...)` and full `clearPipelineCache()`, but no selective cache invalidation operation. The selective operation therefore remains a thin backend extension while the decision about which keys are stale remains in Vitrail.
+
+This is still only part of the backend boundary. Vulkan-only synchronization special cases, descriptor-set/binding handling, geometry-stage implementation, and startup/backend selection still need explicit provider or capability boundaries before the port can be called backend-neutral.
 
 ## Validation status
 
 The Metallum changes are **not yet considered runtime-complete**.
 
-The fork currently has no confirmed successful build for this feature branch. The local execution environment used during this work also cannot reach GitHub or Maven repositories, so it cannot download the dependencies needed to substitute for CI.
+The fork still has no confirmed successful build for this feature branch. The local execution environment used during this work cannot download the dependencies needed to substitute for CI.
+
+Vitrail draft PR #1 now has a working commit-policy check and has reached the Gradle dependency-resolution stage. The first build attempt was stopped by the repository text gate because the imported `AGENTS.md` migration contract preserves the user's typographic punctuation. The build now excludes that single non-shipped instruction file while leaving source and `docs/**` text checks unchanged. The following build passed `checkText` but was blocked before Java compilation because `https://maven.neoforged.net/mojang-meta/` returned HTTP 502 for `net.neoforged:minecraft-dependencies:26.2` in all three modules. That failure is recorded as an upstream dependency-service block, not as a successful or failed Java compile.
 
 Before the Metallum PR is ready to merge, it still needs:
 
@@ -100,14 +120,15 @@ Before the Metallum PR is ready to merge, it still needs:
 3. confirmation that a pass with an unused middle attachment slot preserves fragment-output locations;
 4. confirmation that ordinary single-target vanilla/Sodium rendering is unchanged;
 5. a colour-mipmap smoke test that samples non-zero LODs after a Metal-generated chain;
-6. a regression check that unsupported shadow/depth mip generation cleanly stays on Vitrail's base-level fallback.
+6. a regression check that unsupported shadow/depth mip generation cleanly stays on Vitrail's base-level fallback;
+7. an entity-mesh transition smoke test proving that the Metal pipeline cache recompiles the changed stride and does not release the evicted native pipeline before the safe full-cache purge.
 
-The Vitrail backend-neutral Sodium hook, optional Metal capability provider, colour-mipmap adapter, and dead-viewport cleanup are source-checked against Sodium tag `mc26.2-0.9.2`, the current Metallum MRT branch, Minecraft 26.2 `GpuFormat`, Metal's blit mipmap API, the Mixin soft-target contract, and the Vitrail commit history. They still need the repository build/CI path plus Vulkan and Metal runtime smoke coverage before the draft PR is ready.
+The Vitrail backend-neutral Sodium hook, optional Metal providers, colour-mipmap adapter, dead-viewport cleanup, and selective pipeline-cache boundary are source-checked against Sodium tag `mc26.2-0.9.2`, the current Metallum MRT branch, Minecraft 26.2 `GpuFormat` and `GpuDeviceBackend`, Metal's blit mipmap API, the Mixin soft-target contract, and the Vitrail commit history. They still need a dependency-successful repository build plus Vulkan and Metal runtime smoke coverage before the draft PR is ready.
 
 ## Next Vitrail work
 
 Continue Phase 1 without yet treating Metal as a fully supported shader-pack backend. `HostReport.otherBackend()`, `PackScreens`, `GraphicsApiChoice`, `StartupGuard`, and the backend placeholder must continue to prevent the incomplete Metal path from being presented as finished until the remaining required capabilities are bridged and validated.
 
-The next backend slices should isolate pipeline-cache lifecycle, descriptor/binding internals, synchronization special cases, and geometry-stage support, then establish a Metal implementation or conservative fallback for each. The existing Vitrail capability classes should remain the policy boundary: Vulkan and Metal providers publish facts, while shader-pack scheduling and render-target semantics stay in Vitrail.
+The next backend slices should isolate descriptor/binding internals, synchronization special cases, and geometry-stage support, then establish a Metal implementation or conservative fallback for each. The existing Vitrail capability classes should remain the policy boundary: Vulkan and Metal providers publish facts, while shader-pack scheduling and render-target semantics stay in Vitrail.
 
 Any new Minecraft, Sodium, Mixin, or Metallum API used by that bridge must be checked against the exact Minecraft 26.2 / Sodium 0.9.2 source or published API before code is committed, as required by `AGENTS.md`.
