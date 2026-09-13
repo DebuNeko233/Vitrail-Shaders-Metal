@@ -127,22 +127,22 @@ This is still only part of the backend boundary. Vulkan-only synchronization spe
 
 ## Validation status
 
-The Metallum changes are **not yet considered runtime-complete**.
+Both sides of the current SSBO slice are compile-validated.
 
-Vitrail draft PR #1 had both its commit-policy and full Gradle `build` workflow green at the pre-SSBO head `d98e219d9fa4166d7be5ece954d7683065779db5`. That proves the terrain hook, Metal capability providers, colour mipmaps, dead-viewport cleanup and selective pipeline-cache boundary compiled under the repository's Java/lint/doclint gates. The new SSBO slice is a later head and must pass the same checks before it inherits that status.
+- Vitrail draft PR #1 head `85cc7199deb6433e892bef9889b72f5ba670e1db` completed both the `commits` and full Gradle `build` workflows successfully. That includes `StorageBufferBackend`, the Metal soft bridge, the backend-owned allocation path, the preserved Vulkan fallback, text checks, javac warnings-as-errors and doclint.
+- Metallum draft PR #1 head `eafb8c5df105a15b749a165cb8044367e28097f3` completed GitHub Actions run `34757903523` successfully with Java 25 and `./gradlew build`. The preceding run exposed an invalid JSpecify type-use on the nested MRT attachment type; that was corrected before this successful run.
 
-Metallum draft PR #1 now has a pull-request workflow running for the SSBO head. Until that run completes successfully, the new Metal storage-buffer compiler/resource changes remain source-reviewed rather than compile-validated.
+This is compile validation, not runtime validation. No Apple-Silicon SSBO/MRT/mipmap smoke result has been recorded yet, and the Metal backend must not be advertised as complete on the strength of a green build alone.
 
 Before the Metallum PR is ready to merge, it still needs:
 
-1. a successful `./gradlew build` against Minecraft 26.2 and Sodium 0.9.2 for the current head;
-2. a macOS/Apple-Silicon MRT smoke test that writes distinct values to at least four targets and reads them back or visualizes them;
-3. confirmation that a pass with an unused middle attachment slot preserves fragment-output locations;
-4. confirmation that ordinary single-target vanilla/Sodium rendering is unchanged;
-5. a colour-mipmap smoke test that samples non-zero LODs after a Metal-generated chain;
-6. a regression check that unsupported shadow/depth mip generation cleanly stays on Vitrail's base-level fallback;
-7. an entity-mesh transition smoke test proving that the Metal pipeline cache recompiles the changed stride and does not release the evicted native pipeline before the safe full-cache purge;
-8. an SSBO smoke test that starts from known zero contents, writes through a shader, and reads a nontrivial range back through a later shader stage without aliasing a vertex/uniform argument slot.
+1. a macOS/Apple-Silicon MRT smoke test that writes distinct values to at least four targets and reads them back or visualizes them;
+2. confirmation that a pass with an unused middle attachment slot preserves fragment-output locations;
+3. confirmation that ordinary single-target vanilla/Sodium rendering is unchanged;
+4. a colour-mipmap smoke test that samples non-zero LODs after a Metal-generated chain;
+5. a regression check that unsupported shadow/depth mip generation cleanly stays on Vitrail's base-level fallback;
+6. an entity-mesh transition smoke test proving that the Metal pipeline cache recompiles the changed stride and does not release the evicted native pipeline before the safe full-cache purge;
+7. an SSBO smoke test that starts from known zero contents, writes through a shader, and reads a nontrivial range back through a later shader stage without aliasing a vertex/uniform argument slot.
 
 Storage-image support needs its own compile/runtime validation after it is implemented and is not implied by the SSBO work.
 
