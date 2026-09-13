@@ -47,6 +47,10 @@ public final class TargetName {
         return OptionalInt.of(Integer.parseInt(tail));
     }
     public static String canonical(int index) { return "colortex" + index; }
+    public static String bareName(String path) {
+        int slash = path.lastIndexOf('/');
+        return slash < 0 ? path : path.substring(slash + 1);
+    }
 }
 '''
 
@@ -113,8 +117,10 @@ class GbufferClearTest(unittest.TestCase):
             write('dev/vitrail/pack/target/GbufferClearCheck.java', HARNESS),
         ]
         cls.classes = root / 'classes'
-        subprocess.run(['javac', '-d', str(cls.classes), *sources], check=True,
-                       capture_output=True, text=True)
+        compiled = subprocess.run(['javac', '-d', str(cls.classes), *sources],
+                                  capture_output=True, text=True)
+        if compiled.returncode != 0:
+            raise RuntimeError(compiled.stderr)
 
     @classmethod
     def tearDownClass(cls):
