@@ -131,7 +131,7 @@ The caller-side helper baseline `3b53b58086f5db42c526070a30216515917abead` passe
 
 The actual `PackCompute` dispatch routing landed at `5e84c045332c3687dd0c7be94c894353bdfebcca`; the earlier green builds do not validate that later change.
 
-`python3 tests/test_metallum_compute_bridge.py` checks the real Java adapter against isolated fixtures: missing bridge, missing close method, repeated lookup failure, successful dispatch argument forwarding, and propagation of backend exceptions/errors. Facade stubs make this independent of Minecraft; it does not validate the Minecraft ABI or Metal execution. All three cases pass locally, and the pre-fix adapter reproduces both lookup-failure regressions. The full local JDK 25 `./gradlew build` passed on 2026-09-14; this is not a remote CI or runtime claim.
+`python3 tests/test_metallum_compute_bridge.py` checks the real Java adapter against isolated fixtures: missing bridge, missing close method, repeated lookup failure, successful dispatch argument forwarding, and propagation of backend exceptions/errors. Facade stubs make this independent of Minecraft; it does not validate the Minecraft ABI or Metal execution. The build workflow runs this suite before Gradle so optional-backend failure handling is checked without a GPU. All three cases pass locally, and the pre-fix adapter reproduces both lookup-failure regressions. The full local JDK 25 `./gradlew build` passed on 2026-09-14; this is not a remote CI or runtime claim.
 
 ## Runtime validation required before merge
 

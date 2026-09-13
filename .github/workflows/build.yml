@@ -50,6 +50,9 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      - name: Check optional compute bridge failure handling
+        run: python3 tests/test_metallum_compute_bridge.py
+
       # What this refuses is whatever build.gradle refuses on the day it runs. Naming the gates here
       # as well would only give them a third home to drift out of step with.
       - run: ./gradlew build

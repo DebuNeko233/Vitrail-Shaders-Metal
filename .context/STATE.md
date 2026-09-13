@@ -10,7 +10,7 @@ Scope: `feat/backend-neutral-sodium-terrain-hook`
 - Backend compute owns the uniform ring and opaque pipeline lifetime; Vitrail retains resource-name resolution, target-half selection and dispatch scheduling. Metallum owns native compilation, binding and synchronization.
 - Optional compute bridge method lookup now happens inside a normal call and caches only the complete method set. Missing classes/signatures remain catchable and do not poison adapter initialization. Backend runtime exceptions and fatal errors propagate unchanged.
 - Backend compute success logs are emitted per program after an accepted non-zero dispatch and include workgroup/local dimensions. They do not claim GPU completion.
-- The isolated adapter regression suite passes all three cases; running it against the original adapter reproduces both unavailable/incompatible bridge failures. Its facade stubs do not validate Minecraft or Metal ABI.
+- The isolated adapter regression suite passes all three cases; running it against the original adapter reproduces both unavailable/incompatible bridge failures. The build workflow runs the suite before Gradle. Its facade stubs do not validate Minecraft or Metal ABI.
 - Local JDK 25 full `./gradlew build` passed on 2026-09-14. This is local compile validation, not CI or real-device verification.
 
 ## Open validation boundaries
