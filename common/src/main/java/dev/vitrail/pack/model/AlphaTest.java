@@ -131,7 +131,7 @@ public record AlphaTest(Function function, float reference) {
 	 * dump next to the {@code 0.0001} the pack wrote.
 	 */
 	private String literal() {
-		String plain = new BigDecimal(Float.toString(this.reference)).toPlainString();
+		String plain = new BigDecimal(Float.toString(this.reference)).stripTrailingZeros().toPlainString();
 
 		return plain.indexOf('.') < 0 ? plain + ".0" : plain;
 	}
