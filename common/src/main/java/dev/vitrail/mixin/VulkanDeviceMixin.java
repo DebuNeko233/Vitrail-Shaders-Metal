@@ -2,9 +2,9 @@ package dev.vitrail.mixin;
 
 import dev.vitrail.render.PackChain;
 import dev.vitrail.render.StalePipelines;
-import dev.vitrail.render.VulkanPipelineAdoption;
 import dev.vitrail.Vitrail;
 
+import com.mojang.blaze3d.pipeline.CompiledRenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.vulkan.VulkanDevice;
 import com.mojang.blaze3d.vulkan.VulkanRenderPipeline;
@@ -56,7 +56,7 @@ import java.util.function.Predicate;
  * moment it returns, so a pipeline that left the map there would outlive its own device.
  */
 @Mixin(VulkanDevice.class)
-public abstract class VulkanDeviceMixin implements StalePipelines, VulkanPipelineAdoption {
+public abstract class VulkanDeviceMixin implements StalePipelines {
 
 	/**
 	 * Whether the live pack's pipelines cross a resource reload rather than being compiled again
@@ -118,8 +118,12 @@ public abstract class VulkanDeviceMixin implements StalePipelines, VulkanPipelin
 	}
 
 	@Override
-	public boolean vitrail$adopt(RenderPipeline pipeline, VulkanRenderPipeline compiled) {
-		return this.pipelineCache.putIfAbsent(pipeline, compiled) == null;
+	public boolean vitrail$adopt(RenderPipeline pipeline, CompiledRenderPipeline compiled) {
+		if (!(compiled instanceof VulkanRenderPipeline vulkan)) {
+			return false;
+		}
+
+		return this.pipelineCache.putIfAbsent(pipeline, vulkan) == null;
 	}
 
 	/**
