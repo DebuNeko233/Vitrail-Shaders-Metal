@@ -5,7 +5,7 @@ Scope: active topic branch `feat/backend-neutral-sodium-terrain-hook` and draft 
 
 ## P0 — Complete the Metal storage-image path
 
-Status: active, implementation landed; compile/doc checkpoint still open
+Status: active, implementation/lifecycle fixes landed; final compile checkpoint still open
 
 Goal:
 Make `image.NAME` resources work through Metallum using the backend-neutral storage-image capabilities without moving shader-pack policy into the backend or regressing the Vulkan path.
@@ -16,11 +16,11 @@ Acceptance criteria:
 - [x] Vitrail carries Minecraft `GpuTexture`/`GpuTextureView` objects across the Metal seam; no Metal native handle or argument index becomes part of Vitrail policy code.
 - [x] The image uniform is bound as a storage texture and an optional sampler alias remains a sampled texture without inventing a second logical resource/binding.
 - [x] Clear-at-birth, pack-marked clears, relative resize, movable-volume detection, scratch allocation, and camera reanchor decisions remain Vitrail policy and work through backend commands on Metal.
-- [ ] Vitrail build/commit gates are green on the final storage-image head. Build #33 reached javac and exposed two incorrect `VkDependencyInfo.calloc(1, stack)` single-struct allocations; head `0592b2b0097f5deeeca1250de4cbbc37701dc579` fixes those and its successor workflows are pending.
+- [ ] Vitrail build/commit gates are green on the final storage-image head. Build #33 reached javac and exposed two incorrect `VkDependencyInfo.calloc(1, stack)` single-struct allocations; `0592b2b0097f5deeeca1250de4cbbc37701dc579` fixed those. Storage-image birth-state cleanup landed at `8b30e6f9788aca8c04b439e91f62b253df02f1d6`; its successor workflows are pending.
 - [x] Companion Metallum code through storage-image draw binding is compile-green: head `881c4337426fe2dd88b08bcad2d029a00bfa3d71`, Actions run `34761479404`.
-- [ ] Wire `MTLStorageTexturePipelines.close()` into Metal device teardown so the typed zero-clear pipeline cache cannot survive device destruction/recreation.
-- [ ] Fix the `newlyBorn()` state transition so an allocation is marked prepared only after backend birth preparation succeeds; a provider refusal must remain retryable or fail the owning load cleanly rather than leaving `laidOut=true` prematurely.
-- [ ] `docs/metallum-port.md` is updated to distinguish the implemented resource path from the still-Vulkan-only shader-pack compute path and from runtime validation.
+- [x] `MTLStorageTexturePipelines.close()` is wired into `MetalDevice.close()` at Metallum commit `f9bc3aee46e1491536ce0601a15d354e0c4e4cce`; its build gate is pending before the lifecycle fix is considered validated.
+- [x] `newlyBorn()` no longer marks an allocation prepared before backend birth preparation succeeds. `laidOut` is committed only after successful preparation, and a preparation exception destroys the allocated set, clears bindings, and forces the next attempt to allocate from scratch.
+- [x] `docs/metallum-port.md` distinguishes the implemented resource path from the still-Vulkan-only shader-pack compute path and from runtime validation.
 
 Relevant repository evidence:
 
