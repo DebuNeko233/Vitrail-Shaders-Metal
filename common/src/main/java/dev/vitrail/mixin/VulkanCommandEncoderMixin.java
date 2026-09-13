@@ -19,7 +19,6 @@ import org.lwjgl.vulkan.VkImageBlit;
 import org.lwjgl.vulkan.VkImageMemoryBarrier2;
 import org.lwjgl.vulkan.VkImageSubresourceRange;
 import org.lwjgl.vulkan.VkMemoryBarrier2;
-import org.lwjgl.vulkan.VkViewport;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -221,31 +220,6 @@ public abstract class VulkanCommandEncoderMixin implements MipmapCommands {
 			if (!wide) {
 				vitrail$chainTailBarrier(commands, stack);
 			}
-		}
-
-		return true;
-	}
-
-	/**
-	 * The same call the pass constructor makes, with the extent said rather than the one shifted
-	 * off the attachment. Dynamic state on the pass's own command buffer, so it holds until the
-	 * next pass opens and sets its own.
-	 */
-	@Override
-	public boolean vitrail$viewport(int width, int height) {
-		if (this.currentRenderPass == null || width <= 0 || height <= 0) {
-			return false;
-		}
-
-		try (MemoryStack stack = MemoryStack.stackPush()) {
-			VkViewport.Buffer viewport = VkViewport.calloc(1, stack)
-					.x(0.0F)
-					.y(0.0F)
-					.width(width)
-					.height(height)
-					.minDepth(0.0F)
-					.maxDepth(1.0F);
-			VK12.vkCmdSetViewport(vitrail$commandBuffer(), 0, viewport);
 		}
 
 		return true;
