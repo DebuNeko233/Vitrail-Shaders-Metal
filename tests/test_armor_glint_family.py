@@ -24,8 +24,11 @@ class ArmorGlintFamilyTest(unittest.TestCase):
         self.assertIn('const bool colortex1Clear = true;', fragment)
         self.assertIn('const vec4 colortex1ClearColor = vec4(0.0, 0.0, 0.0, 1.0);', fragment)
         self.assertIn('/* DRAWBUFFERS:1 */', fragment)
-        self.assertIn('vec4(0.0, step(0.02, textureSignal), 0.0, texel.a)', fragment)
-        self.assertIn('vec4(1.0, 0.0, 1.0, texel.a)', fragment)
+        self.assertIn('float sampledTextureOk = step(-0.01, minSample) * step(maxSample, 1.01);', fragment)
+        self.assertIn('float contractOk = glintAbiOk * sampledTextureOk;', fragment)
+        self.assertIn('? vec4(0.0, 1.0, 0.0, 1.0)', fragment)
+        self.assertIn(': vec4(1.0, 0.0, 1.0, 1.0)', fragment)
+        self.assertNotIn('step(0.02, textureSignal)', fragment)
 
         self.assertIn('gl_Position = ftransform();', final_vertex)
         self.assertIn('texcoord = gl_MultiTexCoord0.st;', final_vertex)
