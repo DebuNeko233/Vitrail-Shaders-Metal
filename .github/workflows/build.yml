@@ -77,6 +77,7 @@ jobs:
           python3 tests/test_weather_family.py
           python3 tests/test_cloud_family.py
           python3 tests/test_sky_family.py
+          python3 tests/test_depthtex0_contract.py
           python3 tests/test_terrain_pass_semantics.py
           python3 tests/test_terrain_vertex_abi.py
           python3 tests/test_sodium_pass_routing.py
@@ -95,6 +96,7 @@ jobs:
           java tests/VerifyWeatherScreenshot.java --self-test
           java tests/VerifyCloudScreenshot.java --self-test
           java tests/VerifySkyScreenshot.java --self-test
+          java tests/VerifyDepthtex0Screenshot.java --self-test
 
       # What this refuses is whatever build.gradle refuses on the day it runs. Naming the gates here
       # as well would only give them a third home to drift out of step with.
