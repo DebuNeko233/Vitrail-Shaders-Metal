@@ -58,7 +58,8 @@ class CloudFamilyTest(unittest.TestCase):
         self.assertIn('#define of_Color', vertex)
         self.assertIn('#define of_Normal of_cloudNormals[of_cloudFacing()]', vertex)
         self.assertIn('#define of_MultiTexCoord0 vec4(0.5, 0.5, 0.0, 1.0)', vertex)
-        self.assertIn('#define of_MultiTexCoord1 vec4(240.0, 240.0, 0.0, 1.0)', vertex)
+        self.assertIn('for (int unit = 1; unit <= 2; unit++)', vertex)
+        self.assertIn('"#define of_MultiTexCoord" + unit + " vec4(240.0, 240.0, 0.0, 1.0)"', vertex)
         self.assertIn('// No format, which this family is alone in', program)
 
 
