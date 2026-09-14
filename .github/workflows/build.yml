@@ -80,6 +80,7 @@ jobs:
           python3 tests/test_depthtex0_contract.py
           python3 tests/test_depth_batch_contract.py
           python3 tests/test_depth_final_contract.py
+          python3 tests/test_shadow_terrain_contract.py
           python3 tests/test_terrain_pass_semantics.py
           python3 tests/test_terrain_vertex_abi.py
           python3 tests/test_sodium_pass_routing.py
@@ -101,6 +102,7 @@ jobs:
           java tests/VerifyDepthtex0Screenshot.java --self-test
           java tests/VerifyDepthBatchScreenshot.java --self-test
           java tests/VerifyDepthFinalScreenshot.java --self-test
+          java tests/VerifyShadowTerrainScreenshot.java --self-test
 
       # What this refuses is whatever build.gradle refuses on the day it runs. Naming the gates here
       # as well would only give them a third home to drift out of step with.
