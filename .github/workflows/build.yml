@@ -71,6 +71,7 @@ jobs:
           python3 tests/test_block_entity_family.py
           python3 tests/test_spider_eyes_family.py
           python3 tests/test_armor_glint_family.py
+          python3 tests/test_hand_family.py
           python3 tests/test_terrain_pass_semantics.py
           python3 tests/test_terrain_vertex_abi.py
           python3 tests/test_sodium_pass_routing.py
@@ -83,6 +84,7 @@ jobs:
           java tests/VerifyBlockEntityScreenshot.java --self-test
           java tests/VerifySpiderEyesScreenshot.java --self-test
           java tests/VerifyArmorGlintScreenshot.java --self-test
+          java tests/VerifyHandScreenshot.java --self-test
 
       # What this refuses is whatever build.gradle refuses on the day it runs. Naming the gates here
       # as well would only give them a third home to drift out of step with.
