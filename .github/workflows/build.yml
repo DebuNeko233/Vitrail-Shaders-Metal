@@ -66,6 +66,7 @@ jobs:
           python3 tests/test_gbuffer_clear.py
           python3 tests/test_gbuffer_write.py
           python3 tests/test_gbuffer_sampling.py
+          python3 tests/test_gbuffer_pingpong.py
           python3 tests/test_terrain_pass_semantics.py
           python3 tests/test_terrain_vertex_abi.py
           python3 tests/test_sodium_pass_routing.py
