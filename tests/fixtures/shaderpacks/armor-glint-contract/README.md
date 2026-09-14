@@ -1,9 +1,9 @@
-# PHASE 7 spider-eyes contract
+# PHASE 7 armor-glint contract
 
-This developer fixture isolates the camera's glowing-eye family from ordinary entities, block entities, glint and hand rendering.
+This developer fixture isolates the camera's armor/item glint family from ordinary entities, block entities, spider eyes and the hand.
 
-`gbuffers_spidereyes` is the only entity-family program present. It writes draw buffer 1, whose `colortex1` target is explicitly cleared to black, so the ordinary entity body and terrain cannot fake the acceptance colour. The fragment keeps the sampled eye-texture alpha so Vitrail's per-row alpha test still shapes the eye layer.
+`gbuffers_armor_glint` is the only geometry-family program present. It writes draw buffer 1, whose `colortex1` target is explicitly cleared to black, and `final` displays only that target. A normal entity or armor body therefore cannot fake the acceptance colour.
 
-The vertex stage checks the full-bright light coordinate expected from the fixed eye rows. A passing eye writes green; a failure writes magenta. `final` displays only `colortex1`, so no `gbuffers_spidereyes` draw leaves the screenshot black.
+The vertex stage is written against the glint contract rather than the carried entity mesh: it uses `gl_TextureMatrix[0] * gl_MultiTexCoord0`, checks Iris-compatible full-bright `gl_MultiTexCoord1` and the synthesized viewer-facing `gl_Normal`. The fragment samples the real glint texture. A passing glint writes green; a synthesized-input failure writes magenta; no served glint leaves the screenshot black.
 
-This closes only the PHASE 7 spider-eyes/emissive-eyes routing checkpoint. It does not close armor glint, hand, shadow entities, particles, weather, clouds or sky.
+Real-device acceptance must log the camera's `glint_late` piece through `gbuffers_armor_glint`. A hand or held-item glint is deliberately excluded and remains part of the later hand checkpoint.
