@@ -13,7 +13,8 @@ class ArmorGlintFamilyTest(unittest.TestCase):
     def test_fixture_is_glint_only_and_observes_synthesized_inputs(self):
         vertex = (FIXTURE / 'gbuffers_armor_glint.vsh').read_text(encoding='utf-8')
         fragment = (FIXTURE / 'gbuffers_armor_glint.fsh').read_text(encoding='utf-8')
-        final = (FIXTURE / 'final.fsh').read_text(encoding='utf-8')
+        final_vertex = (FIXTURE / 'final.vsh').read_text(encoding='utf-8')
+        final_fragment = (FIXTURE / 'final.fsh').read_text(encoding='utf-8')
 
         self.assertIn('gl_TextureMatrix[0] * gl_MultiTexCoord0', vertex)
         self.assertIn('gl_MultiTexCoord1.st', vertex)
@@ -25,8 +26,13 @@ class ArmorGlintFamilyTest(unittest.TestCase):
         self.assertIn('/* DRAWBUFFERS:1 */', fragment)
         self.assertIn('vec4(0.0, step(0.02, textureSignal), 0.0, texel.a)', fragment)
         self.assertIn('vec4(1.0, 0.0, 1.0, texel.a)', fragment)
-        self.assertIn('uniform sampler2D colortex1;', final)
-        self.assertIn('texture2D(colortex1, texcoord)', final)
+
+        self.assertIn('gl_Position = ftransform();', final_vertex)
+        self.assertIn('texcoord = gl_MultiTexCoord0.st;', final_vertex)
+        self.assertNotIn('gl_FragColor', final_vertex)
+        self.assertNotIn('DRAWBUFFERS', final_vertex)
+        self.assertIn('uniform sampler2D colortex1;', final_fragment)
+        self.assertIn('texture2D(colortex1, texcoord)', final_fragment)
 
         names = {path.name for path in FIXTURE.iterdir()}
         self.assertEqual(

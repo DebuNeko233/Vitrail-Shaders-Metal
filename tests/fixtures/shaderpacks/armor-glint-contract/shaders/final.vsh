@@ -1,7 +1,8 @@
 #version 120
 
-/* DRAWBUFFERS:0 */
+varying vec2 texcoord;
 
 void main() {
-    gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+    gl_Position = ftransform();
+    texcoord = gl_MultiTexCoord0.st;
 }
