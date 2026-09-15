@@ -8,12 +8,12 @@ import dev.vitrail.pack.model.PixelType;
  * by both sides.
  * <p>
  * A pack's {@code sampler3D} over a blob it ships is served by a 2D atlas of slices and a helper
- * that reads two of them and mixes: the blob is uploaded flat and nothing builds a 3D view over
- * it, the one volume the backend binds as such being the kind an {@code image} directive fills. Two readers therefore have
- * to agree texel for texel: the one that fills the atlas out of the pack's blob, and the one that
- * prints the arithmetic into the shader. They agree because they both come here. A layout written
- * twice would come out as noise on the screen, and a noise texture that is wrong looks exactly
- * like a noise texture that is right.
+ * that reads one or two of them according to the pack's filter mode: the blob is uploaded flat
+ * and nothing builds a 3D view over it, the one volume the backend binds as such being the kind an
+ * {@code image} directive fills. Two readers therefore have to agree texel for texel: the one that
+ * fills the atlas out of the pack's blob, and the one that prints the arithmetic into the shader.
+ * They agree because they both come here. A layout written twice would come out as noise on the
+ * screen, and a noise texture that is wrong looks exactly like a noise texture that is right.
  * <p>
  * <strong>The gutter is the part that is easy to leave out and impossible to see afterwards.</strong>
  * Each slice is laid out with one texel of margin on all four sides, carrying what the hardware
@@ -25,9 +25,9 @@ import dev.vitrail.pack.model.PixelType;
  * Worley noise. With the gutter, the tap is exactly the {@code REPEAT} or the {@code CLAMP} the
  * hardware would have done on a real volume.
  * <p>
- * The depth needs no gutter of its own: nothing interpolates between slices in hardware, the
- * helper reads two of them and mixes them itself, and it is the helper that repeats or clamps the
- * slice index.
+ * The depth needs no gutter of its own: no physical atlas tap crosses between slices. The helper
+ * chooses one slice for nearest filtering, or reads two and mixes them for linear filtering, and
+ * repeats or clamps the logical slice coordinate before either operation.
  * <p>
  * The atlas keeps the blob's channel type and widens the texel to four channels, because four is
  * what the engine allocates for a texture of its own: a byte a channel stays a byte, a half float
@@ -47,9 +47,10 @@ public final class VolumeAtlas {
 	private final PixelType type;
 	private final int components;
 	private final boolean clamp;
+	private final boolean linear;
 
 	private VolumeAtlas(int width, int height, int depth, PixelType type, int components,
-			boolean clamp) {
+			boolean clamp, boolean linear) {
 		this.width = width;
 		this.height = height;
 		this.depth = depth;
@@ -58,6 +59,7 @@ public final class VolumeAtlas {
 		this.type = type;
 		this.components = components;
 		this.clamp = clamp;
+		this.linear = linear;
 	}
 
 	/**
@@ -67,7 +69,7 @@ public final class VolumeAtlas {
 	 * @throws IllegalArgumentException if the blob is not one {@link #serves} says yes to, which the
 	 *                                  caller has to have asked first
 	 */
-	public static VolumeAtlas of(PackTexture.Raw raw, boolean clamp) {
+	public static VolumeAtlas of(PackTexture.Raw raw, boolean clamp, boolean linear) {
 		if (!serves(raw)) {
 			throw new IllegalArgumentException("A volume of " + raw.sizeX() + "x" + raw.sizeY() + "x"
 					+ raw.sizeZ() + " in " + raw.pixelFormat() + " " + raw.pixelType()
@@ -75,7 +77,12 @@ public final class VolumeAtlas {
 		}
 
 		return new VolumeAtlas(raw.sizeX(), raw.sizeY(), raw.sizeZ(), raw.pixelType(),
-				raw.pixelFormat().components(), clamp);
+				raw.pixelFormat().components(), clamp, linear);
+	}
+
+	/** Linear by default for raw volumes, preserving the historical factory for narrow callers. */
+	public static VolumeAtlas of(PackTexture.Raw raw, boolean clamp) {
+		return of(raw, clamp, true);
 	}
 
 	/** Whether a blob of that description is one this lays out flat: three dimensional, of a channel type it carries. */
@@ -215,6 +222,11 @@ public final class VolumeAtlas {
 	/** Whether the pack asked the volume to clamp, which the helper and the gutter both honour. */
 	public boolean clamp() {
 		return this.clamp;
+	}
+
+	/** Whether the pack asked the volume to interpolate between neighbouring texels. */
+	public boolean linear() {
+		return this.linear;
 	}
 
 	/** Bytes in one channel of the atlas, the blob's own. */

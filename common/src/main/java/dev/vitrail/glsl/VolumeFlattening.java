@@ -20,8 +20,9 @@ import java.util.Set;
  * <p>
  * A three dimensional sampler is refused by the game's own compiler wherever it is declared, read
  * or not, so a pack that ships one has to be rewritten rather than served. The declaration becomes
- * a {@code sampler2D} over an atlas of slices and each lookup becomes a helper that reads two of
- * them and mixes them, which is one rewrite over the token list with a table of what it found.
+ * a {@code sampler2D} over an atlas of slices and each lookup becomes a helper that chooses one
+ * slice for nearest filtering or reads two and mixes them for linear filtering, which is one
+ * rewrite over the token list with a table of what it found.
  * <p>
  * Apart because what it needs is its own and narrow: the tokens, the unit's liveness, the volumes
  * the pack declared and the two tables of macro names, since a pack reads a volume through an
@@ -90,7 +91,7 @@ final class VolumeFlattening {
 
 	/**
 	 * Moves every volume the pack ships onto a flat atlas: the declaration to a {@code sampler2D}
-	 * under a forged name, and each lookup to a helper that reads two slices and mixes them.
+	 * under a forged name, and each lookup to a helper that reads the atlas with the volume's filter.
 	 * <p>
 	 * <strong>The declaration is what has to go, not the lookup.</strong> A name is judged on its
 	 * declared type: {@link dev.vitrail.pack.target.SamplerTypes} refuses a program for a
@@ -303,17 +304,17 @@ final class VolumeFlattening {
 	}
 
 	/**
-	 * The trilinear read of a volume, over the atlas its slices were laid out in.
+	 * The filtered read of a volume, over the atlas its slices were laid out in.
 	 * <p>
 	 * The hardware does the two dimensional half: each slice carries one texel of gutter holding
 	 * what lies past its edge, the far edge for a volume that repeats and the edge itself for one
-	 * that clamps, so a bilinear tap at the edge of a tile reads what {@code REPEAT} or
-	 * {@code CLAMP} would have read on a real volume rather than the slice next door. Only the depth
-	 * is done here, two taps and a mix, because nothing interpolates between tiles of an atlas, and
-	 * the slice index repeats or clamps as the pack asked.
+	 * that clamps, so a tap at the edge of a tile reads what {@code REPEAT} or {@code CLAMP} would
+	 * have read on a real volume rather than the slice next door. A nearest volume chooses one
+	 * logical slice here and lets the atlas sampler choose one x/y texel. A linear volume reads two
+	 * slices and mixes them, because nothing interpolates between tiles of an atlas.
 	 * <p>
-	 * The half texel is the whole of the arithmetic: a lookup at {@code u} samples the volume at
-	 * {@code u * size - 0.5} in texels, and the atlas coordinate has to land on the same pair of
+	 * The half texel is the whole of the linear arithmetic: a lookup at {@code u} samples the volume
+	 * at {@code u * size - 0.5} in texels, and the atlas coordinate has to land on the same pair of
 	 * texels the hardware would have blended. Every constant here comes from {@link VolumeAtlas} so
 	 * that this and the upload cannot drift apart; a layout written twice reads as noise, and noise
 	 * that is wrong looks exactly like noise that is right.
@@ -326,27 +327,35 @@ final class VolumeFlattening {
 		List<String> lines = new ArrayList<>();
 		lines.add("vec4 " + VOLUME_LOOKUP + name + "(sampler2D ofMap, vec3 ofAt) {");
 		lines.add(atlas.clamp() ? "\tvec3 ofQ = clamp(ofAt, 0.0, 1.0);" : "\tvec3 ofQ = fract(ofAt);");
-		lines.add("\tfloat ofZ = ofQ.z * " + depth + " - 0.5;");
-		lines.add("\tfloat ofBase = floor(ofZ);");
 		lines.add("\tvec2 ofIn = ofQ.xy * vec2(" + whole(atlas.width()) + ", " + whole(atlas.height())
 				+ ") + " + whole(VolumeAtlas.GUTTER) + ";");
-		if (atlas.clamp()) {
-			lines.add("\tint ofNear = clamp(int(ofBase), 0, " + last + ");");
-			lines.add("\tint ofFar = clamp(int(ofBase) + 1, 0, " + last + ");");
-		} else {
-			lines.add("\tint ofNear = int(mod(ofBase, " + depth + "));");
-			lines.add("\tint ofFar = int(mod(ofBase + 1.0, " + depth + "));");
-		}
-
 		lines.add("\tvec2 ofTile = vec2(" + whole(atlas.tileStride()) + ", " + whole(atlas.tileHeight())
 				+ ");");
 		lines.add("\tvec2 ofSize = vec2(" + whole(atlas.atlasWidth()) + ", " + whole(atlas.atlasHeight())
 				+ ");");
-		lines.add("\tvec2 ofA = (vec2(ofNear % " + tiles + ", ofNear / " + tiles
-				+ ") * ofTile + ofIn) / ofSize;");
-		lines.add("\tvec2 ofB = (vec2(ofFar % " + tiles + ", ofFar / " + tiles
-				+ ") * ofTile + ofIn) / ofSize;");
-		lines.add("\treturn mix(texture(ofMap, ofA), texture(ofMap, ofB), clamp(ofZ - ofBase, 0.0, 1.0));");
+
+		if (!atlas.linear()) {
+			lines.add("\tint ofSlice = clamp(int(floor(ofQ.z * " + depth + ")), 0, " + last + ");");
+			lines.add("\tvec2 ofUV = (vec2(ofSlice % " + tiles + ", ofSlice / " + tiles
+					+ ") * ofTile + ofIn) / ofSize;");
+			lines.add("\treturn texture(ofMap, ofUV);");
+		} else {
+			lines.add("\tfloat ofZ = ofQ.z * " + depth + " - 0.5;");
+			lines.add("\tfloat ofBase = floor(ofZ);");
+			if (atlas.clamp()) {
+				lines.add("\tint ofNear = clamp(int(ofBase), 0, " + last + ");");
+				lines.add("\tint ofFar = clamp(int(ofBase) + 1, 0, " + last + ");");
+			} else {
+				lines.add("\tint ofNear = int(mod(ofBase, " + depth + "));");
+				lines.add("\tint ofFar = int(mod(ofBase + 1.0, " + depth + "));");
+			}
+
+			lines.add("\tvec2 ofA = (vec2(ofNear % " + tiles + ", ofNear / " + tiles
+					+ ") * ofTile + ofIn) / ofSize;");
+			lines.add("\tvec2 ofB = (vec2(ofFar % " + tiles + ", ofFar / " + tiles
+					+ ") * ofTile + ofIn) / ofSize;");
+			lines.add("\treturn mix(texture(ofMap, ofA), texture(ofMap, ofB), clamp(ofZ - ofBase, 0.0, 1.0));");
+		}
 		lines.add("}");
 
 		// The levelled form, which is what every read of iterationT's three volumes is written as.

@@ -49,6 +49,7 @@ jobs:
           python3 tests/test_metallum_status.py
           python3 tests/test_mrt_smoke_fixture.py
           python3 tests/test_gbuffer_attachment_location.py
+          python3 tests/test_volume_filter_semantics.py
           python3 tests/test_gbuffer_format.py
           python3 tests/test_gbuffer_clear.py
           python3 tests/test_gbuffer_write.py
