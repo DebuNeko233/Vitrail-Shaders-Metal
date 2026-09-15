@@ -23,11 +23,12 @@ void main() {
         && mip0 >= 0.0 && mip0 <= 1.0
         && base1 >= 0.0 && base1 <= 1.0
         && mip1 >= 0.0 && mip1 <= 1.0;
-    bool reduced = abs(base0 - mip0) > 0.05 || abs(base1 - mip1) > 0.05;
+    bool reduced0 = abs(base0 - mip0) > 0.05;
+    bool reduced1 = abs(base1 - mip1) > 0.05;
 
-    if (!valid) {
+    if (!valid || reduced0 != reduced1) {
         gl_FragData[0] = vec4(1.0, 0.0, 1.0, 1.0);
-    } else if (reduced) {
+    } else if (reduced0 && reduced1) {
         gl_FragData[0] = vec4(0.0, 1.0, 0.0, 1.0);
     } else {
         gl_FragData[0] = vec4(0.0, 0.0, 1.0, 1.0);
