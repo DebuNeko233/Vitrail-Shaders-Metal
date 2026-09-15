@@ -9,7 +9,7 @@ SHADOW_TARGETS = ROOT / "common/src/main/java/dev/vitrail/render/ShadowTargets.j
 GPU_FORMATS = ROOT / "common/src/main/java/dev/vitrail/render/GpuFormats.java"
 MIPMAP_REDUCTION = ROOT / "common/src/main/java/dev/vitrail/render/MipmapReduction.java"
 METAL_MIXIN = ROOT / "common/src/main/java/dev/vitrail/mixin/metallum/MetalCommandEncoderMixin.java"
-METAL_BRIDGE = ROOT / "common/src/main/java/dev/vitrail/mixin/metallum/MetallumDepthMipmapBridge.java"
+METAL_BRIDGE = ROOT / "common/src/main/java/dev/vitrail/compat/metallum/MetallumDepthMipmapBridge.java"
 PACK_DIRECTIVES = ROOT / "common/src/main/java/dev/vitrail/pack/target/PackDirectives.java"
 
 
@@ -65,9 +65,11 @@ class ShadowMipmapContractTest(unittest.TestCase):
         self.assertIn("backend instanceof MipmapCommands commands && commands.vitrail$generateMipmaps(texture)", reduction)
 
         mixin = compact(METAL_MIXIN)
+        self.assertIn("import dev.vitrail.compat.metallum.MetallumDepthMipmapBridge;", mixin)
         self.assertIn("return generateMipmaps(texture) || MetallumDepthMipmapBridge.generate(this, texture);", mixin)
 
         bridge = compact(METAL_BRIDGE)
+        self.assertIn("package dev.vitrail.compat.metallum;", bridge)
         self.assertIn('private static final String CLASS_NAME = "com.metallum.render.MetalDepthMipmapBridge";', bridge)
         self.assertIn('bridge.getMethod("generate", Object.class, GpuTexture.class);', bridge)
         self.assertIn("if (method == null) { return false; }", bridge)

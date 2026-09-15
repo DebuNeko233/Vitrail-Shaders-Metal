@@ -1,4 +1,4 @@
-package dev.vitrail.mixin.metallum;
+package dev.vitrail.compat.metallum;
 
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.textures.GpuSampler;
@@ -16,7 +16,7 @@ import java.util.Map;
  * optional adapter preserves that boundary while the public Vitrail capability interfaces stay
  * expressed entirely in Minecraft/JDK types.
  */
-final class MetallumComputeBridge {
+public final class MetallumComputeBridge {
 
 	private static final String CLASS_NAME = "com.metallum.render.MetalComputeBridge";
 
@@ -25,11 +25,11 @@ final class MetallumComputeBridge {
 	private MetallumComputeBridge() {
 	}
 
-	static Object compile(Object backend, String label, ByteBuffer spirv) {
+	public static Object compile(Object backend, String label, ByteBuffer spirv) {
 		return invoke(methods().compile(), backend, label, spirv);
 	}
 
-	static boolean dispatch(
+	public static boolean dispatch(
 			Object encoder,
 			Object pipeline,
 			Map<String, GpuBufferSlice> buffers,
@@ -46,7 +46,7 @@ final class MetallumComputeBridge {
 		return result instanceof Boolean accepted && accepted;
 	}
 
-	static void close(Object pipeline) {
+	public static void close(Object pipeline) {
 		invoke(methods().close(), pipeline);
 	}
 

@@ -5,7 +5,8 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-ADAPTER = ROOT / 'common/src/main/java/dev/vitrail/mixin/metallum/MetallumComputeBridge.java'
+ADAPTER = ROOT / 'common/src/main/java/dev/vitrail/compat/metallum/MetallumComputeBridge.java'
+MIXIN_METALLUM = ROOT / 'common/src/main/java/dev/vitrail/mixin/metallum'
 
 BRIDGE = '''package com.metallum.render;
 import java.nio.ByteBuffer;
@@ -26,7 +27,7 @@ public final class MetalComputeBridge {
 }
 '''
 
-HARNESS = '''package dev.vitrail.mixin.metallum;
+HARNESS = '''package dev.vitrail.compat.metallum;
 import java.nio.ByteBuffer;
 import java.util.Map;
 public final class BridgeCheck {
@@ -69,6 +70,10 @@ public final class BridgeCheck {
 
 
 class ComputeBridgeTest(unittest.TestCase):
+    def test_optional_helpers_live_outside_the_defined_mixin_package(self):
+        self.assertIn('package dev.vitrail.compat.metallum;', ADAPTER.read_text(encoding='utf-8'))
+        self.assertEqual(list(MIXIN_METALLUM.glob('Metallum*Bridge.java')), [])
+
     def run_fixture(self, mode):
         with tempfile.TemporaryDirectory(prefix='vitrail-bridge-') as directory:
             root = Path(directory)
@@ -86,8 +91,8 @@ class ComputeBridgeTest(unittest.TestCase):
                                   ('textures', 'GpuSampler'), ('textures', 'GpuTextureView')]:
                 write(f'com/mojang/blaze3d/{package}/{name}.java',
                       f'package com.mojang.blaze3d.{package}; public class {name} {{}}')
-            write('dev/vitrail/mixin/metallum/MetallumComputeBridge.java', ADAPTER.read_text())
-            write('dev/vitrail/mixin/metallum/BridgeCheck.java', HARNESS)
+            write('dev/vitrail/compat/metallum/MetallumComputeBridge.java', ADAPTER.read_text())
+            write('dev/vitrail/compat/metallum/BridgeCheck.java', HARNESS)
             if mode != 'missing':
                 bridge = BRIDGE
                 if mode == 'incompatible':
@@ -96,7 +101,7 @@ class ComputeBridgeTest(unittest.TestCase):
             subprocess.run(['javac', '-d', str(root / 'classes'), *sources], check=True,
                            capture_output=True, text=True)
             subprocess.run(['java', '-cp', str(root / 'classes'),
-                            'dev.vitrail.mixin.metallum.BridgeCheck', mode], check=True,
+                            'dev.vitrail.compat.metallum.BridgeCheck', mode], check=True,
                            capture_output=True, text=True)
 
     def test_missing_bridge_remains_catchable_on_repeated_calls(self):

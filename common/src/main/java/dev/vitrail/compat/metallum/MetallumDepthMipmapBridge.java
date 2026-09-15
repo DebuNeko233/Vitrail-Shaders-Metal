@@ -1,4 +1,4 @@
-package dev.vitrail.mixin.metallum;
+package dev.vitrail.compat.metallum;
 
 import com.mojang.blaze3d.textures.GpuTexture;
 
@@ -6,7 +6,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
 /** Late-bound access to Metallum's generic D32 progressive-nearest mipmap path. */
-final class MetallumDepthMipmapBridge {
+public final class MetallumDepthMipmapBridge {
 
 	private static final String CLASS_NAME = "com.metallum.render.MetalDepthMipmapBridge";
 
@@ -16,7 +16,7 @@ final class MetallumDepthMipmapBridge {
 	private MetallumDepthMipmapBridge() {
 	}
 
-	static boolean generate(Object encoder, GpuTexture texture) {
+	public static boolean generate(Object encoder, GpuTexture texture) {
 		Method method = method();
 		if (method == null) {
 			return false;

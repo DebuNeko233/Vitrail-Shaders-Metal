@@ -1,5 +1,7 @@
 package dev.vitrail.mixin.metallum;
 
+import dev.vitrail.compat.metallum.MetallumComputeBridge;
+import dev.vitrail.compat.metallum.MetallumTextureBridge;
 import dev.vitrail.render.StalePipelines;
 import dev.vitrail.render.compute.ComputeDeviceBackend;
 import dev.vitrail.render.storage.ShaderWritableTextureBackend;

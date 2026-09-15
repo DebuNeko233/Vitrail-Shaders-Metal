@@ -1,5 +1,7 @@
 package dev.vitrail.mixin.metallum;
 
+import dev.vitrail.compat.metallum.MetallumComputeBridge;
+import dev.vitrail.compat.metallum.MetallumDepthMipmapBridge;
 import dev.vitrail.render.MipmapCommands;
 import dev.vitrail.render.compute.ComputeCommands;
 import dev.vitrail.render.storage.StorageImageCommands;

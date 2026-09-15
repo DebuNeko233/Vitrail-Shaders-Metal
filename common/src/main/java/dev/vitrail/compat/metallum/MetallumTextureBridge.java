@@ -1,4 +1,4 @@
-package dev.vitrail.mixin.metallum;
+package dev.vitrail.compat.metallum;
 
 import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.textures.GpuTexture;
@@ -7,7 +7,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
 /** Late-bound call into Metallum's optional shader-writable texture bridge. */
-final class MetallumTextureBridge {
+public final class MetallumTextureBridge {
 
 	private static final String CLASS_NAME = "com.metallum.render.MetalTextureBridge";
 	private static final Method CREATE_SHADER_WRITABLE = method("createShaderWritable",
@@ -17,7 +17,7 @@ final class MetallumTextureBridge {
 	private MetallumTextureBridge() {
 	}
 
-	static GpuTexture createShaderWritable(
+	public static GpuTexture createShaderWritable(
 			Object backend,
 			String label,
 			int usage,
