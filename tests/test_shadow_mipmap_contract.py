@@ -70,6 +70,9 @@ class ShadowMipmapContractTest(unittest.TestCase):
         bridge = compact(METAL_BRIDGE)
         self.assertIn('private static final String CLASS_NAME = "com.metallum.render.MetalDepthMipmapBridge";', bridge)
         self.assertIn('bridge.getMethod("generate", Object.class, GpuTexture.class);', bridge)
+        self.assertIn("if (method == null) { return false; }", bridge)
+        self.assertIn("catch (ReflectiveOperationException ignored) { generate = null; }", bridge)
+        self.assertNotIn("unavailable or incompatible", bridge)
 
 
 if __name__ == "__main__":
