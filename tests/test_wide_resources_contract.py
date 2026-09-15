@@ -15,10 +15,10 @@ def text(path: Path) -> str:
 
 
 class WideResourcesContract(unittest.TestCase):
-    def test_fixture_exposes_seventeen_distinct_active_sampled_images(self):
+    def test_fixture_exposes_thirty_three_distinct_active_sampled_images(self):
         fragment = text(FIXTURE / "final.fsh")
         names = re.findall(r"uniform\s+sampler2D\s+(wide\d\d)\s*;", fragment)
-        self.assertEqual(names, [f"wide{i:02d}" for i in range(17)])
+        self.assertEqual(names, [f"wide{i:02d}" for i in range(33)])
         for name in names:
             self.assertEqual(fragment.count(f"texture2D({name}, probe)"), 1, name)
             self.assertIn(f"isWhite(s{name[-2:]})", fragment)
@@ -28,7 +28,7 @@ class WideResourcesContract(unittest.TestCase):
     def test_each_sampler_has_a_real_custom_texture_binding(self):
         properties = text(FIXTURE / "shaders.properties")
         declarations = re.findall(r"^customTexture\.(wide\d\d)\s*=\s*white\.png\s*$", properties, re.MULTILINE)
-        self.assertEqual(declarations, [f"wide{i:02d}" for i in range(17)])
+        self.assertEqual(declarations, [f"wide{i:02d}" for i in range(33)])
         self.assertTrue((FIXTURE / "white.png").is_file())
         self.assertGreater((FIXTURE / "white.png").stat().st_size, 0)
 
@@ -44,7 +44,6 @@ class WideResourcesContract(unittest.TestCase):
         self.assertIn("spvc_compiler_get_active_interface_variables", reach)
         self.assertIn("MoltenVK", vulkan)
         self.assertIn("VulkanCommandEncoder", vulkan)
-        # Vitrail's pack contract never asks Metallum for an argument-buffer policy.
         fixture_text = "\n".join(text(path) for path in (FIXTURE / "final.vsh", FIXTURE / "final.fsh", FIXTURE / "shaders.properties"))
         self.assertNotIn("ArgumentBuffer", fixture_text)
         self.assertNotIn("Metal", fixture_text)
