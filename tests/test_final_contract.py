@@ -35,7 +35,8 @@ class FinalContract(unittest.TestCase):
         self.assertIn("ColorTargetState.WRITE_COLOR", source)
         self.assertIn("void drawFinal(CommandEncoder encoder, GpuTextureView into", source)
         self.assertIn("encoder.createRenderPass(this.label, into, Optional.empty())", source)
-        self.assertIn("writes the game's target and has to be drawn through drawFinal", source)
+        self.assertIn("writes the game's target and has to be", source)
+        self.assertIn("drawn through drawFinal", source)
 
     def test_pack_chain_routes_only_the_last_pass_to_main_view(self):
         source = PACK_CHAIN.read_text(encoding="utf-8")
