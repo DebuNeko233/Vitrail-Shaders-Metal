@@ -610,16 +610,12 @@ final class ShadowTargets {
 		}
 
 		if (this.noTranslucents == null) {
-			// The source's own format rather than an assumed one, the same rule the world's depth
-			// copy follows: a copy whose format differs from its source is refused outright.
-			// Three usages and not the four the map itself takes: nothing ever draws into this
-			// image, it is written by the copy alone. COPY_SRC is here for the chain, a blit
-			// reading the level above the one it writes.
+			// Level zero is filled by the copy below, but a requested chain is filled by the backend's
+			// generic progressive depth reduction, which renders each higher mip as a depth attachment.
+			// Keep the usage contract honest for both roads rather than relying on backend allocation
+			// details that the public GpuTexture usage mask did not declare.
 			this.noTranslucents = RenderSystem.getDevice().createTexture(() -> "Vitrail shadowtex1",
-					GpuTexture.USAGE_COPY_DST | GpuTexture.USAGE_COPY_SRC
-							| GpuTexture.USAGE_TEXTURE_BINDING,
-					this.depth.getFormat(), this.resolution, this.resolution, 1,
-					levels(1));
+					USAGE, this.depth.getFormat(), this.resolution, this.resolution, 1, levels(1));
 			this.noTranslucentsView = RenderSystem.getDevice().createTextureView(this.noTranslucents);
 		}
 

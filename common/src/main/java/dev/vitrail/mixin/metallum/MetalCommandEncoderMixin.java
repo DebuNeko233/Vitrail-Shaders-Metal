@@ -46,7 +46,7 @@ public abstract class MetalCommandEncoderMixin implements MipmapCommands, Storag
 
 	@Override
 	public boolean vitrail$generateMipmaps(GpuTexture texture) {
-		return generateMipmaps(texture);
+		return generateMipmaps(texture) || MetallumDepthMipmapBridge.generate(this, texture);
 	}
 
 	@Override
