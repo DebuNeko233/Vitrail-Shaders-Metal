@@ -106,6 +106,8 @@ class GbufferAttachmentLocationTest(unittest.TestCase):
         self.assertIn('for (int slot = 0; slot < this.attachments.size(); slot++)', pack)
         self.assertIn('int index = this.attachments.get(slot).target();', pack)
         self.assertIn('builder.withColorTargetState(slot, new ColorTargetState(', pack)
+        self.assertIn('targets.blend(program, slot)', pack)
+        self.assertNotIn('targets.blend(program), Optional.empty()', pack)
 
         # Descriptor views are emitted by the same attachment list order, keeping pipeline slot and
         # render-pass attachment location aligned.
