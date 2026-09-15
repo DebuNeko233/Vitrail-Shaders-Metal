@@ -1,5 +1,6 @@
 package dev.vitrail.mixin;
 
+import dev.vitrail.render.ComparisonSamplers;
 import dev.vitrail.render.GeometryHold;
 import dev.vitrail.render.ParticleDraw;
 import dev.vitrail.render.storage.StorageImages;
@@ -12,6 +13,7 @@ import com.mojang.blaze3d.systems.RenderPassBackend;
 import com.mojang.blaze3d.textures.GpuSampler;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
@@ -28,14 +30,17 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * its own, and a hook on the renderer's method sees none of those. {@link ParticleDraw} scopes
  * both to the one pass the group opened and stays out of the way on every other pass of the frame.
  * <p>
- * Storage-image facade replacement also lives at this common pass boundary. Vulkan keeps the
- * placeholder view and replaces its native descriptor later; a backend that allocated the image as
- * a real {@link com.mojang.blaze3d.textures.GpuTexture} instead substitutes that view here, before
- * the backend sees it. The original invocation is always called so other wrappers and the particle
- * tail hook keep their ordinary ordering.
+ * Storage-image facade replacement and optional native comparison samplers also live at this
+ * common pass boundary. Vitrail has already decided which image a name means and which translated
+ * sampler declarations are comparisons. A backend therefore sees ordinary Minecraft texture and
+ * sampler objects carrying those answers rather than learning shader-pack names of its own.
  */
 @Mixin(RenderPass.class)
 public abstract class RenderPassMixin {
+
+	/** The effective pipeline handed to the backend, for per-pipeline comparison-sampler semantics. */
+	@Unique
+	private RenderPipeline vitrail$pipeline;
 
 	@Inject(method = "close", at = @At("HEAD"), cancellable = true, require = 1)
 	private void vitrail$keep(CallbackInfo callback) {
@@ -46,7 +51,9 @@ public abstract class RenderPassMixin {
 
 	@ModifyVariable(method = "setPipeline", at = @At("HEAD"), argsOnly = true, require = 1)
 	private RenderPipeline vitrail$particlePipeline(RenderPipeline pipeline) {
-		return ParticleDraw.pipeline((RenderPass) (Object) this, pipeline);
+		RenderPipeline effective = ParticleDraw.pipeline((RenderPass) (Object) this, pipeline);
+		this.vitrail$pipeline = effective;
+		return effective;
 	}
 
 	@WrapOperation(method = "bindTexture", require = 1,
@@ -57,7 +64,8 @@ public abstract class RenderPassMixin {
 	private void vitrail$storageImage(RenderPassBackend backend, String name, GpuTextureView view,
 			GpuSampler sampler, Operation<Void> original) {
 		GpuTextureView storage = StorageImages.facadeView(name);
-		original.call(backend, name, storage == null ? view : storage, sampler);
+		GpuSampler resolvedSampler = ComparisonSamplers.forBinding(this.vitrail$pipeline, name, sampler);
+		original.call(backend, name, storage == null ? view : storage, resolvedSampler);
 	}
 
 	@Inject(method = "bindTexture", at = @At("TAIL"), require = 1)
