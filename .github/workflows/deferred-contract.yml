@@ -1,4 +1,4 @@
-name: deferred-composite-contract
+name: deferred-contract
 run-name: ${{ github.ref_name }}
 
 on:
@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  deferred-composite-contract:
+  deferred-contract:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,7 +21,7 @@ jobs:
         with:
           distribution: temurin
           java-version: 25
-      - name: validate PHASE 10A ordered chain contract
+      - name: validate PHASE 10 deferred family contract
         run: |
-          python3 tests/test_deferred_composite_contract.py
-          java tests/VerifyDeferredCompositeScreenshot.java --self-test
+          python3 tests/test_deferred_contract.py
+          java tests/VerifyDeferredScreenshot.java --self-test
