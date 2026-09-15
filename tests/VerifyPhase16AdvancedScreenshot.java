@@ -19,7 +19,7 @@ public final class VerifyPhase16AdvancedScreenshot {
         Counts[] counts = count(image);
         boolean all = true;
         for (int i = 0; i < counts.length; i++) {
-            boolean pass = pass(counts[i]);
+            boolean pass = pass(i, counts[i]);
             System.out.println("PHASE 16 " + NAMES[i] + ": GREEN=" + counts[i].green
                 + " MAGENTA=" + counts[i].magenta + " OTHER=" + counts[i].other
                 + " -> " + (pass ? "PASS" : "FAIL"));
@@ -50,23 +50,37 @@ public final class VerifyPhase16AdvancedScreenshot {
         return counts;
     }
 
-    private static boolean pass(Counts c) {
+    private static boolean pass(int quarter, Counts c) {
         long total = c.total();
-        return total > 0 && c.green >= 256 && c.green * 100 >= total * 90 && c.magenta * 100 <= total;
+        if (total <= 0) return false;
+        if (quarter == 2) {
+            return c.green >= 512 && c.green * 100 >= total * 5 && c.magenta * 10 <= c.green;
+        }
+        return c.green >= 256 && c.green * 100 >= total * 90 && c.magenta * 100 <= total;
     }
 
     private static void selfTest() {
         BufferedImage success = quarters(-1);
-        for (Counts c : count(success)) if (!pass(c)) throw new AssertionError("GREEN quarter rejected");
+        Counts[] successCounts = count(success);
+        for (int i = 0; i < successCounts.length; i++) {
+            if (!pass(i, successCounts[i])) throw new AssertionError("GREEN quarter rejected: " + i);
+        }
+
         for (int fail = 0; fail < 4; fail++) {
             Counts[] counts = count(quarters(fail));
             for (int i = 0; i < 4; i++) {
                 boolean shouldPass = i != fail;
-                if (pass(counts[i]) != shouldPass) {
+                if (pass(i, counts[i]) != shouldPass) {
                     throw new AssertionError("Quarter self-test mismatch at fail=" + fail + " checked=" + i);
                 }
             }
         }
+
+        Counts[] sparse = count(blendMarker(false));
+        if (!pass(2, sparse[2])) throw new AssertionError("Sparse valid BLEND terrain marker rejected");
+        Counts[] missing = count(blendMarker(true));
+        if (pass(2, missing[2])) throw new AssertionError("BLEND passed without valid terrain marker");
+
         System.out.println("PHASE 16 advanced screenshot verifier self-test: PASS");
     }
 
@@ -76,6 +90,21 @@ public final class VerifyPhase16AdvancedScreenshot {
             for (int x = 0; x < image.getWidth(); x++) {
                 int q = Math.min(3, x * 4 / image.getWidth());
                 image.setRGB(x, y, q == magentaQuarter ? 0xFFFF00FF : 0xFF00FF00);
+            }
+        }
+        return image;
+    }
+
+    private static BufferedImage blendMarker(boolean fail) {
+        BufferedImage image = quarters(-1);
+        int x0 = image.getWidth() / 2;
+        int x1 = image.getWidth() * 3 / 4;
+        for (int y = 0; y < image.getHeight(); y++) {
+            for (int x = x0; x < x1; x++) image.setRGB(x, y, 0xFF000000);
+        }
+        if (!fail) {
+            for (int y = 100; y < 300; y++) {
+                for (int x = x0 + 40; x < x1 - 40; x++) image.setRGB(x, y, 0xFF00FF00);
             }
         }
         return image;

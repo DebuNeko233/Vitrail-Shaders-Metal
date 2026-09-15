@@ -3,6 +3,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "tests/fixtures/shaderpacks/phase16-advanced-contract/shaders"
+TARGET_PLAN = ROOT / "common/src/main/java/dev/vitrail/pack/target/TargetPlan.java"
+PACK_PASS = ROOT / "common/src/main/java/dev/vitrail/render/PackPass.java"
 
 
 def text(name: str) -> str:
@@ -40,22 +42,34 @@ class Phase16AdvancedContract(unittest.TestCase):
         self.assertIn("vec2(1.25, 0.25)", shader)
         self.assertIn("distance(noiseA, noiseB) < 0.02", shader)
 
-    def test_non_identity_mrt_uses_two_different_rank_blends(self):
+    def test_non_identity_geometry_mrt_maps_physical_blend_directives_to_attachment_ranks(self):
         properties = text("shaders.properties")
-        self.assertIn("blend.composite1.0=ONE ZERO", properties)
-        self.assertIn("blend.composite1.1=ZERO ZERO", properties)
-        write = text("composite1.fsh")
+        self.assertIn("blend.gbuffers_terrain_solid.colortex3=ONE ZERO", properties)
+        self.assertIn("blend.gbuffers_terrain_solid.colortex1=ZERO ZERO", properties)
+        self.assertNotIn("blend.composite", properties)
+
+        write = text("gbuffers_terrain_solid.fsh")
         self.assertIn("/* DRAWBUFFERS:31 */", write)
         self.assertIn("gl_FragData[0] = source;", write)
         self.assertIn("gl_FragData[1] = source;", write)
-        judge = text("composite2.fsh")
+
+        plan = TARGET_PLAN.read_text(encoding="utf-8")
+        pack = PACK_PASS.read_text(encoding="utf-8")
+        self.assertIn("int rank = writes.indexOf(index.getAsInt());", plan)
+        self.assertIn("functions[rank] = BlendMode.parse(directive.value()).orElseThrow();", plan)
+        self.assertIn("targets.blend(program, slot)", pack)
+
+        judge = text("composite1.fsh")
         self.assertIn("uniform sampler2D colortex3;", judge)
         self.assertIn("uniform sampler2D colortex1;", judge)
         self.assertIn("distance(blended, vec3(0.75, 0.25, 0.5)) < 0.04", judge)
         self.assertIn("length(zeroed) < 0.04", judge)
+        self.assertIn("untouched ? vec4(0.0, 0.0, 0.0, 1.0)", judge)
+        self.assertFalse((FIXTURE / "composite2.fsh").exists())
+        self.assertFalse((FIXTURE / "composite2.vsh").exists())
 
     def test_shadow_comparison_is_hardware_road_and_scene_independent(self):
-        shader = text("composite2.fsh")
+        shader = text("composite1.fsh")
         self.assertIn("uniform sampler2DShadow shadowtex0;", shader)
         self.assertIn("vec3(0.5, 0.5, -1.0)", shader)
         self.assertIn("vec3(0.5, 0.5, 2.0)", shader)
@@ -64,7 +78,7 @@ class Phase16AdvancedContract(unittest.TestCase):
         self.assertTrue((FIXTURE / "shadow.fsh").is_file())
 
     def test_final_image_has_four_independent_quarters_and_fixture_is_backend_neutral(self):
-        judge = text("composite2.fsh")
+        judge = text("composite1.fsh")
         for edge in ("0.25", "0.50", "0.75"):
             self.assertIn(f"texcoord.x < {edge}", judge)
         all_text = "\n".join(path.read_text(encoding="utf-8", errors="ignore") for path in FIXTURE.iterdir() if path.is_file())
