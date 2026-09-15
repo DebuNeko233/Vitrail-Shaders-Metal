@@ -10,26 +10,35 @@ final class MetallumDepthMipmapBridge {
 
 	private static final String CLASS_NAME = "com.metallum.render.MetalDepthMipmapBridge";
 
+	private static boolean resolved;
 	private static Method generate;
 
 	private MetallumDepthMipmapBridge() {
 	}
 
 	static boolean generate(Object encoder, GpuTexture texture) {
-		Object result = invoke(method(), encoder, texture);
+		Method method = method();
+		if (method == null) {
+			return false;
+		}
+
+		Object result = invoke(method, encoder, texture);
 		return result instanceof Boolean accepted && accepted;
 	}
 
 	private static synchronized Method method() {
 		// Resolve inside the call, not class initialization: the optional backend may be older than
-		// this Vitrail build and that mismatch must remain a normal capability failure.
-		if (generate == null) {
+		// this Vitrail build and that mismatch is a normal capability failure, not a shadow-stage
+		// error. Cache the negative result as well so an older backend does not pay reflection every
+		// frame while its sampler correctly stays clamped to level zero.
+		if (!resolved) {
+			resolved = true;
 			try {
 				Class<?> bridge = Class.forName(CLASS_NAME, false,
 						MetallumDepthMipmapBridge.class.getClassLoader());
 				generate = bridge.getMethod("generate", Object.class, GpuTexture.class);
-			} catch (ReflectiveOperationException e) {
-				throw new IllegalStateException("Metallum depth mipmap bridge is unavailable or incompatible", e);
+			} catch (ReflectiveOperationException ignored) {
+				generate = null;
 			}
 		}
 		return generate;
