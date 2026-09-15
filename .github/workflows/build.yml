@@ -50,6 +50,7 @@ jobs:
           python3 tests/test_mrt_smoke_fixture.py
           python3 tests/test_gbuffer_attachment_location.py
           python3 tests/test_volume_filter_semantics.py
+          python3 tests/test_phase16_advanced_contract.py
           python3 tests/test_gbuffer_format.py
           python3 tests/test_gbuffer_clear.py
           python3 tests/test_gbuffer_write.py
@@ -107,4 +108,5 @@ jobs:
           java tests/VerifyCompositeScreenshot.java --self-test
           java tests/VerifyFinalScreenshot.java --self-test
           java tests/VerifyDimensionRoutingScreenshot.java --self-test
+          java tests/VerifyPhase16AdvancedScreenshot.java --self-test
       - run: ./gradlew build
