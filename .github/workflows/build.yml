@@ -75,6 +75,7 @@ jobs:
           python3 tests/test_deferred_tail_contract.py
           python3 tests/test_composite_contract.py
           python3 tests/test_final_contract.py
+          python3 tests/test_dimension_routing_contract.py
           python3 tests/test_terrain_pass_semantics.py
           python3 tests/test_terrain_vertex_abi.py
           python3 tests/test_sodium_pass_routing.py
@@ -104,4 +105,5 @@ jobs:
           java tests/VerifyDeferredTailScreenshot.java --self-test
           java tests/VerifyCompositeScreenshot.java --self-test
           java tests/VerifyFinalScreenshot.java --self-test
+          java tests/VerifyDimensionRoutingScreenshot.java --self-test
       - run: ./gradlew build
