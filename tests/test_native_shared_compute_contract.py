@@ -21,7 +21,12 @@ class NativeSharedComputeContract(unittest.TestCase):
         shared = text(SHARED)
         self.assertIn("public static final long THREADGROUP_BYTES = 32768L;", shared)
         self.assertIn('public static final String BLOCK = "OfSharedMemory";', shared)
-        self.assertIn("memoryBarrierBuffer()", shared)
+        self.assertIn("GL_KHR_memory_scope_semantics", shared)
+        self.assertIn("controlBarrier(gl_ScopeWorkgroup, gl_ScopeWorkgroup", shared)
+        self.assertIn("gl_StorageSemanticsBuffer", shared)
+        self.assertIn("gl_SemanticsAcquireRelease", shared)
+        self.assertNotIn("memoryBarrierBuffer() in front", shared)
+        self.assertNotIn('"layout(std430) coherent buffer "', shared)
 
     def test_native_fallback_is_limited_to_a_fixed_single_workgroup(self):
         backend = text(BACKEND)
