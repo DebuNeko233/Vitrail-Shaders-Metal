@@ -8,11 +8,11 @@ The roadmap matrix starts with Photon, Complementary, BSL-family, Sildur-family,
 
 The classifier emits exactly one of these five public statuses:
 
-- **Supported** — a real Vitrail pack path drew, the session shut down cleanly, the tested reference visual passed, and no blocking unsupported feature, meaningful unsupported feature, compatibility fallback, or visual regression was recorded.
-- **Partially Supported** — a real Vitrail pack path drew, but one or more meaningful non-blocking unsupported features, compatibility fallbacks, or visual regressions remain.
-- **Fallback** — the tested world rendered through compatibility/game-owned fallback paths and no Vitrail pack draw was observed.
-- **Unsupported** — one or more required unsupported blockers prevent the intended pack route.
-- **Broken** — the pack did not load or the test recorded a fatal runtime/chain failure.
+- **Supported** - a real Vitrail pack path drew, the session shut down cleanly, the tested reference visual passed, and no blocking unsupported feature, meaningful unsupported feature, compatibility fallback, or visual regression was recorded.
+- **Partially Supported** - a real Vitrail pack path drew, but one or more meaningful non-blocking unsupported features, compatibility fallbacks, or visual regressions remain.
+- **Fallback** - the tested world rendered through compatibility/game-owned fallback paths and no Vitrail pack draw was observed.
+- **Unsupported** - one or more required unsupported blockers prevent the intended pack route.
+- **Broken** - the pack did not load or the test recorded a fatal runtime/chain failure.
 
 An incomplete session is not silently turned into one of those statuses. Missing real-device execution, missing a clean shutdown, missing a world draw for a candidate `Supported` result, or missing the reference visual check causes the classifier to refuse the record.
 
