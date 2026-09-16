@@ -11,6 +11,7 @@ import dev.vitrail.pack.target.TargetSchedule;
 import dev.vitrail.render.compute.ComputeCommands;
 import dev.vitrail.render.compute.ComputeDeviceBackend;
 import dev.vitrail.render.compute.ComputeResources;
+import dev.vitrail.render.storage.StorageBufferBackend;
 import dev.vitrail.Vitrail;
 
 import com.mojang.blaze3d.GpuDeviceLossException;
@@ -25,6 +26,7 @@ import org.lwjgl.util.shaderc.Shaderc;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -53,6 +55,8 @@ final class BackendComputePass implements AutoCloseable {
 	private final TextureStage textureStage;
 
 	private MappableRingBuffer block;
+	private GpuBuffer sharedMemory;
+	private long sharedMemoryBytes;
 	private ComputeDeviceBackend owner;
 	private Object pipeline;
 	private ComputeResources resources;
@@ -93,7 +97,8 @@ final class BackendComputePass implements AutoCloseable {
 				targets,
 				step,
 				depth,
-				distant);
+				distant,
+				transientBuffers());
 		int[] groups = this.compute.groupsAt(width, height);
 		if (!commands.vitrail$dispatchCompute(
 				this.pipeline,
@@ -116,6 +121,12 @@ final class BackendComputePass implements AutoCloseable {
 					groups[0], groups[1], groups[2],
 					this.localSize.x(), this.localSize.y(), this.localSize.z());
 		}
+	}
+
+	private Map<String, GpuBufferSlice> transientBuffers() {
+		return this.sharedMemory == null
+				? Map.of()
+				: Map.of(SharedMemory.BLOCK, this.sharedMemory.slice(0, this.sharedMemoryBytes));
 	}
 
 	private void compile(ComputeDeviceBackend backend) {
@@ -143,12 +154,34 @@ final class BackendComputePass implements AutoCloseable {
 				return;
 			}
 			if (shared.over()) {
-				Vitrail.logger().warn("compute {} is not dispatched on native Metal: it asks for {} "
-						+ "bytes of threadgroup memory, past the verified {} byte limit; the MoltenVK "
-						+ "single-workgroup storage-buffer rewrite is intentionally not reused here",
-						this.path, shared.threadgroupBytes(), SharedMemory.THREADGROUP_BYTES);
-				this.localSize = null;
-				return;
+				// A storage buffer is one copy for the whole dispatch, while GLSL shared memory is
+				// one copy per work group. They are equivalent only for a fixed single group. This
+				// is the same condition the established MoltenVK road uses; keeping it here avoids
+				// silently changing a multi-group reduction merely to fit Metal's memory limit.
+				if (this.compute.groupsX() != 1 || this.compute.groupsY() != 1
+						|| this.compute.groupsZ() != 1) {
+					Vitrail.logger().warn("compute {} is not dispatched on native Metal: it asks for {} "
+							+ "bytes of threadgroup memory, past the verified {} byte limit, and does "
+							+ "not dispatch a single work group", this.path, shared.threadgroupBytes(),
+							SharedMemory.THREADGROUP_BYTES);
+					this.localSize = null;
+					return;
+				}
+				if (!(backend instanceof StorageBufferBackend)) {
+					Vitrail.logger().warn("compute {} is not dispatched on the active backend: its {} "
+							+ "bytes of shared memory need the storage-buffer fallback, but that backend "
+							+ "does not expose storage-buffer allocation", this.path,
+							shared.threadgroupBytes());
+					this.localSize = null;
+					return;
+				}
+
+				this.sharedMemoryBytes = shared.bufferBytes();
+				source = shared.moved();
+				Vitrail.logger().info("compute {} asks Metal for {} bytes of threadgroup memory, past "
+						+ "the {} it allows; its fixed single work group is served from a transient "
+						+ "storage buffer of {} bytes", this.path, shared.threadgroupBytes(),
+						SharedMemory.THREADGROUP_BYTES, this.sharedMemoryBytes);
 			}
 		}
 
@@ -177,6 +210,10 @@ final class BackendComputePass implements AutoCloseable {
 			this.resources = ComputeResources.inspect(module.spirv());
 			this.pipeline = backend.vitrail$compileCompute(this.label, module.spirv().duplicate());
 			this.owner = backend;
+			if (this.sharedMemoryBytes > 0L) {
+				this.sharedMemory = ((StorageBufferBackend) backend)
+						.vitrail$createStorageBuffer(this.sharedMemoryBytes);
+			}
 		} catch (GpuDeviceLossException e) {
 			throw e;
 		} catch (Exception e) {
@@ -298,6 +335,11 @@ final class BackendComputePass implements AutoCloseable {
 			this.block.close();
 			this.block = null;
 		}
+		if (this.sharedMemory != null) {
+			this.sharedMemory.close();
+			this.sharedMemory = null;
+		}
+		this.sharedMemoryBytes = 0L;
 	}
 
 	private record LocalSize(int x, int y, int z) {

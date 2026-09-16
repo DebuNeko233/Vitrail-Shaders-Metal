@@ -56,12 +56,39 @@ final class PackComputeBindings {
 			TargetSchedule.Bound step,
 			GpuTextureView depth,
 			GpuTextureView distant) {
+		return resolve(resources, uniformBlock, samplers, textureStage, program, targets, step,
+				depth, distant, Map.of());
+	}
+
+	/**
+	 * Resolves a compute's resources with transient backend buffers taking precedence over the
+	 * pack-level storage-buffer registry.
+	 * <p>
+	 * Transient buffers are deliberately named by the reflected shader resource rather than by a
+	 * native binding index. The shared-memory fallback uses this door for {@code OfSharedMemory};
+	 * keeping the exception here means neither the scheduler nor the Metallum bridge learns that
+	 * name, and ordinary pack-declared SSBOs keep following {@link StorageBuffers} unchanged.
+	 */
+	static Resolved resolve(
+			ComputeResources resources,
+			GpuBufferSlice uniformBlock,
+			SamplerPlan samplers,
+			TextureStage textureStage,
+			String program,
+			ColorTargets targets,
+			TargetSchedule.Bound step,
+			GpuTextureView depth,
+			GpuTextureView distant,
+			Map<String, GpuBufferSlice> transientBuffers) {
 		Map<String, GpuBufferSlice> buffers = new LinkedHashMap<>();
 		for (String name : resources.uniformBuffers()) {
 			buffers.put(name, uniformBlock);
 		}
 		for (String name : resources.storageBuffers()) {
-			GpuBufferSlice slice = StorageBuffers.facadeSlice(name);
+			GpuBufferSlice slice = transientBuffers.get(name);
+			if (slice == null) {
+				slice = StorageBuffers.facadeSlice(name);
+			}
 			if (slice == null) {
 				throw new IllegalStateException("Missing backend storage buffer " + name);
 			}
