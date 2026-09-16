@@ -26,14 +26,15 @@ import java.util.regex.Pattern;
  * using the text. A shared variable starts undefined, and what the last dispatch left in the buffer
  * is one reading of that.
  * <p>
- * <strong>The barriers have to name the buffer.</strong> SPIRV-Cross writes {@code barrier()} as
- * {@code threadgroup_barrier(mem_flags::mem_threadgroup)} whatever memory the stage touches, and that
- * flag orders writes to threadgroup memory and to nothing else, so a reduction reading what the other
- * invocations wrote into a buffer would race. The moved text therefore puts
- * {@code memoryBarrierBuffer()} in front of every {@code barrier()}, which SPIRV-Cross writes as
- * {@code mem_device} below MSL 3.2 and as an {@code atomic_thread_fence} over device memory from
- * 3.2, and declares the block {@code coherent}, which 3.2 receives as {@code coherent device}, the
- * qualifier that fence is written against.
+ * <strong>The barriers have to name the buffer without widening their scope.</strong> GLSL's plain
+ * {@code barrier()} orders shared/workgroup memory. Once the variable is moved into a storage buffer,
+ * the same control barrier has to order buffer memory instead. The fallback is only legal for one
+ * fixed work group, so the replacement keeps both execution and memory scope at Workgroup and changes
+ * only the storage semantics to Buffer. That lowers to one SPIR-V {@code OpControlBarrier} and, on
+ * Metal, to {@code threadgroup_barrier(mem_flags::mem_device)}. A standalone
+ * {@code memoryBarrierBuffer()} would instead become a device-scope fence on newer MSL targets, and a
+ * {@code coherent} block would ask SPIRV-Cross for a Metal qualifier not accepted by the native
+ * compiler used here; neither is needed when every communicating invocation is in one work group.
  * <p>
  * Off until {@code VulkanBackendMixin} says the driver is MoltenVK, which is what the harness gets.
  */
@@ -46,11 +47,14 @@ public final class SharedMemory {
 	public static final String BLOCK = "OfSharedMemory";
 
 	/**
-	 * Written after the version line, so that every barrier of the stage names the buffer. One
-	 * expression and not two statements: {@code if (x) barrier();} would otherwise fence the buffer
-	 * in the branch and wait for every thread outside it.
+	 * Written after the version line, so that every barrier of the stage orders the moved buffer.
+	 * One statement, not a sequence: {@code if (x) barrier();} must retain its original control-flow
+	 * shape. The caller proves the dispatch is one work group before any text containing this is used.
 	 */
-	private static final String BARRIER = "#define barrier() (memoryBarrierBuffer(), barrier())";
+	private static final String BARRIER =
+			"#extension GL_KHR_memory_scope_semantics : require\n"
+					+ "#define barrier() controlBarrier(gl_ScopeWorkgroup, gl_ScopeWorkgroup, "
+					+ "gl_StorageSemanticsBuffer, gl_SemanticsAcquireRelease)";
 
 	private static final Pattern WORD = Pattern.compile("\\bshared\\b");
 
@@ -185,7 +189,7 @@ public final class SharedMemory {
 			int[] span = spans.get(k);
 			text.append(preprocessed, copied, span[0]);
 			text.append(k == 0
-					? "layout(std430) coherent buffer " + BLOCK + " { " + members + "};"
+					? "layout(std430) buffer " + BLOCK + " { " + members + "};"
 					: blank(preprocessed.substring(span[0], span[1])));
 			copied = span[1];
 		}
