@@ -333,8 +333,16 @@ public final class PackChain {
 	 */
 	private final List<FamilyDraw> families;
 
-	/** Shadow compute, dispatched after the shadow map, Complementary's floodfill among them. */
+	/** Shadow/chained/setup compute programs and their shader-pack scheduling. */
 	private final PackCompute compute;
+
+	/**
+	 * Screen size whose target allocation has already received setup. Setup is resource lifecycle
+	 * work, not frame work: a resize recreates screen-sized targets and therefore reruns it, while
+	 * an ordinary new frame does not.
+	 */
+	private int setupWidth = -1;
+	private int setupHeight = -1;
 
 	private List<PackPass> programs;
 	private PackPass last;
@@ -1184,7 +1192,21 @@ public final class PackChain {
 		// state has already been advanced onto this frame.
 		WorldState world = this.values.world();
 		this.fogClear.set(world.fogR(), world.fogG(), world.fogB(), 1.0F);
-		this.targets.clear(device.createCommandEncoder(), this.fogClear);
+		CommandEncoder encoder = device.createCommandEncoder();
+		this.targets.clear(encoder, this.fogClear);
+
+		// Setup is tied to the allocation, not to the frame. The full clear above writes the
+		// allocation's initial contents; flush its deferred load-op clears before setup so no later
+		// render pass can erase an imageStore made by setup. The same command stream then changes
+		// encoder type as Metal requires: the clear encoder is ended before PackCompute starts its
+		// compute encoder, with ordering supplied by the command buffer rather than a Vulkan barrier.
+		if (this.compute.hasSetup()
+				&& (main.width != this.setupWidth || main.height != this.setupHeight)) {
+			this.targets.flushPending(encoder);
+			this.compute.dispatchSetup(encoder, device, this.values, this.targets);
+			this.setupWidth = main.width;
+			this.setupHeight = main.height;
+		}
 		// After the clear and not before. The clear is what pays the debt a fresh allocation owes,
 		// and it is the one call here that can throw; raised first, the second call of the same frame
 		// found the frame opened and skipped the clear it never got, and the debt died with the

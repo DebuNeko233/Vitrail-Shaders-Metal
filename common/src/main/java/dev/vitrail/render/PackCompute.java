@@ -133,6 +133,16 @@ final class PackCompute implements AutoCloseable {
 	/** The pattern of a colour target written as an image, {@code colorimg4} for {@code colortex4}. */
 	private static final Pattern COLOUR_IMAGE = Pattern.compile("\\bcolorimg(\\d+)\\b");
 
+	/**
+	 * Setup sees the initial, unflipped side of every colour target. Iris builds setup with an
+	 * empty flipped set and runs it after the full clear, before any begin or geometry program.
+	 */
+	private static final TargetSchedule.Bound SETUP_STEP =
+			new TargetSchedule.Bound("setup", List.of(), true, Set.of(), Set.of());
+
+	/** The setup computes, dispatched once after target allocation and again after a resize. */
+	private final List<Pass> setup;
+
 	/** The shadow computes, dispatched at the head of the frame. */
 	private final List<Pass> passes;
 
@@ -162,8 +172,9 @@ final class PackCompute implements AutoCloseable {
 	/** The passes whose computes have been announced once, which is once per pass and not per frame. */
 	private final Set<String> announcedChains = new LinkedHashSet<>();
 
-	private PackCompute(List<Pass> passes, Map<String, List<Pass>> chained,
+	private PackCompute(List<Pass> setup, List<Pass> passes, Map<String, List<Pass>> chained,
 			Map<String, List<Pass>> alone, Set<Integer> storageTargets) {
+		this.setup = List.copyOf(setup);
 		this.passes = List.copyOf(passes);
 		this.chained = Map.copyOf(chained);
 		this.alone = Map.copyOf(alone);
@@ -171,12 +182,17 @@ final class PackCompute implements AutoCloseable {
 	}
 
 	static PackCompute none() {
-		return new PackCompute(List.of(), Map.of(), Map.of(), Set.of());
+		return new PackCompute(List.of(), List.of(), Map.of(), Map.of(), Set.of());
 	}
 
 	/** The targets to create writable from a compute, read before the first allocation. */
 	Set<Integer> storageTargets() {
 		return this.storageTargets;
+	}
+
+	/** Whether this pack has setup work that must run after a full target allocation/clear. */
+	boolean hasSetup() {
+		return !this.setup.isEmpty();
 	}
 
 	/** Whether any compute hangs off that full screen pass. */
@@ -240,15 +256,17 @@ final class PackCompute implements AutoCloseable {
 	static PackCompute load(OpenedPack pack, String place, List<String> computes, int load,
 			UniformCatalog shadowCatalog, UniformCatalog chainCatalog, Set<String> running,
 			Set<String> passing) {
+		List<Pass> setup = new ArrayList<>();
 		List<Pass> passes = new ArrayList<>();
 		Map<String, List<Pass>> chained = new LinkedHashMap<>();
 		Map<String, List<Pass>> alone = new LinkedHashMap<>();
 		Set<Integer> storageTargets = new LinkedHashSet<>();
 		for (String name : computes) {
-			boolean shadow = ProgramNames.shadowComposite(ProgramNames.familyOf(name));
+			String family = ProgramNames.familyOf(name);
+			boolean setupCompute = family.equals("setup");
+			boolean shadow = ProgramNames.shadowComposite(family);
 			Optional<String> base = ProgramNames.computeBase(name);
-			// Setup has no moment in this frame yet. The plan already names it.
-			if (!shadow && base.isEmpty()) {
+			if (!shadow && !setupCompute && base.isEmpty()) {
 				continue;
 			}
 
@@ -258,8 +276,8 @@ final class PackCompute implements AutoCloseable {
 			// user's ask or by this engine refusing a sampler it cannot bind, and a final nothing
 			// draws, whose computes the reference builds with the final and never without it. The
 			// plan tells the three apart in its notes; here they take the same road.
-			boolean standalone = !shadow && passing.contains(base.get());
-			if (!shadow && !standalone && !running.contains(base.get())) {
+			boolean standalone = !shadow && !setupCompute && passing.contains(base.get());
+			if (!shadow && !setupCompute && !standalone && !running.contains(base.get())) {
 				Vitrail.logger().warn("compute {} is not dispatched: nothing of this chain runs {}, "
 						+ "and the plan's notes say what took it out", name, base.get());
 				continue;
@@ -296,9 +314,16 @@ final class PackCompute implements AutoCloseable {
 					continue;
 				}
 
+				String program = setupCompute
+						? ProgramNames.parse(name).map(ProgramNames.ProgramName::baseName).orElse(name)
+						: shadow ? null : base.get();
 				Pass pass = new Pass(compute.get(), shadow ? shadowCatalog : chainCatalog, load,
-						path, shadow ? null : base.get());
-				if (shadow) {
+						path, program);
+				if (setupCompute) {
+					setup.add(pass);
+					storageTargets.addAll(colourImagesOf(compute.get()));
+					Vitrail.logger().info("Loaded setup compute {} ({})", path, sizing(compute.get()));
+				} else if (shadow) {
 					passes.add(pass);
 					Vitrail.logger().info("Loaded shadow compute {} ({})", path, sizing(compute.get()));
 				} else if (standalone) {
@@ -329,12 +354,15 @@ final class PackCompute implements AutoCloseable {
 			}
 		}
 
+		setup.sort(Comparator
+				.comparing((Pass pass) -> pass.program, ProgramNames.frameOrder())
+				.thenComparing(pass -> ProgramNames.computeLetter(pass.name)));
 		chained.values().forEach(list -> list.sort(
 				Comparator.comparing(pass -> ProgramNames.computeLetter(pass.name))));
 		alone.values().forEach(list -> list.sort(
 				Comparator.comparing(pass -> ProgramNames.computeLetter(pass.name))));
 
-		return new PackCompute(passes, chained, alone, storageTargets);
+		return new PackCompute(setup, passes, chained, alone, storageTargets);
 	}
 
 	/** The colour targets a compute names as an image, read off its translated text. */
@@ -351,6 +379,31 @@ final class PackCompute implements AutoCloseable {
 		}
 
 		return indices;
+	}
+
+	/**
+	 * Runs the setup computes after the targets have been fully allocated and cleared. Iris runs
+	 * setup at exactly that resource-lifecycle boundary and repeats it only after a target resize.
+	 * The caller has already flushed deferred clears, so a later render-pass load operation cannot
+	 * erase an imageStore performed here.
+	 * <p>
+	 * Setup uses the initial MAIN side of every colour target and a logical dispatch size of 1x1,
+	 * matching Iris's {@code program.dispatch(1, 1)}. On Metal this remains one ordered command
+	 * stream: any render/blit encoder used for the clear is ended before the compute encoder starts,
+	 * rather than translating a Vulkan pipeline barrier into Metal vocabulary.
+	 */
+	void dispatchSetup(CommandEncoder encoder, GpuDevice device, PackValues values,
+			ColorTargets targets) {
+		if (this.setup.isEmpty() || !targets.usable()) {
+			return;
+		}
+
+		values.modelView(null, null);
+		values.projection(null);
+		values.passColour(null);
+		values.renderStage(RenderStage.NONE);
+		dispatchChain(this.setup, "setup", encoder, device, values, targets, SETUP_STEP,
+				null, null, 1, 1);
 	}
 
 	/**
@@ -582,6 +635,7 @@ final class PackCompute implements AutoCloseable {
 	 */
 	@Override
 	public void close() {
+		this.setup.forEach(Pass::close);
 		this.passes.forEach(Pass::close);
 		this.chained.values().forEach(list -> list.forEach(Pass::close));
 		this.alone.values().forEach(list -> list.forEach(Pass::close));
