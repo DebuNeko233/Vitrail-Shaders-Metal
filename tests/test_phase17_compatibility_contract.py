@@ -31,6 +31,7 @@ def base_record():
             "world_drawn": True,
             "clean_shutdown": True,
             "fatal_failure": False,
+            "compatibility_reviewed": True,
             "blocking_unsupported": 0,
             "meaningful_unsupported_features": 0,
             "vitrail_draws": 10,
@@ -61,7 +62,7 @@ def expect_refused(fragment, **updates):
 
 
 expect("Supported")
-expect("Broken", fatal_failure=True)
+expect("Broken", fatal_failure=True, compatibility_reviewed=False)
 expect("Unsupported", blocking_unsupported=1, vitrail_draws=0)
 expect("Fallback", vitrail_draws=0, compatibility_fallbacks=9)
 expect("Partially Supported", meaningful_unsupported_features=1)
@@ -71,6 +72,7 @@ expect_refused("reference visual was not checked", visual_reference_checked=Fals
 expect_refused("real-device session was not attempted", attempted=False)
 expect_refused("world_drawn cannot be true", loaded=False)
 expect_refused("session did not reach clean shutdown", clean_shutdown=False)
+expect_refused("compatibility observations were not reviewed", compatibility_reviewed=False)
 
 catalog = json.loads((HERE / "fixtures" / "phase17" / "catalog.json").read_text(encoding="utf-8"))
 assert catalog["schema"] == "vitrail.phase17.catalog.v1"
@@ -83,6 +85,7 @@ for entry in catalog["families"]:
 
 template = json.loads((HERE / "fixtures" / "phase17" / "evidence-template.json").read_text(encoding="utf-8"))
 assert template["schema"] == "vitrail.phase17.compatibility.v1"
+assert template["evidence"]["compatibility_reviewed"] is False
 try:
     mod.classify(template)
 except mod.EvidenceError as exc:

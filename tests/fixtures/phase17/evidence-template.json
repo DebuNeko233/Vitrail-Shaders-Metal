@@ -19,6 +19,7 @@
     "world_drawn": false,
     "clean_shutdown": false,
     "fatal_failure": false,
+    "compatibility_reviewed": false,
     "blocking_unsupported": 0,
     "meaningful_unsupported_features": 0,
     "vitrail_draws": 0,

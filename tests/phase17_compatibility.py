@@ -2,8 +2,8 @@
 """Classify PHASE 17 real shader-pack compatibility from explicit evidence.
 
 The classifier is deliberately conservative: it never guesses a pack status from its
-name, family, or static source alone. A final classification requires a completed
-real-device evidence record.
+name, family, or static source alone. A final classification requires a completed,
+reviewed real-device evidence record.
 """
 from __future__ import annotations
 
@@ -30,6 +30,7 @@ REQUIRED_EVIDENCE = (
     "world_drawn",
     "clean_shutdown",
     "fatal_failure",
+    "compatibility_reviewed",
     "blocking_unsupported",
     "meaningful_unsupported_features",
     "vitrail_draws",
@@ -88,7 +89,8 @@ def validate(record: dict[str, Any]) -> None:
         key: _expect_bool(ev, key)
         for key in (
             "attempted", "loaded", "world_drawn", "clean_shutdown",
-            "fatal_failure", "visual_reference_checked", "visual_reference_ok",
+            "fatal_failure", "compatibility_reviewed",
+            "visual_reference_checked", "visual_reference_ok",
         )
     }
     counts = {
@@ -131,6 +133,11 @@ def classify(record: dict[str, Any]) -> Classification:
     if not ev["clean_shutdown"]:
         raise EvidenceError("session did not reach clean shutdown; refusing to turn an incomplete session into a pack status")
 
+    if not ev["compatibility_reviewed"]:
+        raise EvidenceError(
+            "compatibility observations were not reviewed; refusing to promote raw runtime evidence to a pack status"
+        )
+
     if ev["blocking_unsupported"] > 0:
         return Classification(
             "Unsupported",
@@ -170,7 +177,7 @@ def classify(record: dict[str, Any]) -> Classification:
 
     return Classification(
         "Supported",
-        ("real Vitrail draws, clean shutdown and passing reference visual with no recorded gaps",),
+        ("real Vitrail draws, clean shutdown, reviewed compatibility observations and a passing reference visual",),
     )
 
 
