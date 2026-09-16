@@ -109,14 +109,10 @@ public final class GlslLexer {
 			// A backslash before a line break splices the two lines together before anything else
 			// reads them. That is how a macro body runs past its own line, so the break has to be
 			// swallowed here rather than end the directive.
-			if (c == '\\' && index + 1 < length && (source.charAt(index + 1) == '\n' || source.charAt(index + 1) == '\r')) {
-				int end = index + 2;
-				if (source.charAt(index + 1) == '\r' && end < length && source.charAt(end) == '\n') {
-					end++;
-				}
-
-				tokens.add(new Token(Kind.SPACE, source.substring(index, end), null));
-				index = end;
+			int splice = lineSpliceLength(source, index);
+			if (splice != 0) {
+				tokens.add(new Token(Kind.SPACE, source.substring(index, index + splice), null));
+				index += splice;
 				continue;
 			}
 
@@ -133,7 +129,17 @@ public final class GlslLexer {
 
 			if (c == '/' && index + 1 < length && source.charAt(index + 1) == '/') {
 				int end = index;
-				while (end < length && source.charAt(end) != '\n' && source.charAt(end) != '\r') {
+				while (end < length) {
+					int commentSplice = lineSpliceLength(source, end);
+					if (commentSplice != 0) {
+						end += commentSplice;
+						continue;
+					}
+
+					char inComment = source.charAt(end);
+					if (inComment == '\n' || inComment == '\r') {
+						break;
+					}
 					end++;
 				}
 
@@ -247,6 +253,21 @@ public final class GlslLexer {
 		}
 
 		return marked;
+	}
+
+	private static int lineSpliceLength(String source, int index) {
+		if (index >= source.length() || source.charAt(index) != '\\' || index + 1 >= source.length()) {
+			return 0;
+		}
+
+		char next = source.charAt(index + 1);
+		if (next == '\n') {
+			return 2;
+		}
+		if (next == '\r') {
+			return index + 2 < source.length() && source.charAt(index + 2) == '\n' ? 3 : 2;
+		}
+		return 0;
 	}
 
 	private static int numberEnd(String source, int start) {
