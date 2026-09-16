@@ -64,6 +64,20 @@ class ComputeStorageContract(unittest.TestCase):
         self.assertNotIn("Metal", fixture_text)
         self.assertNotIn("MTL", fixture_text)
 
+    def test_native_compute_retries_when_shaderc_optimizer_rejects_valid_source(self):
+        backend = text(BACKEND_COMPUTE)
+        self.assertIn('COMPUTE/shaderc-opt2-vulkan1.2', backend)
+        self.assertIn('COMPUTE/shaderc-opt0-vulkan1.2', backend)
+        self.assertIn('compileSpirv(source, SHADERC_OPTIMIZATION_PERFORMANCE)', backend)
+        self.assertIn('compileSpirv(source, SHADERC_OPTIMIZATION_NONE)', backend)
+        self.assertIn('shaderc optimization failed; retrying without ', backend)
+        self.assertIn('optimization', backend)
+        self.assertIn('compileOptions(SHADERC_OPTIMIZATION_NONE)', backend)
+        self.assertLess(
+            backend.index('compileSpirv(source, SHADERC_OPTIMIZATION_PERFORMANCE)'),
+            backend.index('compileSpirv(source, SHADERC_OPTIMIZATION_NONE)'),
+        )
+
     def test_shader_writable_backend_counts_as_storage_capable(self):
         formats = text(GPU_FORMATS)
         writable = text(SHADER_WRITABLE)
