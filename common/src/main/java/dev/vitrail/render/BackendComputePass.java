@@ -43,7 +43,10 @@ final class BackendComputePass implements AutoCloseable {
 
 	private static final int SHADERC_VULKAN_1_2 = 4202496;
 	private static final int SHADERC_COMPUTE = 2;
-	private static final String MODULE_CACHE_STAGE = "COMPUTE/shaderc-opt2-vulkan1.2";
+	private static final int SHADERC_OPTIMIZATION_NONE = 0;
+	private static final int SHADERC_OPTIMIZATION_PERFORMANCE = 2;
+	private static final String MODULE_CACHE_STAGE_OPTIMIZED = "COMPUTE/shaderc-opt2-vulkan1.2";
+	private static final String MODULE_CACHE_STAGE_UNOPTIMIZED = "COMPUTE/shaderc-opt0-vulkan1.2";
 	private static final Pattern LOCAL_AXIS = Pattern.compile("\\blocal_size_([xyz])\\s*=\\s*");
 	private static final Pattern LOCAL_LITERAL = Pattern.compile("\\d+");
 
@@ -189,14 +192,35 @@ final class BackendComputePass implements AutoCloseable {
 		IntermediaryShaderModule module = null;
 		RawLocals.begin();
 		try {
-			String key = ModuleCache.keyOf(source, MODULE_CACHE_STAGE);
-			module = ModuleCache.lookup(key, this.label);
+			String optimizedKey = ModuleCache.keyOf(source, MODULE_CACHE_STAGE_OPTIMIZED);
+			String unoptimizedKey = ModuleCache.keyOf(source, MODULE_CACHE_STAGE_UNOPTIMIZED);
+			String key = optimizedKey;
+			module = ModuleCache.lookup(optimizedKey, this.label);
+			if (module == null) {
+				module = ModuleCache.lookup(unoptimizedKey, this.label);
+				if (module != null) {
+					key = unoptimizedKey;
+				}
+			}
+
 			ByteBuffer spirv = null;
 			if (module == null) {
-				spirv = compileSpirv(source);
-				if (spirv == null) {
-					ModuleCache.building(this.label);
-					return;
+				SpirvResult optimized = compileSpirv(source, SHADERC_OPTIMIZATION_PERFORMANCE);
+				if (optimized.spirv() != null) {
+					spirv = optimized.spirv();
+				} else {
+					SpirvResult unoptimized = compileSpirv(source, SHADERC_OPTIMIZATION_NONE);
+					if (unoptimized.spirv() == null) {
+						Vitrail.logger().warn("compute shaderc: optimized compile failed: {}; "
+								+ "unoptimized compile failed: {}", optimized.error(), unoptimized.error());
+						ModuleCache.building(this.label);
+						return;
+					}
+
+					Vitrail.logger().warn("compute {} shaderc optimization failed; retrying without "
+							+ "optimization: {}", this.path, optimized.error());
+					spirv = unoptimized.spirv();
+					key = unoptimizedKey;
 				}
 				ModuleCache.building(this.label);
 			}
@@ -246,9 +270,12 @@ final class BackendComputePass implements AutoCloseable {
 		return this.block.currentBuffer().slice(0, bytes);
 	}
 
-	private static ByteBuffer compileSpirv(String source) {
+	private record SpirvResult(ByteBuffer spirv, String error) {
+	}
+
+	private static SpirvResult compileSpirv(String source, int optimization) {
 		long compiler = Shaderc.shaderc_compiler_initialize();
-		long options = compileOptions();
+		long options = compileOptions(optimization);
 		ByteBuffer sourceBuffer = MemoryUtil.memUTF8(source, false);
 		ByteBuffer filename = MemoryUtil.memUTF8("compute.csh");
 		ByteBuffer entry = MemoryUtil.memUTF8("main");
@@ -256,15 +283,19 @@ final class BackendComputePass implements AutoCloseable {
 		try {
 			result = Shaderc.shaderc_compile_into_spv(compiler, sourceBuffer, SHADERC_COMPUTE,
 					filename, entry, options);
+			if (result == 0L) {
+				return new SpirvResult(null, "shaderc returned no result");
+			}
 			if (Shaderc.shaderc_result_get_compilation_status(result) != 0) {
-				Vitrail.logger().warn("compute shaderc: {}",
-						Shaderc.shaderc_result_get_error_message(result));
-				return null;
+				return new SpirvResult(null, Shaderc.shaderc_result_get_error_message(result));
 			}
 			ByteBuffer spirv = Shaderc.shaderc_result_get_bytes(result);
+			if (spirv == null) {
+				return new SpirvResult(null, "shaderc returned no SPIR-V bytes");
+			}
 			ByteBuffer copy = MemoryUtil.memCalloc(spirv.remaining());
 			MemoryUtil.memCopy(spirv, copy);
-			return copy;
+			return new SpirvResult(copy, null);
 		} finally {
 			if (result != 0L) {
 				Shaderc.shaderc_result_release(result);
@@ -279,7 +310,7 @@ final class BackendComputePass implements AutoCloseable {
 
 	private static String preprocess(String source) {
 		long compiler = Shaderc.shaderc_compiler_initialize();
-		long options = compileOptions();
+		long options = compileOptions(SHADERC_OPTIMIZATION_NONE);
 		ByteBuffer sourceBuffer = MemoryUtil.memUTF8(source, false);
 		ByteBuffer filename = MemoryUtil.memUTF8("compute.csh");
 		ByteBuffer entry = MemoryUtil.memUTF8("main");
@@ -307,13 +338,13 @@ final class BackendComputePass implements AutoCloseable {
 		}
 	}
 
-	private static long compileOptions() {
+	private static long compileOptions(int optimization) {
 		long options = Shaderc.shaderc_compile_options_initialize();
 		Shaderc.shaderc_compile_options_set_target_env(options, 0, SHADERC_VULKAN_1_2);
 		Shaderc.shaderc_compile_options_set_auto_bind_uniforms(options, true);
 		Shaderc.shaderc_compile_options_set_auto_map_locations(options, true);
 		Shaderc.shaderc_compile_options_set_generate_debug_info(options);
-		Shaderc.shaderc_compile_options_set_optimization_level(options, 2);
+		Shaderc.shaderc_compile_options_set_optimization_level(options, optimization);
 		return options;
 	}
 
