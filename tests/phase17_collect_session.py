@@ -17,15 +17,18 @@ from typing import Iterable
 
 SCHEMA = "vitrail.phase17.compatibility.v1"
 
+# These patterns intentionally key off the message text rather than a logger-name
+# decoration. Production Fabric logs do not necessarily print a literal "(Vitrail)"
+# prefix even though isolated fixtures historically did.
 HIGH_CONFIDENCE_FATAL = (
-    re.compile(r"\(Vitrail\).*(?:chain|shader|pipeline).*(?:failed|failure)", re.IGNORECASE),
-    re.compile(r"\(Vitrail\).*(?:failed|failure).*(?:chain|shader|pipeline)", re.IGNORECASE),
+    re.compile(r"Vitrail stopped drawing this pack after an error", re.IGNORECASE),
+    re.compile(r"Failed to compile shader vitrail:pack/", re.IGNORECASE),
     re.compile(r"A fatal error has been detected by the Java Runtime Environment", re.IGNORECASE),
 )
 
 RAW_FALLBACK_PATTERNS = (
-    re.compile(r"\(Vitrail\).*went back to the game's own shader", re.IGNORECASE),
-    re.compile(r"\(Vitrail\).*keeps? (?:the game's|its own) shader", re.IGNORECASE),
+    re.compile(r"went back to the game's own shader", re.IGNORECASE),
+    re.compile(r"(?:the game keeps its own shader|keeps? the game's own shader)", re.IGNORECASE),
 )
 
 
@@ -116,7 +119,7 @@ def collect(
     if backend != "Metal":
         raise CollectionError(f"PHASE 17 requires the Metal backend, observed {backend!r}")
 
-    device_match = re.search(r"\(metallum\) Metal device: ([^\r\n]+)", text)
+    device_match = re.search(r"(?:\(metallum\)\s*)?Metal device: ([^\r\n]+)", text, re.IGNORECASE)
     if not device_match:
         device_match = re.search(r"Using graphics device: ([^\r\n]+)", text)
     if not device_match:
@@ -139,8 +142,8 @@ def collect(
     )
 
     draw_patterns = (
-        re.compile(rf"\(Vitrail\).*Drawing .* of {re.escape(runtime_name)} at render stage", re.IGNORECASE),
-        re.compile(rf"\(Vitrail\).*Drawing {re.escape(runtime_name)} from the root for minecraft:", re.IGNORECASE),
+        re.compile(rf"Drawing .* of {re.escape(runtime_name)} at render stage", re.IGNORECASE),
+        re.compile(rf"Drawing {re.escape(runtime_name)} from the root for minecraft:", re.IGNORECASE),
     )
     draw_lines = [line.strip() for line in lines if any(pattern.search(line) for pattern in draw_patterns)]
     world_drawn = bool(draw_lines)
@@ -235,6 +238,7 @@ def main(argv: list[str] | None = None) -> int:
         "PHASE 17 evidence collected: "
         f"loaded={str(ev['loaded']).lower()} worldDrawn={str(ev['world_drawn']).lower()} "
         f"vitrailDraws={ev['vitrail_draws']} cleanShutdown={str(ev['clean_shutdown']).lower()} "
+        f"fatalFailure={str(ev['fatal_failure']).lower()} "
         f"rawFallbackObservations={obs['raw_game_owned_fallbacks']}"
     )
     print("PHASE 17 compatibility review remains pending; no pack status was assigned.")
