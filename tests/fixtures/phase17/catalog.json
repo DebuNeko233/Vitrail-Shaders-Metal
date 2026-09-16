@@ -1,0 +1,10 @@
+{
+  "schema": "vitrail.phase17.catalog.v1",
+  "families": [
+    {"id": "photon", "label": "Photon"},
+    {"id": "complementary", "label": "Complementary"},
+    {"id": "bsl", "label": "BSL-family"},
+    {"id": "sildur", "label": "Sildur-family"},
+    {"id": "makeup", "label": "MakeUp"}
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "schema": "vitrail.phase17.compatibility.v1",
+  "pack": {
+    "family": "replace-me",
+    "name": "replace-me",
+    "version": "replace-me",
+    "artifact_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "environment": {
+    "minecraft": "26.2",
+    "vitrail": "replace-with-tested-head",
+    "metallum": "replace-with-tested-head",
+    "backend": "Metal",
+    "device": "replace-me"
+  },
+  "evidence": {
+    "attempted": false,
+    "loaded": false,
+    "world_drawn": false,
+    "clean_shutdown": false,
+    "fatal_failure": false,
+    "blocking_unsupported": 0,
+    "meaningful_unsupported_features": 0,
+    "vitrail_draws": 0,
+    "compatibility_fallbacks": 0,
+    "visual_reference_checked": false,
+    "visual_reference_ok": false,
+    "visual_regressions": 0
+  }
+}
