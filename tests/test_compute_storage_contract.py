@@ -7,8 +7,10 @@ FIXTURE = ROOT / "tests/fixtures/shaderpacks/compute-storage-contract/shaders"
 PACK_COMPUTE = ROOT / "common/src/main/java/dev/vitrail/render/PackCompute.java"
 BACKEND_COMPUTE = ROOT / "common/src/main/java/dev/vitrail/render/BackendComputePass.java"
 BINDINGS = ROOT / "common/src/main/java/dev/vitrail/render/PackComputeBindings.java"
+GPU_FORMATS = ROOT / "common/src/main/java/dev/vitrail/render/GpuFormats.java"
 STORAGE_BUFFERS = ROOT / "common/src/main/java/dev/vitrail/render/storage/StorageBuffers.java"
 STORAGE_IMAGES = ROOT / "common/src/main/java/dev/vitrail/render/storage/StorageImages.java"
+SHADER_WRITABLE = ROOT / "common/src/main/java/dev/vitrail/render/storage/ShaderWritableTextureBackend.java"
 
 
 def text(path: Path) -> str:
@@ -61,6 +63,17 @@ class ComputeStorageContract(unittest.TestCase):
         fixture_text = "\n".join(text(path) for path in FIXTURE.iterdir() if path.is_file())
         self.assertNotIn("Metal", fixture_text)
         self.assertNotIn("MTL", fixture_text)
+
+    def test_shader_writable_backend_counts_as_storage_capable(self):
+        formats = text(GPU_FORMATS)
+        writable = text(SHADER_WRITABLE)
+        self.assertIn("interface ShaderWritableTextureBackend", writable)
+        self.assertIn("instanceof ShaderWritableTextureBackend", formats)
+        self.assertIn("VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT", formats)
+        self.assertLess(
+            formats.index("instanceof ShaderWritableTextureBackend"),
+            formats.index("VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT"),
+        )
 
 
 if __name__ == "__main__":
