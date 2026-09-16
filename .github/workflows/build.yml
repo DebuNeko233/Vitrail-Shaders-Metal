@@ -17,9 +17,6 @@ name: build
 
 on:
   push:
-    # Both long-lived branches. main carries nothing dev has not already carried, so a run there is
-    # the same tree a second time; it is kept because main is what the badge and anybody arriving at
-    # the repository read, and a branch with no run of its own reads as a branch nobody checks.
     branches: [main, dev]
   pull_request:
   workflow_dispatch:
@@ -27,29 +24,94 @@ on:
 permissions:
   contents: read
 
-# A pull request only needs its latest push checked, so a superseded run there is cancelled rather
-# than left to finish and report on a commit nobody is looking at any more. A push on one of the
-# two long-lived branches is a commit that has landed for good, and every one of those keeps its
-# own verdict: two requests merged a minute apart used to leave the first commit with a cancelled
-# run, which reads as a failure on the branch and denies that commit the check it earned.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-
+      - name: Verify Apple Silicon runner
+        run: |
+          sw_vers
+          uname -a
+          test "$(uname -m)" = "arm64"
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 25
-
       - uses: gradle/actions/setup-gradle@v4
-
-      # What this refuses is whatever build.gradle refuses on the day it runs. Naming the gates here
-      # as well would only give them a third home to drift out of step with.
+      - name: Check optional Metallum integration and smoke contracts
+        run: |
+          python3 tests/test_metallum_compute_bridge.py
+          python3 tests/test_metallum_status.py
+          python3 tests/test_mrt_smoke_fixture.py
+          python3 tests/test_gbuffer_attachment_location.py
+          python3 tests/test_volume_filter_semantics.py
+          python3 tests/test_phase16_advanced_contract.py
+          python3 tests/test_phase16_pbr_contract.py
+          python3 tests/verify_phase16_temporal_log.py --self-test
+          python3 tests/test_phase17_compatibility_contract.py
+          python3 tests/test_phase17_collect_session.py
+          python3 tests/test_gbuffer_format.py
+          python3 tests/test_gbuffer_clear.py
+          python3 tests/test_gbuffer_write.py
+          python3 tests/test_gbuffer_sampling.py
+          python3 tests/test_gbuffer_pingpong.py
+          python3 tests/test_entity_family.py
+          python3 tests/test_block_entity_family.py
+          python3 tests/test_spider_eyes_family.py
+          python3 tests/test_armor_glint_family.py
+          python3 tests/test_hand_family.py
+          python3 tests/test_hand_glint_family.py
+          python3 tests/test_particle_family.py
+          python3 tests/test_weather_family.py
+          python3 tests/test_cloud_family.py
+          python3 tests/test_sky_family.py
+          python3 tests/test_depthtex0_contract.py
+          python3 tests/test_depth_batch_contract.py
+          python3 tests/test_depth_final_contract.py
+          python3 tests/test_shadow_terrain_contract.py
+          python3 tests/test_shadow_batch_contract.py
+          python3 tests/test_shadow_mipmap_contract.py
+          python3 tests/test_deferred_contract.py
+          python3 tests/test_deferred_depth_contract.py
+          python3 tests/test_deferred_tail_contract.py
+          python3 tests/test_composite_contract.py
+          python3 tests/test_final_contract.py
+          python3 tests/test_dimension_routing_contract.py
+          python3 tests/test_terrain_pass_semantics.py
+          python3 tests/test_terrain_vertex_abi.py
+          python3 tests/test_sodium_pass_routing.py
+          python3 tests/test_terrain_alpha_contract.py
+          python3 tests/test_terrain_smoke_fixture.py
+          python3 tests/test_vulkan_recording_contract.py
+          java tests/VerifyMrtScreenshot.java --self-test
+          java tests/VerifyTerrainScreenshot.java --self-test
+          java tests/VerifyEntityScreenshot.java --self-test
+          java tests/VerifyBlockEntityScreenshot.java --self-test
+          java tests/VerifySpiderEyesScreenshot.java --self-test
+          java tests/VerifyArmorGlintScreenshot.java --self-test
+          java tests/VerifyHandScreenshot.java --self-test
+          java tests/VerifyHandGlintScreenshot.java --self-test
+          java tests/VerifyParticleScreenshot.java --self-test
+          java tests/VerifyWeatherScreenshot.java --self-test
+          java tests/VerifyCloudScreenshot.java --self-test
+          java tests/VerifySkyScreenshot.java --self-test
+          java tests/VerifyDepthtex0Screenshot.java --self-test
+          java tests/VerifyDepthBatchScreenshot.java --self-test
+          java tests/VerifyDepthFinalScreenshot.java --self-test
+          java tests/VerifyShadowTerrainScreenshot.java --self-test
+          java tests/VerifyShadowBatchScreenshot.java --self-test
+          java tests/VerifyShadowMipmapScreenshot.java --self-test
+          java tests/VerifyDeferredScreenshot.java --self-test
+          java tests/VerifyDeferredDepthScreenshot.java --self-test
+          java tests/VerifyDeferredTailScreenshot.java --self-test
+          java tests/VerifyCompositeScreenshot.java --self-test
+          java tests/VerifyFinalScreenshot.java --self-test
+          java tests/VerifyDimensionRoutingScreenshot.java --self-test
+          java tests/VerifyPhase16AdvancedScreenshot.java --self-test
+          java tests/VerifyPhase16PbrScreenshot.java --self-test
       - run: ./gradlew build

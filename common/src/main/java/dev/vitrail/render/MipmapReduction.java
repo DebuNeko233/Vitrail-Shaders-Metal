@@ -9,9 +9,11 @@ import com.mojang.blaze3d.textures.GpuTexture;
 /**
  * Fills the mip chain of a colour target, or of the shadow map. Nothing of the pack takes part.
  * <p>
- * It exists because the public encoder has no {@code generateMipmaps}. Iris pays one
- * {@code glGenerateMipmap} per chain; the Vulkan equivalent is a blit of each level into the next
- * on the frame's command buffer, which {@link MipmapCommands} puts on the encoder.
+ * It exists because Minecraft 26.2's public encoder has no {@code generateMipmaps}. Iris pays one
+ * {@code glGenerateMipmap} per chain; Vitrail asks the active command backend for the equivalent
+ * operation through {@link MipmapCommands}. Vulkan fills the levels with explicit image blits and
+ * barriers. Metallum currently delegates eligible colour textures to Metal's native blit mipmap
+ * command; depth/stencil chains are deliberately refused there until a correct Metal path exists.
  * <p>
  * What the packs do with those levels is not decoration: BSL drives its automatic exposure from
  * {@code texture2DLod(colortex0, vec2(0.5), log2(viewHeight * R))}, which without a chain reads
@@ -19,13 +21,11 @@ import com.mojang.blaze3d.textures.GpuTexture;
  * wholesale the moment a jump moves that pixel from the ground to the sky. The same pack reads lods
  * for its depth of field and for the tiles of its bloom.
  * <p>
- * The blit uses the hardware linear filter on a colour target, which is what
- * {@code glGenerateMipmap} gave the packs, and the nearest one on the shadow map, Vulkan allowing
- * no other where the source of a blit carries a depth aspect. It floors the extent of every level,
- * which is what lets a chain run to one texel on the
- * longer side: a render pass per level was the road before it, and the game refuses a pass on a
- * level whose shorter side shifts to nought, so that road stopped a level short of OpenGL's chain
- * on every screen that is not as tall as it is wide.
+ * Backend details stay below this class. The Vulkan implementation uses linear filtering for
+ * filterable colour images and nearest filtering for depth/integer cases where Vulkan requires it;
+ * the Metal implementation follows the native mipmap-generation rules of the texture format.
+ * Failure remains explicit: callers keep sampling the base level when a backend cannot safely fill
+ * a requested chain.
  */
 final class MipmapReduction {
 

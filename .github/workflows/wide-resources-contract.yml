@@ -1,0 +1,27 @@
+name: wide-resources-contract
+run-name: ${{ github.ref_name }}
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wide-resources-contract:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: verify Apple Silicon runner
+        run: |
+          uname -a
+          test "$(uname -m)" = "arm64"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+      - name: validate PHASE 14 Wide Resources contracts
+        run: |
+          python3 tests/test_wide_resources_contract.py
+          java tests/VerifyWideResourcesScreenshot.java --self-test

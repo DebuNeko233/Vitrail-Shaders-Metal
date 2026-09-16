@@ -122,22 +122,18 @@ final class GpuFormats {
 	}
 
 	/**
-	 * Whether this device transfers a rectangle of that format into another of the same, at both
-	 * ends, which is what filling a mip chain by blit needs: every level past the base is read from
-	 * the level above it and written into itself.
+	 * Whether the Vulkan backend can blit this format both ways, or whether a non-Vulkan backend may
+	 * attempt the backend-neutral mipmap capability and report success/failure when it records it.
 	 * <p>
-	 * Asked of the device because the specification requires neither bit of a DEPTH format, and
-	 * that is the format the shadow map is in. There is no runtime answer to fall back on: a
-	 * command buffer records what it is given and says nothing, so a chain allocated on a device
-	 * that cannot fill it would be read as a coarser image and hold whatever the driver left there.
-	 * The question is therefore asked before the memory is taken, and a device that says no gets a
-	 * map of one level, which is the map every pack had before there were chains.
-	 * <p>
-	 * No with no Vulkan device to ask, which is no device to blit on either.
+	 * Vulkan has to answer before allocation because the specification requires neither blit bit of
+	 * a depth format. Other backends do not share Vulkan's format-bit contract: Vitrail allocates the
+	 * requested levels and {@link MipmapReduction} keeps samplers at level zero unless the active
+	 * {@link MipmapCommands} implementation actually fills the chain. That lets Metal use a depth
+	 * render reduction without pretending it is a Vulkan blit.
 	 */
 	static boolean blitsBothWays(GpuFormat format) {
-		return feature(format, VK10.VK_FORMAT_FEATURE_BLIT_SRC_BIT, false)
-				&& feature(format, VK10.VK_FORMAT_FEATURE_BLIT_DST_BIT, false);
+		return feature(format, VK10.VK_FORMAT_FEATURE_BLIT_SRC_BIT, true)
+				&& feature(format, VK10.VK_FORMAT_FEATURE_BLIT_DST_BIT, true);
 	}
 
 	/** One bit of what this device does with that format, or {@code absent} with no device to ask. */

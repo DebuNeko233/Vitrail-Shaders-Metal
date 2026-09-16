@@ -39,7 +39,7 @@ jobs:
     # `main`, which reaches back past the day this convention started; and it carries nothing of its
     # own, every commit in it having already come through a request checked here.
     if: github.base_ref != 'main'
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
 
     steps:
       - uses: actions/checkout@v4

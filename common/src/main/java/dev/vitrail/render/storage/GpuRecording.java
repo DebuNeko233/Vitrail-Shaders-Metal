@@ -27,12 +27,19 @@ public final class GpuRecording {
 	/** Ends the encoder's open pass, if any, so a clear, fill or dispatch can be recorded. */
 	public static void endPass(CommandEncoder encoder) {
 		CommandEncoderBackend backend = ((CommandEncoderAccessor) encoder).vitrail$backend();
-		if (!(backend instanceof VulkanCommandEncoder vulkan)) {
+		if (backend instanceof VulkanCommandEncoder vulkan) {
+			// Minecraft's Vulkan encoder refuses submitRenderPass when no pass is open. Storage
+			// housekeeping can legally arrive between passes (shadow custom-image clears do), so
+			// asking the accessor first is the difference between "end if any" and throwing on the
+			// ordinary no-pass state.
+			if (((VulkanCommandEncoderAccessor) vulkan).vitrail$currentRenderPass() != null) {
+				vulkan.submitRenderPass();
+			}
 			return;
 		}
 
-		if (((VulkanCommandEncoderAccessor) vulkan).vitrail$currentRenderPass() != null) {
-			vulkan.submitRenderPass();
+		if (backend instanceof StorageImageCommands) {
+			backend.submitRenderPass();
 		}
 	}
 

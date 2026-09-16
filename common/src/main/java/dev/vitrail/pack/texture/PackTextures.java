@@ -293,7 +293,7 @@ public final class PackTextures {
 		// out: the length of the blob is checked and its shape is not. Refused by name, like the
 		// rest, so the sampler reads black.
 		if (flattenable(texture)) {
-			VolumeAtlas atlas = VolumeAtlas.of(raw.orElseThrow(), texture.clamp());
+			VolumeAtlas atlas = VolumeAtlas.of(raw.orElseThrow(), texture.clamp(), texture.blur());
 			if (!atlas.fits()) {
 				refused.add(new Refused(key, value, path + " lays out flat as " + atlas.atlasWidth()
 						+ "x" + atlas.atlasHeight() + ", which is past what a texture can be", stage,
@@ -438,18 +438,19 @@ public final class PackTextures {
 	 * the declaration itself, so every program carrying that declaration is rewritten, and the same
 	 * atlas has to answer for all of them.
 	 * <p>
-	 * Two things have to hold and each of them is a way the picture would be wrong rather than
+	 * Three things have to hold and each of them is a way the picture would be wrong rather than
 	 * absent. The blob has to be three dimensional, since nothing else is laid out in slices, and
-	 * of a channel type the atlas carries as it is. How the pack asked it addressed goes into the
-	 * layout, because the repeat or the clamp is baked into the gutter and into the helper and
-	 * neither can be undone at the sampler. Everything else stays refused with its own line.
+	 * of a channel type the atlas carries as it is. How the pack asked it addressed and filtered go
+	 * into the layout, because the wrap is baked into the gutter and helper and the filter decides
+	 * whether that helper chooses one depth slice or interpolates two. Everything else stays refused
+	 * with its own line.
 	 */
 	public Map<String, VolumeAtlas> volumes() {
 		Map<String, VolumeAtlas> flat = new LinkedHashMap<>();
 		for (PackTexture texture : this.supplied) {
 			if (flattenable(texture)) {
 				flat.putIfAbsent(texture.sampler(),
-						VolumeAtlas.of(texture.raw().orElseThrow(), texture.clamp()));
+						VolumeAtlas.of(texture.raw().orElseThrow(), texture.clamp(), texture.blur()));
 			}
 		}
 

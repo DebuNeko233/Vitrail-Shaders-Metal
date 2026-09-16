@@ -284,7 +284,7 @@ final class PackPass {
 				// composites to blend ONE ONE, which is an accumulation. Replacing where a pack
 				// asked to add is not a subtle difference, and nothing about it shows as an error.
 				builder.withColorTargetState(slot, new ColorTargetState(
-						BlendFunctions.of(targets.blend(program), Optional.empty()), format,
+						BlendFunctions.of(targets.blend(program, slot), Optional.empty()), format,
 						ColorTargetState.WRITE_ALL));
 			}
 

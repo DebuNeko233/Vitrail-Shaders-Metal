@@ -9,12 +9,14 @@ import dev.vitrail.sodium.SodiumPasses;
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.llamalad7.mixinextras.sugar.Local;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderPassDescriptor;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import net.minecraft.client.Minecraft;
+import net.caffeinemc.mods.sodium.client.gpu.device.context.DrawContext;
 import net.caffeinemc.mods.sodium.client.gui.SodiumOptions;
 import net.caffeinemc.mods.sodium.client.render.chunk.DefaultChunkRenderer;
 import net.caffeinemc.mods.sodium.client.render.chunk.terrain.TerrainRenderPass;
@@ -40,6 +42,12 @@ import java.util.function.Supplier;
  * Wrapping the call is the whole hook. Everything else stays Sodium's: the draw commands, the
  * regions, the culling, the push constants. Rewriting any of that is out of the question, it is the
  * most internal code Sodium has and it is under a licence this project cannot copy from.
+ * <p>
+ * <strong>Backend boundary.</strong> Terrain uniforms and samplers are bound at the common Sodium
+ * call site that hands a {@link DrawContext} its {@link RenderPass} and {@link RenderPipeline}.
+ * Sodium 0.9.2 selects the concrete context separately (OpenGL or Vulkan, with Metallum supplying
+ * its own Metal context), so this class deliberately does not target {@code VKDrawContext} or any
+ * Metal implementation. The pack binding belongs to the pass, not to the native backend.
  * <p>
  * <strong>Draw buffer nought comes here too, and the sky and the entities still do not.</strong>
  * What a {@code gbuffers_terrain} puts there is not a colour but whatever the pack packed there, and
@@ -98,7 +106,7 @@ public abstract class MixinDefaultChunkRenderer {
 	}
 
 	/**
-	 * Serves every face of a section while the shadow map is drawn.
+	 * Serves every face of a section while the shadow map is being drawn.
 	 * <p>
 	 * The batches Sodium builds leave out the faces that point away from the camera, and the light
 	 * is not the camera: a face the player cannot see still stands between the sun and the ground.
@@ -138,5 +146,26 @@ public abstract class MixinDefaultChunkRenderer {
 		return descriptor == null
 				? original.call(encoder, label, colour, clearColour, depth, clearDepth)
 				: GeometryHold.open(encoder, descriptor);
+	}
+
+	/**
+	 * Binds the pack's terrain resources at Sodium's backend-neutral context hand-off.
+	 * <p>
+	 * In Sodium 0.9.2 this call is shared by every concrete draw context. Metallum replaces
+	 * {@code DrawContext.create()} with a Metal context when the active device is Metal, so keeping
+	 * this hook here makes the Vitrail binding independent of the concrete native backend while
+	 * preserving its position immediately after {@code RenderPass#setPipeline}.
+	 */
+	@WrapOperation(
+			method = "render",
+			require = 1,
+			at = @At(value = "INVOKE",
+					target = "Lnet/caffeinemc/mods/sodium/client/gpu/device/context/DrawContext;setContext("
+							+ "Lcom/mojang/blaze3d/systems/RenderPass;"
+							+ "Lcom/mojang/blaze3d/pipeline/RenderPipeline;)V"))
+	private void vitrail$bindTerrain(DrawContext context, RenderPass pass, RenderPipeline pipeline,
+			Operation<Void> original) {
+		TerrainDraw.bind(pass, pipeline);
+		original.call(context, pass, pipeline);
 	}
 }
