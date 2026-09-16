@@ -117,6 +117,9 @@ final class PackPass {
 	private final PackUniforms uniforms;
 	private final List<String> samplers;
 
+	/** The opaque uniforms above that are writable images rather than sampled textures. */
+	private final Set<String> storageImages;
+
 	/**
 	 * The plan's answer for each of {@link #samplers}, in that order.
 	 * <p>
@@ -199,6 +202,7 @@ final class PackPass {
 		this.values = values;
 		this.uniforms = new PackUniforms(loaded.program().uniforms(), values.catalog());
 		this.samplers = loaded.program().samplers().stream().map(TranslatedUnit.Uniform::name).toList();
+		this.storageImages = PackStorageImages.names(loaded);
 		this.samplerBindings = this.samplers.stream().map(loaded.samplers()::binding).toList();
 		List<ColorTargets.PackSource> sources = new ArrayList<>();
 		for (int at = 0; at < this.samplers.size(); at++) {
@@ -615,6 +619,17 @@ final class PackPass {
 			String sampler = this.samplers.get(at);
 			SamplerPlan.Binding binding = this.samplerBindings.get(at);
 
+			if (this.storageImages.contains(sampler)) {
+				GpuTextureView image = PackStorageImages.view(sampler, binding, targets);
+				if (image == null) {
+					throw new IllegalStateException(this.path + " declares writable image " + sampler
+							+ " and no storage-capable image is available for it");
+				}
+
+				pass.bindTexture(sampler, image, sampler(false, FilterMode.NEAREST, false));
+				continue;
+			}
+
 			// A texture the pack ships answers all three questions at once, and they are one
 			// answer: which image, how it is filtered, and how it is addressed outside zero to one
 			// are all the pack's to say, in the same directive and the same .mcmeta beside it.
@@ -668,6 +683,8 @@ final class PackPass {
 				// something real and could not be turned into an image, and black is the honest
 				// answer for it: falling back to the colour target of the same name would have the
 				// pass read the scene as whatever the pack meant to sample and look convincing.
+				case COLOR_IMAGE -> throw new IllegalStateException(
+						"writable image " + sampler + " reached sampled-texture binding");
 				case UNSERVED, UNBINDABLE, PACK_TEXTURE, CUSTOM_IMAGE -> targets.black();
 			};
 

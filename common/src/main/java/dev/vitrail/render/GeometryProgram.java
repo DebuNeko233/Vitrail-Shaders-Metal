@@ -422,6 +422,9 @@ final class GeometryProgram {
 	private final List<String> samplers;
 	private final List<String> storage;
 
+	/** Opaque uniforms that are writable images rather than sampled textures. */
+	private final Set<String> storageImages;
+
 	/**
 	 * The same names in the same order, each carrying what the load settled about it and what the
 	 * pass open resolved for it. Read by the bind and by nothing else.
@@ -690,6 +693,7 @@ final class GeometryProgram {
 		this.uniforms = new PackUniforms(loaded.program().uniforms(),
 				pass.shadow() ? values.shadowGeometryCatalog() : values.geometryCatalog());
 		this.samplers = loaded.program().samplers().stream().map(TranslatedUnit.Uniform::name).toList();
+		this.storageImages = PackStorageImages.names(loaded);
 		this.storage = loaded.storageBlocks().stream()
 				.distinct()
 				.filter(StorageBuffers::named)
@@ -705,6 +709,14 @@ final class GeometryProgram {
 									: null);
 				})
 				.toArray(Sampled[]::new);
+		List<String> imageConflicts = PackStorageImages.attachmentConflicts(this.storageImages,
+				loaded.samplers(), this.extra);
+		if (!imageConflicts.isEmpty()) {
+			this.broken = true;
+			Vitrail.logger().error("{} binds writable image(s) {} over a colour attachment of the "
+					+ "same pass, so the {} pass keeps the game's shader", this.path, imageConflicts,
+					this.pass.name());
+		}
 		this.following = Arrays.stream(this.bound).filter(Sampled::followsTheImage)
 				.toArray(Sampled[]::new);
 		this.settledOnce = Arrays.stream(this.bound).filter(one -> !one.followsTheImage())
@@ -1015,7 +1027,9 @@ final class GeometryProgram {
 		// After the constants and never before them: what a name with no image is answered with is a
 		// view of one of those textures, and this is the call that settles those answers again
 		// after a release.
-		resolve();
+		if (!resolve()) {
+			return null;
+		}
 		announce();
 		writeBlock();
 
@@ -1424,7 +1438,7 @@ final class GeometryProgram {
 	 * {@link #imageView} and {@link #imageSampler} answer over the top of what is settled here: one
 	 * pipeline draws every mob on screen and each of them brings its own skin.
 	 */
-	private void resolve() {
+	private boolean resolve() {
 		// Whatever this program left standing in a pass is no longer what it would write now, so the
 		// next bind writes the lot again. release() clears the same two, and not because a released
 		// program is unreachable: TerrainDraw is the one family that keeps its program map across a
@@ -1435,11 +1449,20 @@ final class GeometryProgram {
 		for (Sampled one : this.bound) {
 			one.interpolates = one.material != null && one.material.interpolates(labPbr);
 			one.view = passView(one);
+			if (this.storageImages.contains(one.name) && one.view == null) {
+				this.broken = true;
+				Vitrail.logger().error("{} declares writable image {} and no storage-capable image "
+						+ "is available for it, so the {} pass keeps the game's shader", this.path,
+						one.name, this.pass.name());
+				return false;
+			}
 			one.state = passSampler(one);
 			one.servedKnown = false;
 			one.servedFor = null;
 			one.served = null;
 		}
+
+		return true;
 	}
 
 	/**
@@ -2008,6 +2031,10 @@ final class GeometryProgram {
 	 */
 	private GpuTextureView passView(Sampled one) {
 		String sampler = one.name;
+		if (this.storageImages.contains(sampler)) {
+			return PackStorageImages.view(sampler, one.binding, this.targets);
+		}
+
 		if (one.material != null) {
 			// One texel of what the absence of this map means, for a sprite the resource pack ships
 			// nothing for and for every family drawn with no image at all. What is drawn over it when

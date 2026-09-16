@@ -142,6 +142,7 @@ public final class TargetPlan {
 	private final TargetDirectives directives;
 	private final TargetSchedule schedule;
 	private final Set<Integer> written;
+	private final Set<Integer> imageWritten;
 	private final Set<Integer> sampled;
 	private final Set<Integer> allocated;
 	private final int shadowCeiling;
@@ -195,6 +196,7 @@ public final class TargetPlan {
 		this.computes = List.copyOf(draft.computes);
 		this.passing = List.copyOf(draft.passing);
 		this.written = Collections.unmodifiableSet(new TreeSet<>(draft.written));
+		this.imageWritten = Collections.unmodifiableSet(new TreeSet<>(draft.imageWritten));
 		this.sampled = Collections.unmodifiableSet(new TreeSet<>(draft.sampled));
 
 		TreeSet<Integer> allocated = new TreeSet<>(draft.written);
@@ -461,7 +463,9 @@ public final class TargetPlan {
 				// buffers, and a compute stores into the very half it samples rather than turning
 				// the target over, which TargetSchedule.passing carries: a name read here reaching
 				// the schedule would flip a target nothing flips.
-				draft.written.addAll(colourImages(expander.expand(file.get())));
+				Set<Integer> images = colourImages(expander.expand(file.get()));
+				draft.written.addAll(images);
+				draft.imageWritten.addAll(images);
 			} catch (IOException | RuntimeException e) {
 				draft.unreadable.add(key.file());
 			}
@@ -853,12 +857,13 @@ public final class TargetPlan {
 			// the light's own geometry at :746, and the one place it does not is the shadow
 			// COMPOSITES, which this walk has already skipped above.
 			//
-			// What this ALLOCATES for, nothing here yet BINDS for: the image behind colorimgN is
-			// pushed for a compute and for nothing else, so iterationT's line program stores into
-			// an image no descriptor carries. That is a gap of its own, older than this, and the
-			// allocation is right whether or not it is closed: the reference opens the target on
-			// the declaration alone.
-			draft.written.addAll(colourImages(unit));
+			// Kept apart from draw-buffer writes as well as included in the allocation: a
+			// colorimgN store needs shader-write usage at texture creation, but it does not turn
+			// the target over. The graphics binding later takes the same pre-pass/read half as the
+			// program's samplers; compute uses that same schedule snapshot.
+			Set<Integer> imageWrites = colourImages(unit);
+			draft.written.addAll(imageWrites);
+			draft.imageWritten.addAll(imageWrites);
 
 			// A full screen program reads colortex0 under every name nothing else answers for, which
 			// is what SamplerPlan gives it and why Iris hands its default sampler the first colour
@@ -1082,6 +1087,11 @@ public final class TargetPlan {
 
 	public Set<Integer> written() {
 		return this.written;
+	}
+
+	/** Targets any fragment or compute stage writes through {@code colorimgN}. */
+	public Set<Integer> imageWritten() {
+		return this.imageWritten;
 	}
 
 	public Set<Integer> sampled() {
@@ -1603,6 +1613,7 @@ public final class TargetPlan {
 		private final List<String> unreachableComputes = new ArrayList<>();
 		private final Set<String> shadowComposites = new TreeSet<>();
 		private final Set<Integer> written = new TreeSet<>();
+		private final Set<Integer> imageWritten = new TreeSet<>();
 		private final Set<Integer> sampled = new TreeSet<>();
 
 		/** Shadow colour buffers a program of the place draws into or reads. */

@@ -50,6 +50,20 @@ public final class SamplerTypes {
 		return shape != null && !BINDABLE.contains(shape);
 	}
 
+	/** Whether this opaque uniform is a storage image rather than a sampled texture. */
+	public static boolean image(String type) {
+		if (type == null) {
+			return false;
+		}
+
+		String name = type;
+		if (name.startsWith("i") || name.startsWith("u")) {
+			name = name.substring(1);
+		}
+
+		return name.startsWith("image");
+	}
+
 	/**
 	 * What follows the word sampler, {@code 3D} for {@code usampler3D}, or null when the type names
 	 * no sampler. Storage images are a resource of their own and are not answered for here.

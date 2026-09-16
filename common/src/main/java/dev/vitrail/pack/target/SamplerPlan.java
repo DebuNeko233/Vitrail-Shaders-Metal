@@ -149,14 +149,14 @@ public final class SamplerPlan {
 	 */
 	public enum Kind {
 		COLORTEX, DEPTH, SHADOW_DEPTH, SHADOW_COLOUR, NOISE, PACK_TEXTURE, CENTER_DEPTH,
-		DISTANT_DEPTH, CUSTOM_IMAGE, UNSERVED, UNBINDABLE
+		DISTANT_DEPTH, COLOR_IMAGE, CUSTOM_IMAGE, UNSERVED, UNBINDABLE
 	}
 
 	/**
 	 * What one sampler name of the program is bound to.
 	 *
-	 * @param index     the colour target for {@link Kind#COLORTEX}, the shadow colour target for
-	 *                  {@link Kind#SHADOW_COLOUR}, -1 otherwise. The two families are numbered apart
+	 * @param index     the colour target for {@link Kind#COLORTEX} and {@link Kind#COLOR_IMAGE},
+	 *                  the shadow colour target for {@link Kind#SHADOW_COLOUR}, -1 otherwise. The two families are numbered apart
 	 *                  and never share a texture, so the kind has to be read before the index means
 	 *                  anything
 	 * @param defaulted whether the name got what it got as the default sampler of a full screen
@@ -206,6 +206,10 @@ public final class SamplerPlan {
 	public static Kind classify(String name, String type, Set<String> supplied, Set<String> images) {
 		if (images.contains(name)) {
 			return Kind.CUSTOM_IMAGE;
+		}
+
+		if (SamplerTypes.image(type) && TargetName.imageIndex(name).isPresent()) {
+			return Kind.COLOR_IMAGE;
 		}
 
 		if (type != null && SamplerTypes.refused(type)) {
@@ -510,6 +514,18 @@ public final class SamplerPlan {
 			if (kind == Kind.SHADOW_COLOUR) {
 				bindings.add(new Binding(name, kind, shadowColour(name), TargetSchedule.Side.MAIN,
 						false));
+				continue;
+			}
+
+			if (kind == Kind.COLOR_IMAGE) {
+				int index = TargetName.imageIndex(name).orElse(-1);
+				if (!plan.allocated().contains(index)) {
+					bindings.add(new Binding(name, Kind.UNSERVED, -1,
+							TargetSchedule.Side.MAIN, false));
+					continue;
+				}
+
+				bindings.add(new Binding(name, Kind.COLOR_IMAGE, index, side(step, index), false));
 				continue;
 			}
 

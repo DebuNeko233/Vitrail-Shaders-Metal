@@ -321,13 +321,13 @@ final class ColorTargets {
 	private boolean fullDeferOwed;
 
 	/**
-	 * The targets a compute of the pack writes as {@code colorimgN}, which have to be created with
+	 * The targets a shader of the pack writes as {@code colorimgN}, which have to be created with
 	 * the storage usage: the bit is baked into the image, so it is known before the first
 	 * allocation and never added to one.
 	 */
 	private Set<Integer> storageTargets = Set.of();
 
-	/** The targets a compute asked to store into and the device refused, each said once. */
+	/** The targets a shader asked to store into and the device refused, each said once. */
 	private final Set<Integer> storageRefused = new HashSet<>();
 
 	private boolean broken;
@@ -377,6 +377,7 @@ final class ColorTargets {
 			List<PackDirectives.ShadowColour> shadowColours,
 			List<PackDirectives.ShadowDepth> shadowDepths) {
 		this.plan = plan;
+		this.storageTargets = Set.copyOf(plan.imageWritten());
 		this.packImages = packImages;
 		this.storageImages = new StorageImages(storageImages);
 		this.storageBuffers = new StorageBuffers(CustomStorage.reading());
@@ -758,13 +759,19 @@ final class ColorTargets {
 	}
 
 	/**
-	 * Names the targets a compute of the pack writes as an image, before any of them is allocated.
-	 * Whether the device makes a storage image of a target's format is asked at its allocation, on
-	 * the render thread where a device exists, and a refusal is said there: the target is
-	 * allocated as it was and the compute naming it is refused at its first dispatch.
+	 * Adds targets a shader of the pack writes as an image, before any of them is allocated.
+	 * The plan supplies the declarations it could read statically; the compute loader may add
+	 * setup targets discovered after translation. The union matters because shader-write usage is
+	 * fixed at texture creation and neither source is allowed to erase the other.
 	 */
 	void storageTargets(Set<Integer> targets) {
-		this.storageTargets = Set.copyOf(targets);
+		if (targets.isEmpty()) {
+			return;
+		}
+
+		Set<Integer> merged = new TreeSet<>(this.storageTargets);
+		merged.addAll(targets);
+		this.storageTargets = Set.copyOf(merged);
 	}
 
 	/**
@@ -1295,8 +1302,8 @@ final class ColorTargets {
 			TargetDirectives directives = this.plan.directives();
 			boolean storage = this.storageTargets.contains(index) && GpuFormats.storageCapable(format);
 			if (this.storageTargets.contains(index) && !storage && this.storageRefused.add(index)) {
-				Vitrail.logger().warn("{} is written by a compute as an image, and this device makes "
-						+ "no storage image of {}, so that compute is not dispatched", name, format);
+				Vitrail.logger().warn("{} is written by a shader as an image, and this device makes "
+						+ "no storage image of {}, so that shader cannot be served", name, format);
 			}
 			// Named before it is allocated, on purpose. RG11B10_FLOAT as a colour attachment is
 			// not something the Vulkan specification guarantees and nothing in the game asks the
@@ -1306,7 +1313,7 @@ final class ColorTargets {
 			Vitrail.logger().info("Allocating {} as {} at {}x{}, {} level(s), declared {} at {}{}", name,
 					format, width, height, TargetSurface.levelsFor(mipped, width, height),
 					directives.format(index).declared(), directives.formatSource(index),
-					storage ? ", writable from a compute" : "");
+					storage ? ", writable from a shader" : "");
 			side.put(index, new TargetSurface("Vitrail " + name, format, mipped, storage, width,
 					height));
 		} else {
