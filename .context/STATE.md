@@ -1,31 +1,40 @@
 # Project State
 
-Updated: 2026-09-14
+Updated: 2026-09-16
 Scope: `feat/backend-neutral-sodium-terrain-hook`
 
 ## Confirmed from the current checkout
 
-- The migration preserves Vitrail shader-pack policy and the existing Vulkan path, with narrow optional Metallum capabilities for terrain binding, blending, mipmaps, pipeline eviction, storage resources, writable colour targets and compute.
-- `PackCompute` routes shadow, chained and standalone computes through `BackendComputePass` when both `ComputeDeviceBackend` and `ComputeCommands` are present. Routing landed at `5e84c045332c3687dd0c7be94c894353bdfebcca`; Vulkan retains its direct descriptor/barrier implementation.
-- Backend compute owns the uniform ring and opaque pipeline lifetime; Vitrail retains resource-name resolution, target-half selection and dispatch scheduling. Metallum owns native compilation, binding and synchronization.
-- Optional compute bridge method lookup now happens inside a normal call and caches only the complete method set. Missing classes/signatures remain catchable and do not poison adapter initialization. Backend runtime exceptions and fatal errors propagate unchanged.
-- Backend compute success logs are emitted per program after an accepted non-zero dispatch and include workgroup/local dimensions. They do not claim GPU completion.
-- The isolated adapter regression suite passes all three cases; running it against the original adapter reproduces both unavailable/incompatible bridge failures. The build workflow runs the suite before Gradle. Its facade stubs do not validate Minecraft or Metal ABI.
-- Local JDK 25 full `./gradlew build` passed on 2026-09-14. This is local compile validation, not CI or real-device verification.
+- The migration boundary remains strict: Vitrail owns shader-pack semantics, scheduling, fallback interpretation and compatibility status; Metallum owns generic Metal execution. The two Draft PRs remain open and unmerged.
+- PHASE 2 and PHASE 5-16 have completed their recorded Apple-Silicon real-device acceptance. PHASE 17 — Real Shader Pack Compatibility — is active.
+- Vitrail PHASE 17 has a five-status conservative classifier: `Supported`, `Partially Supported`, `Fallback`, `Unsupported`, `Broken`. Incomplete/unreviewed evidence is refused rather than promoted.
+- `tests/phase17_collect_session.py` records exact runtime metadata and conservative raw observations from one real Metal session. Raw game-owned fallback warnings remain observations until compatibility review.
+- `tests/phase17_verify_bundle.py` verifies an uploaded/reviewed `.tar.gz` without extracting it to disk: exactly one top-level directory, exactly `evidence.json`, `latest.log`, and `screenshot.png`, no links/extra files, valid PHASE 17 evidence schema, and matching log/screenshot SHA-256 values. It does not assign compatibility status.
+- Companion Metallum `tools/run-vitrail-phase17-pack.sh` now requires exactly one fresh F2 screenshot and hashes the staged shader-pack artifact that Minecraft actually tested, rather than re-hashing the original source path after the run. The review bundle still never contains the shader pack.
+- Current Vitrail head after PHASE 17 review-bundle hardening: `14afa1b3ed5087ca16d94c250b5c8b30c5baea47`.
+- Current companion Metallum head after launcher hardening: `8ceab806081282e15bce0064708b525360c512f6`. Its consolidated Apple-Silicon CI run `35050550858` completed successfully.
+
+## Active real-pack validation
+
+- The first real matrix entry is Photon v1.3b.
+- The currently running Photon hardware session intentionally records the earlier exact heads Vitrail `7adbde248eb155bda20cb7676fca61b24d5153e2` and Metallum `493ccb9f09768e0b8fd9ed24880fa9fcc5135b4a`. Later repository hardening does not invalidate that already-started run; its bundle must be reviewed against the heads it records.
+- No Photon compatibility status has been assigned. Official compatibility statements, static source inspection, CI and warning counts are context only; the status must come from the captured real run plus compatibility/reference review.
+- Unknown abnormal exits that do not match a high-confidence fatal marker remain unclassified when clean shutdown is absent. This conservative refusal is intentional; do not broaden fatal matching merely to force a `Broken` result.
 
 ## Open validation boundaries
 
-- No Apple-Silicon in-game compute, MRT, lifetime or Vulkan regression run was performed in this task. Preserve conservative startup/backend guards.
-- Metal depth/stencil mipmaps, geometry-stage handling and remaining synchronization/startup seams need further work; do not infer support from compilation.
-- `docs/metallum-port.md` owns the runtime validation matrix and historical CI evidence. Vitrail PR #1 was reverified open, draft and unmerged. Bridge fix `9998eec` was published with a file tree identical to the locally tested commit; its remote checks were queued at this checkpoint.
-- Companion repository: `DebuNeko233/metallum`, branch `feat/mc26.2-mrt-foundation`. Head `81295f0` and successful run `34768563289` were reverified; `MetalComputeBridge` compile/dispatch/close signatures match the Vitrail adapter. Native runtime behavior remains unverified.
+- Review the Photon `.tar.gz` with the bundle verifier, then inspect the real log/screenshot and determine whether additional reference evidence is required before classification.
+- Continue the real-pack matrix only from evidence-backed findings. Fix missing contracts/capabilities at the owning layer; do not add pack-specific hacks.
+- Keep both PRs Draft/open/unmerged until the PHASE 17 matrix and broader migration acceptance policy permit merge.
 
 ## Recovery entry points
 
 - `.context/TASKS.md` and `.context/architecture/metallum-port.md`
-- `docs/metallum-port.md`, `CONTRIBUTING.md`, `gradle.properties`
-- `render/PackCompute.java`, `render/BackendComputePass.java`, `render/PackComputeBindings.java`
-- `mixin/metallum/MetallumComputeBridge.java`
-- `tests/test_metallum_compute_bridge.py`
-
-Java paths above are relative to `common/src/main/java/dev/vitrail/`.
+- `docs/metallum-port.md`, `CONTRIBUTING.md`
+- `tests/phase17_compatibility.py`
+- `tests/phase17_collect_session.py`
+- `tests/phase17_verify_bundle.py`
+- `tests/test_phase17_compatibility_contract.py`
+- `tests/test_phase17_collect_session.py`
+- `tests/test_phase17_verify_bundle.py`
+- companion Metallum `tools/run-vitrail-phase17-pack.sh`
