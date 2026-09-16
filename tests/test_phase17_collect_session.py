@@ -13,15 +13,28 @@ mod = importlib.util.module_from_spec(spec)
 assert spec and spec.loader
 spec.loader.exec_module(mod)
 
+# Match the production Fabric log shape: Vitrail and Metallum messages do not
+# necessarily carry a literal logger-name decoration such as "(Vitrail)".
 GOOD_LOG = """\
-[10:00:00] [Render thread/INFO] (Vitrail) Vitrail 0.12.0-dev starting on Fabric 0.19.3, Minecraft 26.2
-[10:00:00] [Render thread/INFO] (metallum) Metal device: Apple Fixture GPU
-[10:00:00] [Render thread/INFO] (Minecraft) Using graphics backend Metal, using drivers: fixture
-[10:00:01] [Worker-Main-1/INFO] (Vitrail) [pack] RealFixture 100 0 0 0
-[10:00:02] [Render thread/INFO] (Vitrail) Drawing the solid chunk pass with gbuffers_terrain of RealFixture at render stage TERRAIN_SOLID, 2 uniforms and 1 samplers
-[10:00:03] [Render thread/WARN] (Vitrail) A draw of the hand went back to the game's own shader because the load left no program for the hand piece.
-[10:00:04] [Render thread/INFO] (Vitrail) Drawing RealFixture from the root for minecraft:overworld, at 1280x720, 1 full screen passes before the final
-[10:00:05] [Render thread/INFO] (Minecraft) Stopping!
+[10:00:00] [Render thread/INFO]: Vitrail 0.12.0-dev starting on Fabric 0.19.3, Minecraft 26.2
+[10:00:00] [Render thread/INFO]: Metal device: Apple Fixture GPU
+[10:00:00] [Render thread/INFO]: Using graphics backend Metal, using drivers: fixture
+[10:00:01] [Worker-Main-1/INFO]: [pack] RealFixture 100 0 0 0
+[10:00:02] [Render thread/INFO]: Drawing the solid chunk pass with gbuffers_terrain of RealFixture at render stage TERRAIN_SOLID, 2 uniforms and 1 samplers
+[10:00:03] [Render thread/WARN]: A draw of the hand went back to the game's own shader because the load left no program for the hand piece.
+[10:00:04] [Render thread/INFO]: Drawing RealFixture from the root for minecraft:overworld, at 1280x720, 1 full screen passes before the final
+[10:00:05] [Render thread/INFO]: Stopping!
+"""
+
+BROKEN_LOG = """\
+[10:00:00] [Render thread/INFO]: Vitrail 0.12.0-dev starting on Fabric 0.19.3, Minecraft 26.2
+[10:00:00] [Render thread/INFO]: Metal device: Apple Fixture GPU
+[10:00:00] [Render thread/INFO]: Using graphics backend Metal, using drivers: fixture
+[10:00:01] [Worker-Main-1/INFO]: [pack] BrokenFixture 100 0 0 0
+[10:00:02] [Render thread/ERROR]: Vitrail stopped drawing this pack after an error
+java.lang.IllegalStateException: Failed to compile shader vitrail:pack/3/world0/prepare/vertex
+Caused by: com.mojang.blaze3d.vulkan.glsl.ShaderCompileException: Couldn't parse GLSL: syntax error
+[10:00:03] [Render thread/INFO]: Stopping!
 """
 
 with tempfile.TemporaryDirectory() as tmp:
@@ -58,6 +71,24 @@ with tempfile.TemporaryDirectory() as tmp:
     assert len(record["pack"]["artifact_sha256"]) == 64
     assert len(record["observations"]["log_sha256"]) == 64
     assert len(record["observations"]["screenshot_sha256"]) == 64
+
+    broken = root / "broken.log"
+    broken.write_text(BROKEN_LOG, encoding="utf-8")
+    broken_record = mod.collect(
+        log=broken,
+        artifact=pack,
+        family="fixture",
+        name="Broken Fixture",
+        version="1.2.3",
+        runtime_name="BrokenFixture",
+        vitrail_head="v-head",
+        metallum_head="m-head",
+    )
+    assert broken_record["evidence"]["loaded"] is True
+    assert broken_record["evidence"]["world_drawn"] is False
+    assert broken_record["evidence"]["fatal_failure"] is True
+    assert broken_record["evidence"]["clean_shutdown"] is True
+    assert len(broken_record["observations"]["fatal_samples"]) == 2
 
     directory = root / "pack-dir"
     directory.mkdir()
