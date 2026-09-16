@@ -2,6 +2,7 @@ package dev.vitrail.render;
 
 import dev.vitrail.mixin.access.GpuDeviceAccessor;
 import dev.vitrail.pack.model.TargetFormat;
+import dev.vitrail.render.storage.ShaderWritableTextureBackend;
 
 import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.systems.GpuDevice;
@@ -90,13 +91,17 @@ final class GpuFormats {
 
 	/**
 	 * Whether this device makes a storage image of that format, which is what a compute writing a
-	 * colour target as {@code colorimgN} needs. Asked of the device rather than read off a table,
-	 * the way the attachment count is: the specification's required set is short and a card
-	 * offers well past it, and a target created without the bit on a device that would have taken
-	 * it costs the compute for nothing. Iris asks nothing here because GL decides it at bind time.
-	 * False with no Vulkan device to ask, which is no device to store into either.
+	 * colour target as {@code colorimgN} needs. A backend with Vitrail's shader-writable texture
+	 * seam owns that contract directly; Vulkan instead answers from the physical-device format
+	 * feature bits. False with neither capability available, because a compute must not be scheduled
+	 * against an image the active backend cannot promise to write.
 	 */
 	static boolean storageCapable(GpuFormat format) {
+		GpuDevice device = RenderSystem.tryGetDevice();
+		if (device != null
+				&& ((GpuDeviceAccessor) device).vitrail$backend() instanceof ShaderWritableTextureBackend) {
+			return true;
+		}
 		return feature(format, VK10.VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT, false);
 	}
 
