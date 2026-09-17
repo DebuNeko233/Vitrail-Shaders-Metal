@@ -16,8 +16,10 @@ class EntityFamilyTest(unittest.TestCase):
         fragment = (FIXTURE / 'gbuffers_entities.fsh').read_text(encoding='utf-8')
         final = (FIXTURE / 'final.fsh').read_text(encoding='utf-8')
 
+        self.assertIn('attribute vec4 mc_Entity;', vertex)
         self.assertIn('attribute vec2 mc_midTexCoord;', vertex)
         self.assertIn('attribute vec4 at_tangent;', vertex)
+        self.assertIn('mc_Entity.x + mc_Entity.y + mc_Entity.z + mc_Entity.w', vertex)
         self.assertIn('distance(mc_midTexCoord, texcoord)', vertex)
         self.assertIn('length(at_tangent.xyz)', vertex)
         self.assertIn('abs(at_tangent.w)', vertex)
@@ -50,6 +52,19 @@ class EntityFamilyTest(unittest.TestCase):
             self.assertIn(ordered, vertex if ordered.startswith('Stream.of') else mesh)
         self.assertIn('boolean entity = declared == DefaultVertexFormat.ENTITY;', mesh)
         self.assertIn('return carrying && entity ? FORMAT : declared;', mesh)
+
+    def test_entity_semantics_are_backed_by_extended_attributes(self):
+        source = ENTITY_VERTEX.read_text(encoding='utf-8')
+
+        self.assertIn(
+            'public static final Set<String> ANSWERED = Set.of("mc_Entity", "mc_midTexCoord", "at_tangent");',
+            source,
+        )
+        self.assertIn('case "mc_Entity" -> entityId(type);', source)
+        self.assertIn('case "vec4" -> "vec4(" + IDENTIFIERS + ")";', source)
+        self.assertIn('case "ivec4" -> "ivec4(" + IDENTIFIERS + ")";', source)
+        self.assertIn('case "uvec4" -> IDENTIFIERS;', source)
+        self.assertNotIn('The rest stay constants, mc_Entity among them', source)
 
     def test_sodium_serializer_writes_every_appended_field(self):
         source = SERIALIZER.read_text(encoding='utf-8')
