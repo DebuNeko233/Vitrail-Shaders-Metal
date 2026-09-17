@@ -2,6 +2,7 @@ package dev.vitrail.render;
 
 import dev.vitrail.glsl.PackProgram;
 import dev.vitrail.glsl.SkyVertex;
+import dev.vitrail.pack.model.ProgramStage;
 import dev.vitrail.pack.target.ChainPlan;
 import dev.vitrail.pack.target.TargetPlan;
 import dev.vitrail.Vitrail;
@@ -54,8 +55,16 @@ final class SkyProgram extends FamilyProgram {
 	 */
 	private static final VertexInputDiagnostics.Inputs INPUTS = VertexInputDiagnostics.sky();
 
-	private SkyProgram(GeometryProgram body) {
+	/**
+	 * Exact translated vertex text of the ordinary sky pipeline. A claim replay has to put the mesh
+	 * through this stage too: a pack may move {@code gl_Position}, and a mask made with the game's
+	 * unmodified transform would then claim different pixels from the sky it belongs to.
+	 */
+	private final String claimVertex;
+
+	private SkyProgram(GeometryProgram body, String claimVertex) {
 		super(body);
+		this.claimVertex = claimVertex;
 	}
 
 	/**
@@ -85,7 +94,7 @@ final class SkyProgram extends FamilyProgram {
 		// converse does not hold, and the End's cube of sky is where it fails, the game blending a
 		// mesh that is opaque at every vertex. The opaque and cutout chunk passes answer the same
 		// question the same way, and the translucent one answers it no.
-		return new SkyProgram(new GeometryProgram(new GeometryProgram.Pass(FAMILY, element.element(),
+		GeometryProgram body = new GeometryProgram(new GeometryProgram.Pass(FAMILY, element.element(),
 				NAMESPACE, INPUTS.diagnosticAnswered(), false, element.blend(),
 				// claimed, and the sky is the one family that answers it yes: it draws pieces of its
 				// own that claim every pixel they span, the disc and the dark in the overworld and the
@@ -98,8 +107,8 @@ final class SkyProgram extends FamilyProgram {
 				// sun, no moon and no flash.
 				//
 				// The band the game's own discs leave open is marked by ours, HorizonCone, which
-				// shares the disc's pass and its mask. What that still does not cover is written
-				// where the field is declared, GeometryProgram.Pass#claimed.
+				// shares the disc's pass and its ownership replay. What that still does not cover is
+				// written where the field is declared, GeometryProgram.Pass#claimed.
 				element.covers(), true, false, element.topology(),
 				// Five pipelines under the eight passes, the disc sharing one with the dark plane and
 				// the End's flash sharing another with the sun and the moon, and not one of the five
@@ -112,17 +121,30 @@ final class SkyProgram extends FamilyProgram {
 				null,
 				// Drawn in the game's own volume, so the dh matrices answer the game's.
 				false),
-				bound, values, load, element.format(), writes, targets, chainRuns));
+				bound, values, load, element.format(), writes, targets, chainRuns);
+
+		return new SkyProgram(body,
+				bound.program().stages().get(ProgramStage.VERTEX).text());
 	}
 
 	/**
 	 * The pipeline this sky element is drawn with, compiled before the renderer opens its pass.
+	 * <p>
+	 * A pass that really owns its first draw buffer and carries coverage also prepares a mask-only
+	 * sibling. The ordinary fragment coverage remains in place for diagnostics and for the pixels
+	 * that survive it; the sibling is what makes sky ownership independent of pack fragment
+	 * {@code discard}. {@link SkyOwnership} keeps that exception to this family.
 	 *
 	 * @param modelView the matrix the game pushed for this element, which is where the sun is
 	 * @see GeometryProgram#prepare
 	 */
 	RenderPipeline prepare(GpuDevice device, Matrix4fc modelView, Vector4fc colour) {
-		return this.body.prepare(device, null, modelView, null, colour, null);
+		RenderPipeline pipeline = this.body.prepare(device, null, modelView, null, colour, null);
+		if (pipeline != null) {
+			SkyOwnership.prepare(device, pipeline, this.claimVertex, this.body.covers());
+		}
+
+		return pipeline;
 	}
 
 	/**

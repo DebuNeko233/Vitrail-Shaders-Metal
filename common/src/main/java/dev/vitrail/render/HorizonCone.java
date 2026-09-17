@@ -38,9 +38,12 @@ import net.minecraft.client.Minecraft;
  * <p>
  * <strong>It claims the whole lower hemisphere against the scene seed, and that is the price.</strong>
  * Seen from the eye the surface runs from the apex, straight down, up to atan(16/radius) over the
- * horizontal, so every direction below the horizon is on it; and it shares the disc's pipeline, so
- * it writes the disc's mask over all of them. {@link SceneSeed} throws away the game's own picture
- * wherever that mask is set and the depth has not moved since the pack's geometry finished with it.
+ * horizontal, so every direction below the horizon is on it. It is first drawn with the disc's
+ * ordinary pack pipeline, then {@link SkyOwnership} replays this same bound vertex buffer through
+ * the disc's translated vertex stage into the coverage attachment only. That second draw is what
+ * keeps a pack-authored fragment {@code discard} from erasing the claim along with the colour.
+ * {@link SceneSeed} still compares the stored claim depth with the game's live depth, so a feature
+ * really drawn in front survives the claim.
  * <p>
  * <strong>Nothing the game still draws there is lost by that on any place of the corpus, and the
  * reason is worth writing out because it is conditional rather than structural.</strong>
@@ -60,14 +63,13 @@ import net.minecraft.client.Minecraft;
  * And the seed never falls outside that half. Its rank is where that half begins, so
  * {@code PackChain.drawRange} paints it at the head of the walk, and at the tail of it where the
  * walk is empty. The plan never puts the world past the far end of the half either: the rank counts
- * the begins and the prepares, and {@code deferredEnd()} counts
- * those and the deferred stage after them. A place shipping no deferred at all has the two equal,
- * and it is that equality a half open interval loses: the seed would miss the first half and lead
- * the second, at {@code AfterLevel}, by which time the clouds, the weather and the particles are in
- * the game's target and the mask would have taken them. Measured on the corpus: one place in twenty
- * five, Body Camera's overworld. The same state is reachable on any pack through {@code passes=},
- * which removes passes from the running list exactly as {@code terrain=off} removes the terrain,
- * and it costs nothing here.
+ * the begins and the prepares, and {@code deferredEnd()} counts those and the deferred stage after
+ * them. A place shipping no deferred at all has the two equal, and it is that equality a half open
+ * interval loses: the seed would miss the first half and lead the second, at {@code AfterLevel}, by
+ * which time the clouds, the weather and the particles are in the game's target and the mask would
+ * have taken them. Measured on the corpus: one place in twenty five, Body Camera's overworld. The
+ * same state is reachable on any pack through {@code passes=}, which removes passes from the running
+ * list exactly as {@code terrain=off} removes the terrain, and it costs nothing here.
  * <p>
  * <strong>The one thing that would be lost is the world itself</strong>, and only where the world
  * reaches the pack's colour target through that same seed rather than writing it. There the cone
@@ -145,16 +147,16 @@ final class HorizonCone {
 	 * after the sky in the frame, so the first sky of a world is drawn before the world has said
 	 * anything. That frame then looks exactly as it does without this class, which is the
 	 * one wrong answer that cannot make a picture worse.
+	 * <p>
+	 * The ownership replay is immediately after the colour draw while this vertex buffer is still
+	 * bound. {@link SkyRendererMixin} has placed the disc's owner in {@link SkyOwnership} for the
+	 * length of this call; if this draw is refused, no replay happens either.
 	 *
 	 * @param program what is drawing it, for the one line that says it happened
 	 * @param world   what the world's opaque geometry does about the mask
 	 */
 	void draw(RenderPass pass, String program, TerrainDraw.Mask world) {
 		if (this.buffer == null || world != TerrainDraw.Mask.WRITTEN) {
-			// Said once, and only for the answer that is really an answer: a refusal while nothing
-			// has been read yet is the first frame and settles itself. The band staying bare is not
-			// a thing a reader can tell from a picture, so without this line the cone would be
-			// missing for a reason nothing anywhere says.
 			if (world == TerrainDraw.Mask.ABSENT && !this.refused) {
 				this.refused = true;
 				Vitrail.logger().info("The horizon cone is not drawn: the world's opaque geometry "
@@ -167,6 +169,7 @@ final class HorizonCone {
 
 		pass.setVertexBuffer(0, this.buffer.slice());
 		pass.draw(VERTICES, 1, 0, 0);
+		SkyOwnership.claimCurrent(pass, VERTICES, 1, 0, 0);
 
 		// Once, and it is the only proof this lot can leave outside the picture: the band it closes
 		// is a thing nobody can measure from a log, but whether the geometry was recorded at all is

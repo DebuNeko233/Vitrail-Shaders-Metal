@@ -19,6 +19,10 @@ what the next one holds.
   counting programs that failed compilation or never dispatched any work.
 - An unavailable or incompatible optional Metallum compute bridge now reaches the compute
   program failure handler instead of causing a Java class-initialization error.
+- **A pack that discards a sky mesh no longer gets the game's sky painted back over it.** Sky
+  pieces that the pack owns keep their scene-seed claim even when the pack fragment intentionally
+  discards its colour, so the vanilla sky is not restored behind that discard. Bliss's basic sky is
+  the observed case that exposed it.
 
 ## 0.11.0-beta
 
@@ -1024,7 +1028,7 @@ what the next one holds.
   is rewritten as before. Each version keeps its own folder and takes the older ones away with
   it, the whole thing is capped at a quarter of a gigabyte, and the log says how many programs
   came off the disk and how many were rewritten. It removes work rather than time: the wait
-  before a pack draws is the same, and what changes is that none of it is spent here.
+  before the pack draws is the same, and what changes is that none of it is spent here.
 - **A shadow lookup a pack asks the hardware to compare is now compared by the hardware.** A
   pack declaring `sampler2DShadow` used to have that comparison rebuilt in shader
   arithmetic on every tap, a dozen instructions where a comparison sampler pays one, and a

@@ -2,6 +2,7 @@ package dev.vitrail.mixin;
 
 import dev.vitrail.render.GeometryHold;
 import dev.vitrail.render.SkyDraw;
+import dev.vitrail.render.SkyOwnership;
 
 import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
@@ -68,8 +69,10 @@ import java.util.function.Supplier;
  * game put it; compiling a pipeline or clearing a target has to happen before the pass exists, which
  * is why the preparation hangs off the opening and not off the head of the method. The texture goes
  * past next, and the block and the samplers are bound after that, once everything the bind needs is
- * known. The draw comes last, and it is the one place a piece of geometry the game has none of can
- * be added to a pass the game built.
+ * known. The draw comes last. A claimed sky piece is then replayed once through a mask-only
+ * pipeline: the same vertex buffer and the pack's same translated vertex stage, but no pack fragment
+ * stage, so a pack-authored {@code discard} cannot accidentally hand that mesh back to the scene
+ * seed. The disc's extra horizon cone follows the same rule.
  */
 @Mixin(SkyRenderer.class)
 public abstract class SkyRendererMixin {
@@ -119,16 +122,6 @@ public abstract class SkyRendererMixin {
 		}
 	}
 
-	/**
-	 * Takes one piece of the sky out of the frame, where the pack asked for it in
-	 * {@code shaders.properties}.
-	 * <p>
-	 * At the head of each method and not at the pass it opens, which is what makes it a removal
-	 * rather than a choice of shader: the piece is not drawn by anybody. The two methods take
-	 * different arguments, so there are two of these and no way to write one; each is the same two
-	 * lines, and {@link SkyDraw#draws} holds the whole of the decision, the two words of the family
-	 * that take no piece away included.
-	 */
 	@Inject(method = "renderSun", at = @At("HEAD"), cancellable = true)
 	private void vitrail$sun(float rainBrightness, PoseStack poseStack, CallbackInfo callback) {
 		vitrail$refuse("Sky sun", callback);
@@ -140,21 +133,12 @@ public abstract class SkyRendererMixin {
 		vitrail$refuse("Sky moon", callback);
 	}
 
-	/**
-	 * Safe at the head of both: each of them pushes the model view it draws under and pops it again
-	 * before it returns, and the pose stack they are handed is pushed and popped by the caller. So a
-	 * method that never runs leaves nothing standing.
-	 */
 	private static void vitrail$refuse(String label, CallbackInfo callback) {
 		if (!SkyDraw.draws(label)) {
 			callback.cancel();
 		}
 	}
 
-	/**
-	 * Lets the game write its dynamic transform and keeps what it wrote. Every sky pass writes one
-	 * before it opens its pass, so this runs first and outside anything.
-	 */
 	@WrapOperation(
 			method = {"renderSkyDisc", "renderDarkDisc", "renderStars", "renderSunriseAndSunset", "renderSun",
 					"renderMoon", "renderEndFlash"},
@@ -172,15 +156,6 @@ public abstract class SkyRendererMixin {
 		return original.call(uniforms, modelView, colour);
 	}
 
-	/**
-	 * The same for the End's sky, which is the one pass of the eight that names no colour.
-	 * <p>
-	 * A wrap of its own and not another name on the one above, because the call is a different
-	 * overload: {@code renderEndSky} passes a matrix alone, and {@code DynamicUniforms} fills the
-	 * modulator in with its own opaque white. Written out here rather than left at whatever the last
-	 * pass wrote, because the modulator is what a pack reads as {@code gl_Color} where the mesh
-	 * carries none and half of it where the mesh carries one, and this mesh carries one.
-	 */
 	@WrapOperation(
 			method = "renderEndSky",
 			at = @At(value = "INVOKE",
@@ -233,16 +208,6 @@ public abstract class SkyRendererMixin {
 		original.call(pass, this.vitrail$pipeline == null ? pipeline : this.vitrail$pipeline);
 	}
 
-	/**
-	 * Lets the game bind its own texture and keeps what it bound. The pack's program declares its
-	 * own name for the same image, and the descriptor flush walks the layout of the pipeline that is
-	 * bound, so the game's binding costs nothing and the name it used is not the one that is read.
-	 * <p>
-	 * Four passes and not two, and the End's two do not bind the same image as each other: the flash
-	 * is a sprite of the celestial atlas, as the sun and the moon are, while the End's sky is a
-	 * texture of its own. Which is exactly why the image is taken from the call rather than looked
-	 * up.
-	 */
 	@WrapOperation(
 			method = {"renderSun", "renderMoon", "renderEndSky", "renderEndFlash"},
 			require = 4,
@@ -258,22 +223,10 @@ public abstract class SkyRendererMixin {
 	}
 
 	/**
-	 * Adds the horizon cone to the pass the disc is drawn in, once the disc itself is recorded.
-	 * <p>
-	 * <strong>The game has no geometry between its two sky discs</strong>, and above sea level it
-	 * draws only the upper one, so everything below 1.79 degrees over the horizontal is a band with
-	 * no surface in it for a pack's sky program to run on. {@code SkyDraw.horizon} says what is drawn
-	 * there and why it rides in this pass rather than one of its own.
-	 * <p>
-	 * After the disc and not before it, which costs one thing and buys another. The two overlap
-	 * between the edge of the disc and the ring of the cone, and there the cone now wins; drawing it
-	 * first would mean re-binding the disc's own vertex buffer afterwards, and this handler is not
-	 * given it. Iris, which draws its cone in a pass of its own before the sky, has the same overlap
-	 * the other way round and calls the difference imperceptible.
-	 * <p>
-	 * Only where a pipeline of ours was handed back: with the game's own sky shader drawing, the
-	 * band is the clear colour and looks as vanilla looks, and a cone drawn into it with the game's
-	 * shader would change a picture nobody complained about.
+	 * Records the disc, then records its semantic ownership, then adds the horizon cone. The replay
+	 * is after the pack draw because it must not affect the colour draw at all, and before the cone
+	 * because the cone expects the ordinary pack pipeline restored and immediately replaces the
+	 * vertex buffer with its own.
 	 */
 	@WrapOperation(method = "renderSkyDisc",
 			at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/RenderPass;draw(IIII)V"))
@@ -281,7 +234,30 @@ public abstract class SkyRendererMixin {
 			int firstInstance, Operation<Void> original) {
 		original.call(pass, vertices, instances, firstVertex, firstInstance);
 		if (this.vitrail$pipeline != null) {
-			SkyDraw.horizon(pass, this.vitrail$pipeline);
+			SkyOwnership.claim(pass, this.vitrail$pipeline, vertices, instances, firstVertex,
+					firstInstance);
+			SkyOwnership.withOwner(this.vitrail$pipeline,
+					() -> SkyDraw.horizon(pass, this.vitrail$pipeline));
+		}
+	}
+
+	/**
+	 * The other seven sky pieces have no extra geometry. All seven come through the same hook so the
+	 * list of claiming pieces remains data in {@link SkyDraw}: {@link SkyOwnership#claim} is a no-op
+	 * for the stars, sunrise, sun, moon and End flash because no claim pipeline was prepared for
+	 * them, while the dark disc and End sky replay their ownership here.
+	 */
+	@WrapOperation(
+			method = {"renderDarkDisc", "renderStars", "renderSunriseAndSunset", "renderSun",
+					"renderMoon", "renderEndSky", "renderEndFlash"},
+			require = 7,
+			at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/RenderPass;draw(IIII)V"))
+	private void vitrail$claim(RenderPass pass, int vertices, int instances, int firstVertex,
+			int firstInstance, Operation<Void> original) {
+		original.call(pass, vertices, instances, firstVertex, firstInstance);
+		if (this.vitrail$pipeline != null) {
+			SkyOwnership.claim(pass, this.vitrail$pipeline, vertices, instances, firstVertex,
+					firstInstance);
 		}
 	}
 
