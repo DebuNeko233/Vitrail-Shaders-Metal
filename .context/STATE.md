@@ -6,7 +6,7 @@ Scope: `feat/backend-neutral-sodium-terrain-hook`
 ## Confirmed from the current checkout
 
 - The migration boundary remains strict: Vitrail owns shader-pack semantics, scheduling, fallback interpretation and compatibility status; Metallum owns generic Metal execution. The two Draft PRs remain open and unmerged.
-- Current branch heads are Vitrail `54f454bc2e4d45c9c8d72faad4a9cc15ef8bed31` and companion Metallum `54ff6f0e22b153ea206cc726f68bccaee6ce4e70`.
+- Current branch heads are Vitrail `76b7c69ca6dc551d6d956e01c7925432500fe04c` and companion Metallum `54ff6f0e22b153ea206cc726f68bccaee6ce4e70`.
 - PHASE 2 and PHASE 5-16 have completed their recorded Apple-Silicon real-device acceptance. PHASE 17 — Real Shader Pack Compatibility — remains active.
 - PHASE 17 still uses the five-status conservative classifier: `Supported`, `Partially Supported`, `Fallback`, `Unsupported`, `Broken`. Runtime progress, CI, warning counts or a plausible frame do not by themselves promote a pack.
 
@@ -23,16 +23,17 @@ Scope: `feat/backend-neutral-sodium-terrain-hook`
 
 This runtime log clears the previously recorded Photon compile blocker and proves real compute dispatch for the observed Photon path. It is not a PHASE 17 compatibility promotion by itself because no reviewed screenshot/reference bundle is attached to this evidence.
 
-## Vertex-ABI finding from the remaining warnings
+## Vertex-ABI finding and diagnostic fix
 
-- Repeated entity-shadow warnings say the Vitrail entity mesh does not carry `at_midBlock`. Do **not** fix this by adding another entity vertex element or changing entity stride.
+- Repeated entity-shadow warnings said the Vitrail entity mesh did not carry `at_midBlock`. This was a diagnostic-classification problem, not a missing entity vertex field.
 - Iris 26.1 defines `at_midBlock` on `IrisVertexFormats.TERRAIN`, while `IrisVertexFormats.ENTITY` contains `iris_Entity`, `mc_midTexCoord` and `at_tangent` but not `at_midBlock`. Iris shader keys use `ENTITY` for ordinary entities and shadow entities.
-- Therefore an entity program asking for `at_midBlock` is not evidence that Vitrail's entity ABI is missing a reference attribute. The current warning wording overstates the situation; the next fix should classify the reference-parity default/constant behavior correctly rather than inventing a Vitrail-only ABI.
+- Vitrail commit `76b7c69c` keeps `EntityVertex.ANSWERED`, the three appended entity elements and entity stride unchanged. `EntityInputDiagnostics` adds `at_midBlock` only to the compatibility set used by the regular-entity missing-input diagnostic, so ordinary and shadow entity rows no longer claim a Vitrail-only missing real attribute where the reference has none.
+- Glint, text and line entity-family rows keep their narrower diagnostic answers until their exact reference paths are audited; the fix is not a blanket synthesized-attribute suppression.
 - Sky `mc_midTexCoord` / `mc_Entity`, particle/weather extended attributes, comparison-vs-ordinary shadow sampler declarations, and first-frame `nothing fills them yet` diagnostics remain separate review items. They must be compared against the exact Iris format/translation behavior before changing runtime contracts or suppressing diagnostics.
 
 ## Open validation boundaries
 
-- Correct the entity `at_midBlock` diagnostic/reference-default classification without changing `IrisVertexFormats.ENTITY` parity or Vitrail entity stride.
+- Re-run a pack that previously emitted entity-shadow `at_midBlock` warnings and verify those warnings are gone while entity/shadow rendering still reaches its normal draw paths. This is real-device confirmation of the diagnostic fix, not a new ABI test.
 - Audit sky, particle and weather attribute warnings against Iris 26.1 `ShaderKey`, vertex formats and translation/default behavior before deciding whether each is a real missing contract or reference-parity input.
 - Keep comparison/ordinary shadow sampler conflicts explicit. The current diagnostic already records that the mixed declaration is undefined under Iris too; do not hide it with a backend alias unless new evidence identifies a real contract to implement.
 - Review first-frame one-pixel resource diagnostics pack by pack only where they survive into a visual or semantic mismatch; a first-frame warning alone is not a compatibility verdict.
@@ -45,10 +46,14 @@ This runtime log clears the previously recorded Photon compile blocker and prove
 - `.context/TASKS.md` and `.context/architecture/metallum-port.md`
 - `docs/metallum-port.md`, `docs/phase17-compatibility.md`, `CONTRIBUTING.md`
 - `common/src/main/java/dev/vitrail/render/GeometryProgram.java`
+- `common/src/main/java/dev/vitrail/render/EntityInputDiagnostics.java`
+- `common/src/main/java/dev/vitrail/render/EntityProgram.java`
+- `common/src/main/java/dev/vitrail/glsl/EntityVertex.java`
 - `common/src/main/java/dev/vitrail/render/DumpedProgram.java`
 - `common/src/main/java/dev/vitrail/render/DistantProgram.java`
 - `common/src/main/java/dev/vitrail/render/FamilyWarmup.java`
 - `common/src/main/java/dev/vitrail/pack/source/IncludeExpander.java`
+- `tests/test_entity_reference_default.py`
 - `tests/test_background_pipeline_warmup.py`
 - `tests/test_preprocessor_macro_redefinition.py`
 - companion Iris 26.1 `IrisVertexFormats.java` and `ShaderKey.java` for vertex-ABI reference
