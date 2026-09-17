@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ALPHA_TEST = ROOT / 'common/src/main/java/dev/vitrail/pack/model/AlphaTest.java'
 TRANSLATOR = ROOT / 'common/src/main/java/dev/vitrail/glsl/GlslTranslator.java'
 EMITTER = ROOT / 'common/src/main/java/dev/vitrail/glsl/Emitter.java'
+GEOMETRY_PROGRAM = ROOT / 'common/src/main/java/dev/vitrail/render/GeometryProgram.java'
 
 HARNESS = '''package dev.vitrail.pack.model;
 
@@ -87,6 +88,14 @@ class TerrainAlphaContractTest(unittest.TestCase):
         plan = source.index('private void planAlphaEpilogue()')
         own_output = source.index('Output first = this.packOutputs.get(0);', plan)
         self.assertGreater(own_output, plan)
+
+    def test_geometry_diagnostic_distinguishes_reference_parity_from_injection_failure(self):
+        source = compact(GEOMETRY_PROGRAM)
+        self.assertIn('if (fragment.text().contains("ofFragData0"))', source)
+        self.assertIn('its legacy draw-buffer-zero', source)
+        self.assertIn('output could not be given the test', source)
+        self.assertIn('its fragment stage writes no legacy draw-buffer-zero output. The reference', source)
+        self.assertIn('does not inject that test into pack-declared outputs either', source)
 
     def test_wrapper_runs_pack_then_discard_then_coverage(self):
         source = compact(EMITTER)

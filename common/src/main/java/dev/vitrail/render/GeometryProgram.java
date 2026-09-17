@@ -2567,12 +2567,21 @@ final class GeometryProgram {
 				this.samplers.size());
 
 		// A cutout stage without its discard draws a leaf as a cube, which reads as the pack being
-		// wrong rather than as a translation that could not place a statement.
+		// wrong rather than as a translation that could not place a statement. But only a legacy
+		// draw-buffer-zero output ever receives the fixed-function test: Iris makes the same split,
+		// and a pack-declared location zero may carry arbitrary MRT data rather than coverage alpha.
 		AlphaTest alphaTest = this.loaded.alphaTest();
 		if (alphaTest.tests() && fragment.notes().alphaEpilogue() == 0) {
-			Vitrail.logger().warn("This pass discards at {} {} and the program could not be given the "
-					+ "test, so nothing beyond the pack's own discards is thrown away",
-					alphaTest.function(), alphaTest.reference());
+			if (fragment.text().contains("ofFragData0")) {
+				Vitrail.logger().warn("This pass discards at {} {} and its legacy draw-buffer-zero "
+						+ "output could not be given the test, so nothing beyond the pack's own "
+						+ "discards is thrown away", alphaTest.function(), alphaTest.reference());
+			} else {
+				Vitrail.logger().info("This pass asks for the fixed-function alpha test at {} {}, but "
+						+ "its fragment stage writes no legacy draw-buffer-zero output. The reference "
+						+ "does not inject that test into pack-declared outputs either, so only the "
+						+ "pack's own discards apply", alphaTest.function(), alphaTest.reference());
+			}
 		}
 
 		// Split by what the mesh really answers. Only names the mesh has no element for are a gap;
