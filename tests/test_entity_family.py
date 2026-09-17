@@ -86,6 +86,14 @@ class EntityFamilyTest(unittest.TestCase):
         ):
             self.assertIn(needle, source)
 
+    def test_shadow_drop_diagnostic_separates_known_row_from_missing_row(self):
+        draw = ENTITY_DRAW.read_text(encoding='utf-8')
+        self.assertIn('if (SHADOW_ELEMENTS.containsKey(pipeline))', draw)
+        self.assertIn('has a shadow row but could not be', draw)
+        self.assertIn('served this frame for the reason reported above', draw)
+        self.assertIn('has no shadow row, so it casts no shadow', draw)
+        self.assertIn("An enchantment's glint is left out of the shadow map", draw)
+
     def test_ordinary_entity_rows_are_separate_from_later_phase7_families(self):
         draw = ENTITY_DRAW.read_text(encoding='utf-8')
 

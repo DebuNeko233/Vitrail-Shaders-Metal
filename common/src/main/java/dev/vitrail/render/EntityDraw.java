@@ -2142,11 +2142,18 @@ public final class EntityDraw extends FamilyDraw {
 		// up on this line, a missing device and a refused program among them, and each of those has
 		// already said what it was on a line of its own. Naming the table as the cause would send a
 		// reader looking for a missing row when the fault is in the load.
-		Vitrail.logger().warn("What the game draws with {} casts no shadow this frame, for whichever "
-				+ "reason is given above, or because this engine has no shadow row for it. It is "
-				+ "dropped rather than handed back: inside the light's walk the game would open its "
-				+ "own pass on the target its render type names, which at that point in the frame "
-				+ "carries the finished picture", pipeline.getLocation());
+		if (SHADOW_ELEMENTS.containsKey(pipeline)) {
+			Vitrail.logger().info("What the game draws with {} has a shadow row but could not be "
+					+ "served this frame for the reason reported above, so it is dropped from this "
+					+ "shadow-map walk rather than handed back: inside the light's walk the game "
+					+ "would open its own pass on the finished picture", pipeline.getLocation());
+			return;
+		}
+
+		Vitrail.logger().warn("What the game draws with {} has no shadow row, so it casts no shadow "
+				+ "in this map. It is dropped rather than handed back: inside the light's walk the "
+				+ "game would open its own pass on the target its render type names, which at that "
+				+ "point in the frame carries the finished picture", pipeline.getLocation());
 	}
 
 	/**
