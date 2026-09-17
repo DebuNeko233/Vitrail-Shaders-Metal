@@ -149,7 +149,7 @@ final class HorizonCone {
 	 * one wrong answer that cannot make a picture worse.
 	 * <p>
 	 * The ownership replay is immediately after the colour draw while this vertex buffer is still
-	 * bound. {@link SkyRendererMixin} has placed the disc's owner in {@link SkyOwnership} for the
+	 * bound. The sky renderer mixin has placed the disc's owner in {@link SkyOwnership} for the
 	 * length of this call; if this draw is refused, no replay happens either.
 	 *
 	 * @param program what is drawing it, for the one line that says it happened
