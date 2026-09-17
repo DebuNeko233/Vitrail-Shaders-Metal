@@ -121,6 +121,20 @@ class ShadowTerrainContractTest(unittest.TestCase):
         self.assertIn("private GpuTexture depth;", targets)
         self.assertIn("private GpuTextureView depthAttachment;", targets)
 
+    def test_shadow_attachment_feedback_is_not_reported_as_unfilled(self):
+        geometry = compact(GEOMETRY_PROGRAM)
+        self.assertIn("private boolean shadowAttachmentFeedback(String sampler)", geometry)
+        self.assertIn(
+            "return kind == SamplerPlan.Kind.SHADOW_DEPTH || kind == SamplerPlan.Kind.SHADOW_COLOUR;",
+            geometry,
+        )
+        self.assertIn(
+            "List<String> feedback = this.samplers.stream().filter(this::shadowAttachmentFeedback).toList();",
+            geometry,
+        )
+        self.assertIn("&& !shadowAttachmentFeedback(name))", geometry)
+        self.assertIn("read a shadow attachment this pass is writing", geometry)
+
 
 if __name__ == "__main__":
     unittest.main()

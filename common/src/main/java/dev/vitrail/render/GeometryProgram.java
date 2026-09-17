@@ -2474,6 +2474,21 @@ final class GeometryProgram {
 	}
 
 	/**
+	 * Whether this name asks for a shadow attachment the pass is itself writing. Such a read is
+	 * deliberately answered with a constant: sampling the same image as both an attachment and a
+	 * texture of one render pass is undefined feedback, not a resource that has yet to be filled.
+	 */
+	private boolean shadowAttachmentFeedback(String sampler) {
+		if (!this.pass.shadow()) {
+			return false;
+		}
+
+		SamplerPlan.Kind kind = this.loaded.samplers().binding(sampler).kind();
+
+		return kind == SamplerPlan.Kind.SHADOW_DEPTH || kind == SamplerPlan.Kind.SHADOW_COLOUR;
+	}
+
+	/**
 	 * Whether a lookup on this name may climb past level nought, which only the shadow map's depth
 	 * pair ever may here. The map answers, and it answers no while the pack asked for no chain or
 	 * while nothing has filled one.
@@ -2580,8 +2595,10 @@ final class GeometryProgram {
 		// this is not one: these names are filled exactly on the frames the pack draws the far
 		// terrain, and PackChain says once for the whole chain what they carry.
 		List<String> distant = this.samplers.stream().filter(this::readsTheDistantDepth).toList();
+		List<String> feedback = this.samplers.stream().filter(this::shadowAttachmentFeedback).toList();
 		List<String> flat = this.samplers.stream()
-				.filter(name -> !readsATexture(name) && !readsTheDistantDepth(name))
+				.filter(name -> !readsATexture(name) && !readsTheDistantDepth(name)
+						&& !shadowAttachmentFeedback(name))
 				.toList();
 		Vitrail.logger().info("{} samplers of this program read a real texture: {}", real.size(), real);
 		if (!distant.isEmpty()) {
@@ -2589,11 +2606,17 @@ final class GeometryProgram {
 					+ "it, and the far plane on the rest: {}", distant.size(), distant);
 		}
 
+		if (!feedback.isEmpty()) {
+			Vitrail.logger().info("{} read a shadow attachment this pass is writing, so they are "
+					+ "answered with the far-plane or white constant instead of sampling the "
+					+ "attachment itself: {}", feedback.size(), feedback);
+		}
+
 		if (!flat.isEmpty()) {
-			// What is left is what nothing fills for this pass: the shadow map, the live depth on
-			// the passes that draw ahead of the deferred stage, and the two material maps
-			// wherever the RESOURCE pack ships no file beside the sprites of this pass's atlas. The
-			// last of the three is the one a reader can act on, and it is not a shader pack's doing.
+			// What is left is what nothing fills for this pass: the live depth on the passes that
+			// draw ahead of the deferred stage, and the two material maps wherever the RESOURCE pack
+			// ships no file beside the sprites of this pass's atlas. The latter is the one a reader
+			// can act on, and it is not a shader pack's doing.
 			Vitrail.logger().warn("{} read one pixel, because nothing fills them yet: {}",
 					flat.size(), flat);
 		}
