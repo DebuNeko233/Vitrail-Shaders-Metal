@@ -49,7 +49,11 @@ Vertex formats are compatibility ABI, not a convenient place to silence shader w
 - Iris 26.1 `IrisVertexFormats.TERRAIN` carries `mc_Entity`, `mc_midTexCoord`, `at_tangent` and `at_midBlock`.
 - Iris 26.1 `IrisVertexFormats.ENTITY` carries `iris_Entity`, `mc_midTexCoord` and `at_tangent`, but **not** `at_midBlock`; ordinary entities and shadow entities use that `ENTITY` format.
 - Therefore an entity/shadow shader asking for `at_midBlock` must not cause Vitrail to grow a Vitrail-only entity vertex element. Classify/implement the same default behavior as the reference instead.
-- Apply the same source-first audit to sky, particle and weather warnings before changing their mesh formats.
+- Iris 26.1 particle and weather keys use `DefaultVertexFormat.PARTICLE`. That format has no backing elements for `mc_Entity`, `mc_midTexCoord` or `at_tangent`; those observed names belong in reference-unbacked diagnostic handling, not a widened particle/weather ABI.
+- Iris 26.1 sky keys use the vanilla `POSITION`, `POSITION_COLOR`, `POSITION_TEX` and `POSITION_TEX_COLOR` formats. None backs `mc_Entity` or `mc_midTexCoord`; the core transformer does not turn either observed name into a physical sky field.
+- Iris 26.1 line rendering uses `DefaultVertexFormat.POSITION_COLOR_NORMAL_LINE_WIDTH`. It carries neither UV2 nor an entity id; `VanillaCoreTransformer` can still declare `iris_UV2` after renaming `vaUV2`, leaving it without a backing array on that format.
+- Keep three concepts separate: a mesh-backed answer, a reference-unbacked input, and the deterministic constant Vitrail chooses for that unbacked input. Classifying the second does not prove value-for-value parity with OpenGL generic-attribute state.
+- Apply the same source-first audit to any future family/input warning before changing its mesh format.
 
 This rule is deliberately stricter than warning elimination: a quiet log with a divergent vertex ABI is a compatibility regression.
 
@@ -70,7 +74,10 @@ Verify this model against current repository evidence before extending it:
 - `common/src/main/java/dev/vitrail/render/storage/StorageBufferBackend.java`
 - `common/src/main/java/dev/vitrail/render/storage/StorageImageBackend.java`
 - `common/src/main/java/dev/vitrail/render/storage/StorageImageCommands.java`
+- `common/src/main/java/dev/vitrail/render/VertexInputDiagnostics.java`
 - `common/src/main/java/dev/vitrail/mixin/metallum/`
 - Iris 26.1 `common/src/main/java/net/irisshaders/iris/vertices/IrisVertexFormats.java`
 - Iris 26.1 `common/src/main/java/net/irisshaders/iris/pipeline/programs/ShaderKey.java`
+- Iris 26.1 `common/src/main/java/net/irisshaders/iris/gl/state/ShaderAttributeInputs.java`
+- Iris 26.1 `common/src/main/java/net/irisshaders/iris/pipeline/transform/transformer/VanillaCoreTransformer.java`
 - companion repository `DebuNeko233/metallum`, draft PR #1

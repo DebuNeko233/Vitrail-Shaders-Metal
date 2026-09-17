@@ -40,7 +40,7 @@ At this status update the companion Metallum branch head is `54ff6f0e22b153ea206
 
 ## Vitrail backend-neutralization
 
-The backend-neutralization baseline is implemented on branch `feat/backend-neutral-sodium-terrain-hook` and Draft PR #1, targeting `dev` as required by repository policy. Current branch head is `54f454bc2e4d45c9c8d72faad4a9cc15ef8bed31`.
+The backend-neutralization baseline is implemented on branch `feat/backend-neutral-sodium-terrain-hook` and Draft PR #1, targeting `dev` as required by repository policy. The latest real-device evidence baseline on that branch is `37d06c12890ade6c940a07939ca49d1cc03b0cbd`; later diagnostic-only source classifications are described below and require their own rerun before becoming hardware evidence.
 
 PHASE 17 real shader-pack compatibility is active. The earlier phases remain acceptance baselines rather than a claim that those subsystems can no longer receive fixes.
 
@@ -130,13 +130,19 @@ Pack source expansion preserves the pack's own active-path redefinition semantic
 
 This is a generic source-preparation rule, not a Bliss or `diagonal3` special case. The 2026-09-18 Bliss run no longer reports the earlier `diagonal3` shaderc redefinition failure.
 
-### Entity attribute compatibility
+### Reference-unbacked vertex inputs
 
 The extended entity mesh already carries the four identifier lanes backing Iris's `iris_Entity` attribute. Vitrail answers pack-facing `mc_Entity` from that same backing storage, with explicit conversion to the type declared by the shader, rather than treating it as an unavailable constant. This does not add another vertex element or change the entity stride.
 
-The remaining entity-shadow `at_midBlock` warning must **not** be fixed by extending that stride. Iris 26.1 defines `at_midBlock` on `IrisVertexFormats.TERRAIN`; `IrisVertexFormats.ENTITY` contains `iris_Entity`, `mc_midTexCoord` and `at_tangent` but no `at_midBlock`, and Iris shader keys use `ENTITY` for both ordinary and shadow entities. Vitrail therefore needs reference-parity default/diagnostic handling for an entity shader that asks for `at_midBlock`, not a Vitrail-only entity ABI.
+Entity `at_midBlock` is intentionally different. Iris 26.1 defines it on `IrisVertexFormats.TERRAIN`; `IrisVertexFormats.ENTITY` contains `iris_Entity`, `mc_midTexCoord` and `at_tangent` but no `at_midBlock`, and Iris shader keys use `ENTITY` for both ordinary and shadow entities. Vitrail therefore classifies `at_midBlock` as reference-unbacked for ordinary/shadow entity diagnostics instead of growing a Vitrail-only entity ABI. Hardware logs after that change contain no `at_midBlock` warning while shadow entities continue to draw.
 
-The same source-first rule applies to the remaining sky and particle/weather attribute diagnostics: establish the exact Iris format and translation/default behavior before changing a mesh format or suppressing a warning.
+The same rule now covers the other source-audited families without changing their mesh layouts:
+
+- `PARTICLES`, `PARTICLES_TRANS` and `WEATHER` use `DefaultVertexFormat.PARTICLE`, which has no backing element for `mc_Entity`, `mc_midTexCoord` or `at_tangent`. Vitrail keeps their real answer set empty and classifies those names only for the missing-input diagnostic. The `37d06c12` hardware run verifies the warnings are gone while particle and weather draws remain active.
+- Iris sky keys use `POSITION`, `POSITION_COLOR`, `POSITION_TEX` or `POSITION_TEX_COLOR`. None backs `mc_Entity` or `mc_midTexCoord`. With zero entity components `VanillaCoreTransformer` leaves a pack-declared `mc_Entity` unbacked, and an explicit `mc_midTexCoord` likewise does not become a physical sky field. Vitrail classifies the two observed names as reference-unbacked without changing any sky format.
+- `LINES` uses `DefaultVertexFormat.POSITION_COLOR_NORMAL_LINE_WIDTH`, which carries neither UV2 nor an entity id. `VanillaCoreTransformer` renames `vaUV2` to an `iris_UV2` input even when the format has no light element, while zero entity components leave a pack-declared `mc_Entity` unbacked. Vitrail keeps `LinesVertex.ANSWERED` and the line stride unchanged and classifies only those two observed names for diagnostics.
+
+A reference-unbacked classification is narrower than value parity. Iris can read OpenGL generic-attribute state at an unbacked location, whereas Vitrail supplies its existing deterministic synthesized constant. These changes say only that the vertex buffer is not missing a reference-required field; they do not claim that every unbacked value equals Iris draw-for-draw.
 
 ### Vulkan-specific code that stays Vulkan-specific
 
@@ -146,12 +152,12 @@ The same source-first rule applies to the remaining sky and particle/weather att
 
 Both repositories remain Draft, open and unmerged. The Metal shader-pack route remains developer-validation-only.
 
-Current branch heads at this documentation update are:
+The latest hardware evidence pair is:
 
-- Vitrail `54f454bc2e4d45c9c8d72faad4a9cc15ef8bed31`;
-- Metallum `54ff6f0e22b153ea206cc726f68bccaee6ce4e70`.
+- Vitrail `37d06c12890ade6c940a07939ca49d1cc03b0cbd`;
+- Metallum feature branch `feat/mc26.2-mrt-foundation`, currently `54ff6f0e22b153ea206cc726f68bccaee6ce4e70`.
 
-At those branch baselines:
+At these baselines:
 
 - PHASE 2 foundation: **CLOSED / Real-device Verified**;
 - PHASE 5-15 baseline acceptance: **CLOSED / Real-device Verified**;
@@ -160,42 +166,45 @@ At those branch baselines:
 
 "Closed" here means the phase's acceptance baseline has real-device evidence. It does not mean that a later real pack cannot expose a generic defect in that subsystem; PHASE 17 findings continue to be fixed at the owning shader-pack contract, Minecraft contract or Metal capability.
 
-### 2026-09-18 five-pack runtime evidence
+### 2026-09-18 runtime evidence
 
-A single Apple M5 Pro / macOS 27.0 / Metal client log runs Bliss v2.1.2, Complementary Reimagined r5.9.1, MakeUp Ultra Fast 9.5e, Photon v1.3b and Solas Shader V3.7b. The Vitrail module-cache path records build `54f454bc`; the mod list records Metallum 0.0.24. The log itself does not print a Metallum commit SHA, so a formal PHASE 17 evidence bundle should continue to carry the exact companion head separately.
+The Apple M5 Pro / macOS 27.0 / Metal sessions exercise Bliss v2.1.2, Complementary Reimagined r5.9.1, MakeUp Ultra Fast 9.5e, Photon v1.3b and Solas Shader V3.7b. The latest supplied log records Vitrail module-cache build `37d06c12`; the mod list records Metallum 0.0.24, and the user confirms the launcher builds continue to come from the two project feature branches named above.
 
-For the observed session:
+Across the recorded sessions:
 
 - every tested pack reaches a first full frame and the client later reaches clean `Stopping!`;
-- the initial Bliss warm-up reports 62/62 leftover pipelines, and the later pack loads report 155/155;
-- no Vitrail/Metallum shader compile `ERROR` occurs;
-- the only log-level `ERROR` is an invalid/missing PNG header from the enabled Prime's HD resource pack;
+- no Vitrail/Metallum shader compile `ERROR` occurs in the latest `37d06c12` run;
 - Photon, MakeUp and Complementary no longer attempt unusable no-DH `distant*` programs during detached warm-up;
 - Bliss no longer hits the `diagonal3` macro-redefinition failure;
 - Photon compiles past the previously recorded `world0/prepare/vertex` blocker, reaches its chain, compiles and dispatches `world0/deferred4_a` on Metal;
-- Solas compiles and dispatches `shadowcomp` on Metal as groups `(24, 12, 24)` / local `(8, 8, 8)`.
+- Solas compiles and dispatches `shadowcomp` on Metal as groups `(24, 12, 24)` / local `(8, 8, 8)`;
+- entity `at_midBlock` is absent after its diagnostic correction while the shadow-entity path remains active;
+- the `37d06c12` run records particle and weather draws across Solas, Photon, MakeUp, Complementary and Bliss without the former particle/weather `mc_Entity`, `mc_midTexCoord` or `at_tangent` missing-real-attribute warnings.
 
-This materially advances the old Photon blocker and closes the previously unverified compute-dispatch half for that observed path. It does **not** by itself promote Photon or any other pack to a new PHASE 17 compatibility status: the status policy still requires reviewed screenshot/reference evidence, not only a clean runtime log.
+The `37d06c12` log leaves seven vertex-input warnings before the next source classification: Solas sky `mc_Entity` three times, Photon sky `mc_midTexCoord` twice, Solas lines `mc_Entity` once and Photon lines `vaUV2` once. Every affected path still records its first draw. Iris 26.1 source now classifies those four names/families as reference-unbacked rather than missing physical mesh fields, so the next hardware run is an acceptance test of the diagnostic change, not a reason to widen any vertex ABI.
 
-The session still contains warnings that need source/reference classification rather than blanket suppression. Important groups include entity `at_midBlock`, sky `mc_midTexCoord` / `mc_Entity`, particle/weather extended inputs, comparison-vs-ordinary shadow sampler declarations, and first-frame `nothing fills them yet` resource diagnostics. The entity `at_midBlock` case is already source-classified as a reference-format/default-input issue rather than a missing entity vertex element; the other groups remain separate audits.
+This materially advances the old blockers and verifies the prior diagnostic fixes on hardware. It does **not** by itself promote Photon or any other pack to a new PHASE 17 compatibility status: the status policy still requires reviewed screenshot/reference evidence, not only a clean runtime log.
+
+Comparison-vs-ordinary shadow sampler declarations and first-frame `nothing fills them yet` resource diagnostics remain separate. They should stay explicit until reference behavior or persistent visual evidence identifies a concrete contract to change.
 
 ## Acceptance required before merge
 
 PHASE 17 remains the merge gate. Before either Draft PR becomes ready, real-pack evidence must be collected and reviewed under [`phase17-compatibility.md`](phase17-compatibility.md). In particular:
 
-1. turn the current five-pack runtime progress into reviewed pack evidence only where the required screenshot/reference material exists;
-2. preserve the real Photon compute-dispatch evidence and exact paired-head metadata in the formal evidence path;
-3. audit the remaining vertex/sampler/resource diagnostics against Iris before changing contracts or treating warning counts as compatibility scores;
-4. continue the required real-pack matrix, including pack families not covered by the current five-pack session;
-5. keep Vulkan/shared-path regression coverage for every backend-neutral contract changed while fixing PHASE 17 findings.
+1. re-run at least Solas and Photon after the sky/line diagnostic classification and verify those seven warnings disappear while the same draw paths remain active;
+2. turn runtime progress into reviewed pack evidence only where the required screenshot/reference material exists;
+3. preserve the real Photon compute-dispatch evidence and exact paired-head metadata in the formal evidence path;
+4. keep comparison/sampler/resource diagnostics separate from vertex-input classification and investigate them only against reference semantics or persistent visual evidence;
+5. continue the required real-pack matrix, including pack families not covered by the current five-pack sessions;
+6. keep Vulkan/shared-path regression coverage for every backend-neutral contract changed while fixing PHASE 17 findings.
 
 A green Gradle build, successful client launch, full warm-up count or successful compute dispatch is useful evidence, but none alone proves rendering correctness or shader-pack compatibility.
 
 ## Next work
 
-Immediate work is to correct the entity `at_midBlock` diagnostic/reference-default classification without changing entity ABI, then source-audit the remaining sky and particle/weather attribute warnings. Comparison/ordinary shadow sampler conflicts and first-frame empty-resource diagnostics should remain explicit until reference behavior or visual evidence identifies a concrete contract to change.
+Immediate work is the hardware rerun for the source-classified sky/line diagnostics. On the new build, Solas sky/line and Photon sky/line should keep drawing while the five sky and two line missing-real-attribute WARNs from `37d06c12` disappear. This does not assert exact numeric parity for OpenGL generic-attribute state.
 
-In parallel, collect the PHASE 17 screenshot/reference evidence needed to assign compatibility statuses to the packs that now reach full frames. Do not promote support from this runtime log alone.
+After that, comparison/ordinary shadow sampler conflicts and first-frame empty-resource diagnostics remain explicit until reference behavior or visual evidence identifies a concrete contract to change. In parallel, collect the PHASE 17 screenshot/reference evidence needed to assign compatibility statuses to packs that reach full frames. Do not promote support from runtime logs alone.
 
 The production Metal shader-pack gate remains conservative while PHASE 17 is incomplete. `phase17-compatibility.md` defines compatibility evidence; `VITRAIL_SMOKE.md` in the companion Metallum repository documents deterministic developer smoke launchers. Neither CI nor a smoke launcher alone changes the support claim.
 

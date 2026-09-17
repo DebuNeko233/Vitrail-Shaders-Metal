@@ -2,6 +2,7 @@ package dev.vitrail.render;
 
 import dev.vitrail.glsl.EntityVertex;
 import dev.vitrail.glsl.LinesVertex;
+import dev.vitrail.glsl.SkyVertex;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -24,6 +25,10 @@ final class VertexInputDiagnostics {
 	private static final Set<String> ENTITY_REFERENCE_DEFAULTS = Set.of("at_midBlock");
 	private static final Set<String> PARTICLE_REFERENCE_DEFAULTS =
 			Set.of("mc_Entity", "mc_midTexCoord", "at_tangent");
+	private static final Set<String> SKY_REFERENCE_DEFAULTS =
+			Set.of("mc_Entity", "mc_midTexCoord");
+	private static final Set<String> LINES_REFERENCE_DEFAULTS =
+			Set.of("mc_Entity", "vaUV2");
 
 	private VertexInputDiagnostics() {
 	}
@@ -52,10 +57,14 @@ final class VertexInputDiagnostics {
 		}
 
 		if (element.lines()) {
-			return new Inputs(LinesVertex.ANSWERED, Set.of());
+			return new Inputs(LinesVertex.ANSWERED, LINES_REFERENCE_DEFAULTS);
 		}
 
 		return new Inputs(EntityVertex.ANSWERED, ENTITY_REFERENCE_DEFAULTS);
+	}
+
+	static Inputs sky() {
+		return new Inputs(Set.copyOf(SkyVertex.ATTRIBUTES), SKY_REFERENCE_DEFAULTS);
 	}
 
 	static Inputs particle() {

@@ -4,8 +4,10 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 ENTITY_VERTEX = ROOT / 'common/src/main/java/dev/vitrail/glsl/EntityVertex.java'
+LINES_VERTEX = ROOT / 'common/src/main/java/dev/vitrail/glsl/LinesVertex.java'
 ENTITY_BRIDGE = ROOT / 'common/src/main/java/dev/vitrail/render/EntityInputDiagnostics.java'
 DIAGNOSTICS = ROOT / 'common/src/main/java/dev/vitrail/render/VertexInputDiagnostics.java'
+SKY = ROOT / 'common/src/main/java/dev/vitrail/render/SkyProgram.java'
 PARTICLE = ROOT / 'common/src/main/java/dev/vitrail/render/ParticleProgram.java'
 WEATHER = ROOT / 'common/src/main/java/dev/vitrail/render/WeatherProgram.java'
 
@@ -70,6 +72,36 @@ class ReferenceVertexInputDiagnosticsTest(unittest.TestCase):
         self.assertIn('NAMESPACE, INPUTS.diagnosticAnswered(), false,', weather)
         self.assertNotIn('private static final Set<String> ANSWERED', particle)
         self.assertNotIn('private static final Set<String> ANSWERED', weather)
+
+    def test_sky_and_lines_keep_reference_unbacked_inputs_out_of_mesh_abis(self):
+        diagnostics = DIAGNOSTICS.read_text(encoding='utf-8')
+        lines_vertex = LINES_VERTEX.read_text(encoding='utf-8')
+        sky = SKY.read_text(encoding='utf-8')
+
+        self.assertIn('Set.of("mc_Entity", "mc_midTexCoord");', diagnostics)
+        self.assertIn('Set.of("mc_Entity", "vaUV2");', diagnostics)
+        self.assertIn(
+            'return new Inputs(Set.copyOf(SkyVertex.ATTRIBUTES), SKY_REFERENCE_DEFAULTS);',
+            diagnostics,
+        )
+        self.assertIn(
+            'return new Inputs(LinesVertex.ANSWERED, LINES_REFERENCE_DEFAULTS);',
+            diagnostics,
+        )
+        self.assertIn(
+            'public static final Set<String> ANSWERED = Set.of("vaPosition", "vaNormal", "vaColor");',
+            lines_vertex,
+        )
+        line_answers = lines_vertex.split(
+            'public static final Set<String> ANSWERED =', 1
+        )[1].split(';', 1)[0]
+        self.assertNotIn('"mc_Entity"', line_answers)
+        self.assertNotIn('"vaUV2"', line_answers)
+        self.assertIn(
+            'private static final VertexInputDiagnostics.Inputs INPUTS = VertexInputDiagnostics.sky();',
+            sky,
+        )
+        self.assertIn('NAMESPACE, INPUTS.diagnosticAnswered(), false,', sky)
 
 
 if __name__ == '__main__':

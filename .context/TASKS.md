@@ -23,29 +23,35 @@ The synthetic/runtime capability phases are closed; current work is evidence-bac
 - [ ] Do not promote Photon or any other pack from the 2026-09-18 runtime logs alone. Collect/review the screenshot/reference evidence required by `docs/phase17-compatibility.md` before changing a public compatibility status.
 - [ ] Continue the matrix through the remaining required pack families, including BSL-family and Sildur-family coverage, with the same evidence discipline.
 
-The 2026-09-18 runtime sessions exercise Bliss v2.1.2, Complementary Reimagined r5.9.1, MakeUp Ultra Fast 9.5e, Photon v1.3b and Solas Shader V3.7b without a Vitrail/Metallum log-level compile error. The follow-up run on Vitrail build `2f1ff54d` also real-device verifies that the corrected entity `at_midBlock` diagnostic is absent while shadow entities still draw. That proves execution progress and the diagnostic fix, not visual/reference correctness.
+The 2026-09-18 runtime sessions exercise Bliss v2.1.2, Complementary Reimagined r5.9.1, MakeUp Ultra Fast 9.5e, Photon v1.3b and Solas Shader V3.7b without a Vitrail/Metallum log-level compile error. The latest run records Vitrail build `37d06c12` and reaches eight first-full-frame events before a clean shutdown. It real-device verifies both the entity `at_midBlock` and particle/weather diagnostic corrections while preserving the affected draw paths. That proves execution progress and diagnostic fixes, not visual/reference correctness.
 
 ## P1 - Classify remaining vertex and sampler diagnostics against Iris 26.1
 
 - [x] Correct the entity-shadow `at_midBlock` diagnostic without extending the entity vertex ABI.
   - Iris 26.1 `IrisVertexFormats.ENTITY` carries `iris_Entity`, `mc_midTexCoord` and `at_tangent`, but not `at_midBlock`.
   - Iris 26.1 shader keys use `ENTITY` for ordinary entities and shadow entities.
-  - `VertexInputDiagnostics` now keeps real mesh-backed answers separate from reference-unbacked inputs; the entity bridge contributes `at_midBlock` only to the missing-input diagnostic filter for regular entity rows.
-  - The `2f1ff54d` hardware run contains no `at_midBlock` diagnostic while Photon records `shadow_item`, `shadow_cutout`, `shadow_solid`, `shadow_translucent` and `shadow_eyes` draws.
-  - Glint, text and line rows remain on their narrower diagnostic answers until their own reference paths are audited.
+  - `VertexInputDiagnostics` keeps real mesh-backed answers separate from reference-unbacked inputs; the entity bridge contributes `at_midBlock` only to the missing-input diagnostic filter for regular entity rows.
+  - Hardware runs after the fix contain no `at_midBlock` diagnostic while shadow entity draws remain active.
 - [x] Classify particle/weather `mc_Entity`, `mc_midTexCoord` and `at_tangent` as reference-unbacked inputs rather than missing real mesh fields.
   - Iris 26.1 `ShaderKey` uses `DefaultVertexFormat.PARTICLE` for both particle keys and weather; that format has no backing element for those three pack extension locations.
-  - Iris's core transformer leaves `mc_Entity` untouched when the format reports zero entity components and does not synthesize `mc_midTexCoord` or `at_tangent` for this format.
-  - Vitrail keeps the real particle/weather answer set empty and uses its existing deterministic synthesized constants. This is a diagnostic classification only: it does **not** claim value-for-value parity with OpenGL generic-attribute state, which can depend on GL state and may be undefined after array-backed draws.
-  - Acceptance: no particle/weather vertex-format or stride change, and these names no longer count as a Vitrail-only missing real attribute.
-- [ ] Audit sky warnings (`mc_midTexCoord` in Photon; `mc_Entity` in Solas) against the exact Iris sky vertex formats and translator behavior before changing mesh ABI or suppressing diagnostics.
-- [ ] Audit line-row warnings (`vaUV2` in Photon; `mc_Entity` in Solas) against Iris's line format and transform path before changing their diagnostic classification.
+  - Iris's core transformer leaves `mc_Entity` untouched when the format reports zero entity components and does not synthesize real `mc_midTexCoord` or `at_tangent` fields for this format.
+  - Vitrail keeps the real particle/weather answer set empty and uses its existing deterministic synthesized constants. This is a diagnostic classification only: it does **not** claim value-for-value parity with OpenGL generic-attribute state.
+  - The `37d06c12` hardware run shows particle and weather draws across the exercised pack set with the former missing-real-attribute warnings absent.
+- [x] Classify the observed sky `mc_Entity` / `mc_midTexCoord` warnings without changing sky mesh formats.
+  - Iris 26.1 sky keys use `POSITION`, `POSITION_COLOR`, `POSITION_TEX` or `POSITION_TEX_COLOR`; none carries either extension input.
+  - With zero entity components, `VanillaCoreTransformer` leaves a pack-declared `mc_Entity` unbacked. An explicit `mc_midTexCoord` likewise remains an input rather than becoming a sky vertex element.
+  - Vitrail keeps the four existing sky formats unchanged and places only those two names in the sky reference-unbacked diagnostic set.
+- [x] Classify the observed line-row `vaUV2` / `mc_Entity` warnings without changing the line mesh ABI.
+  - Iris 26.1 `LINES` uses `DefaultVertexFormat.POSITION_COLOR_NORMAL_LINE_WIDTH`, which carries neither UV2 nor an entity id.
+  - `VanillaCoreTransformer` renames `vaUV2` to `iris_UV2` even when `hasLight()` is false and still declares it as an input; no UV2 element backs it on the line format. Zero entity components likewise leave `mc_Entity` unbacked.
+  - `LinesVertex.ANSWERED` remains only `vaPosition`, `vaNormal` and `vaColor`; no line stride or format changes.
+- [ ] Re-run at least Solas and Photon after the sky/line diagnostic classification. Verify the five sky and two line missing-real-attribute WARNs from the `37d06c12` log disappear while those sky and line draw paths still execute.
 - [ ] Keep comparison-vs-ordinary shadow sampler warnings explicit unless source/reference evidence identifies a defined behavior Vitrail is missing. The current mixed declaration is already diagnosed as undefined under Iris too.
 - [ ] Treat `nothing fills them yet` first-frame resource warnings as evidence to investigate only when they correspond to a persistent semantic/visual mismatch; do not convert warning count into a compatibility score.
 
 ## P2 - Keep acceptance and documentation synchronized
 
 - [ ] Keep both PRs Draft/open/unmerged while PHASE 17 real-pack acceptance is incomplete.
-- [x] Keep `.context/STATE.md` and `.context/TASKS.md` synchronized with the 2026-09-18 hardware evidence and the Iris 26.1 vertex-input findings.
+- [x] Keep `.context/STATE.md`, `.context/TASKS.md` and `docs/metallum-port.md` synchronized with the 2026-09-18 hardware evidence and Iris 26.1 vertex-input findings.
 - [ ] Keep Vitrail/Metallum ownership boundaries strict in every follow-up: pack semantics/defaults/diagnostics in Vitrail; generic Metal execution in Metallum.
 - [ ] Do not relax startup guards or claim general Metal shader-pack support from one runtime session, CI alone, or the absence of log-level errors.

@@ -15,7 +15,6 @@ import org.joml.Matrix4fc;
 import org.joml.Vector4fc;
 
 import java.util.List;
-import java.util.Set;
 
 /**
  * One program the pack draws a piece of the game's sky with, in place of the game's own.
@@ -46,6 +45,14 @@ final class SkyProgram extends FamilyProgram {
 
 	/** Ours, and deliberately without the word that turns push constants on. See the class comment. */
 	private static final String NAMESPACE = Vitrail.MOD_ID;
+
+	/**
+	 * The sky formats physically carry only their {@link SkyVertex} elements. Iris 26.1 leaves
+	 * pack-declared {@code mc_Entity} and {@code mc_midTexCoord} without backing arrays on these
+	 * formats, so the diagnostic classifier keeps those reference-unbacked names separate from the
+	 * real mesh elements instead of reporting them as Vitrail-only missing fields.
+	 */
+	private static final VertexInputDiagnostics.Inputs INPUTS = VertexInputDiagnostics.sky();
 
 	private SkyProgram(GeometryProgram body) {
 		super(body);
@@ -79,7 +86,7 @@ final class SkyProgram extends FamilyProgram {
 		// mesh that is opaque at every vertex. The opaque and cutout chunk passes answer the same
 		// question the same way, and the translucent one answers it no.
 		return new SkyProgram(new GeometryProgram(new GeometryProgram.Pass(FAMILY, element.element(),
-				NAMESPACE, Set.copyOf(SkyVertex.ATTRIBUTES), false, element.blend(),
+				NAMESPACE, INPUTS.diagnosticAnswered(), false, element.blend(),
 				// claimed, and the sky is the one family that answers it yes: it draws pieces of its
 				// own that claim every pixel they span, the disc and the dark in the overworld and the
 				// cube of sky in the End, over the pixels the five that claim nothing span, which are
