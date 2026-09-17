@@ -12,6 +12,7 @@ Scope: `feat/backend-neutral-sodium-terrain-hook`
 
 ## Latest real-device session
 
+- A later 2026-09-18 Apple M5 Pro / macOS 27.0 / Metal attempt runs Vitrail module cache `44742449` on Minecraft 26.2 and reaches the first level frame, then aborts before sky drawing because `SkyRendererMixin.vitrail$claim` requires seven `RenderPass.draw(IIII)` matches but the 26.2 class contains only two. The crash reports `(2/7) succeeded`; the other five sky methods use `drawIndexed(IIIII)`. This is a Vitrail mixin-shape regression in the unverified sky-ownership work, not evidence about Bliss rendering.
 - A 2026-09-18 Apple M5 Pro / macOS 27.0 / Metal log runs Vitrail build `bc5e180a`, Metallum branch head `82a0c75e`, Sodium 0.9.2 and Minecraft 26.2. The user confirms these launcher builds continue to come from Vitrail `feat/backend-neutral-sodium-terrain-hook` and Metallum `feat/mc26.2-mrt-foundation`.
 - The log contains no Vitrail/Metallum log-level `ERROR` or `FATAL` and reaches clean shutdown after the exercised pack reloads.
 - The corrected entity and particle/weather diagnostics remain clean: there is no `at_midBlock` / `at_tangent` regression and the exercised particle/weather draw paths remain active.
@@ -37,6 +38,7 @@ Scope: `feat/backend-neutral-sodium-terrain-hook`
 - The replay uses the pack vertex stage rather than vanilla placement because a pack may change `gl_Position`; the claim must rasterize the same pixels as the sky it belongs to. The horizon cone is replayed immediately after its own ordinary draw while its vertex buffer is still bound.
 - The coverage value remains a depth rather than a boolean. `SceneSeed` can therefore still carry a game feature whose live depth stands in front of the claimed sky. No terrain/entity/particle/hand coverage path is changed.
 - The ownership sibling is prepared only when the ordinary sky program really has a coverage attachment. A device/compiler refusal of the sibling leaves the existing fragment-written coverage in place and is diagnostic rather than disabling the pack sky.
+- Minecraft 26.2 records the top/dark discs and sunrise with direct `draw`, while sun, moon, stars, End sky and End flash use `drawIndexed`. Ownership replay mirrors that split with strict injector counts (2 direct targets for the non-main-disc hook, 5 indexed targets) and repeats the exact indexed arguments while leaving the game's bound index buffer standing.
 - This is source/implementation evidence until the new code is exercised on hardware. The observed Bliss sky anomaly remains the primary visual acceptance case; no Bliss name or pack-specific branch is used by the fix.
 
 ## Other remaining diagnostics

@@ -110,6 +110,28 @@ public final class SkyOwnership {
 	}
 
 	/**
+	 * Indexed twin of {@link #claim}. The game's index buffer stays bound across the pipeline
+	 * switch, so the ownership pass repeats exactly the draw the sky renderer just recorded.
+	 */
+	public static void claimIndexed(RenderPass pass, RenderPipeline owner, int indices, int instances,
+			int firstIndex, int vertexOffset, int firstInstance) {
+		Claim claim;
+		synchronized (CLAIMS) {
+			claim = CLAIMS.get(owner);
+		}
+		if (claim == null || claim.broken) {
+			return;
+		}
+
+		pass.setPipeline(claim.pipeline);
+		try {
+			pass.drawIndexed(indices, instances, firstIndex, vertexOffset, firstInstance);
+		} finally {
+			pass.setPipeline(owner);
+		}
+	}
+
+	/**
 	 * Runs the disc's extra geometry with {@code owner} available to its draw without putting a
 	 * renderer-global pipeline field on {@link HorizonCone}. Nested use is preserved rather than
 	 * assumed away, even though the current sky renderer never nests one.

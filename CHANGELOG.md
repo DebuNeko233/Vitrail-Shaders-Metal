@@ -23,6 +23,9 @@ what the next one holds.
   pieces that the pack owns keep their scene-seed claim even when the pack fragment intentionally
   discards its colour, so the vanilla sky is not restored behind that discard. Bliss's basic sky is
   the observed case that exposed it.
+- **The sky renderer no longer fails to load while that ownership is recorded.** Minecraft draws
+  two of those sky pieces directly and five through an index buffer; the ownership hook now follows
+  both forms instead of requiring all seven to be direct draws.
 
 ## 0.11.0-beta
 

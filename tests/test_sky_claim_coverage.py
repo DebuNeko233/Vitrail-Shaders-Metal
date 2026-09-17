@@ -33,9 +33,14 @@ class SkyClaimCoverageTest(unittest.TestCase):
         self.assertIn('pass.setPipeline(claim.pipeline);', ownership)
         self.assertIn('pass.setPipeline(owner);', ownership)
         self.assertIn('SkyOwnership.claim(pass, this.vitrail$pipeline, vertices, instances, firstVertex,', mixin)
-        self.assertIn('method = {"renderDarkDisc", "renderStars", "renderSunriseAndSunset", "renderSun",', mixin)
-        self.assertIn('"renderMoon", "renderEndSky", "renderEndFlash"}', mixin)
-        self.assertIn('require = 7,', mixin)
+        self.assertIn('method = {"renderDarkDisc", "renderSunriseAndSunset"}', mixin)
+        self.assertIn('require = 2,', mixin)
+        self.assertIn('target = "Lcom/mojang/blaze3d/systems/RenderPass;draw(IIII)V"', mixin)
+        self.assertIn('method = {"renderStars", "renderSun", "renderMoon", "renderEndSky", "renderEndFlash"}', mixin)
+        self.assertIn('require = 5,', mixin)
+        self.assertIn('target = "Lcom/mojang/blaze3d/systems/RenderPass;drawIndexed(IIIII)V"', mixin)
+        self.assertIn('SkyOwnership.claimIndexed(pass, this.vitrail$pipeline, indices, instances, firstIndex,', mixin)
+        self.assertIn('pass.drawIndexed(indices, instances, firstIndex, vertexOffset, firstInstance);', ownership)
 
     def test_disc_and_horizon_both_replay_claimed_geometry(self):
         mixin = MIXIN.read_text(encoding='utf-8')

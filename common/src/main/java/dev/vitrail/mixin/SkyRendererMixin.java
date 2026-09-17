@@ -242,15 +242,13 @@ public abstract class SkyRendererMixin {
 	}
 
 	/**
-	 * The other seven sky pieces have no extra geometry. All seven come through the same hook so the
-	 * list of claiming pieces remains data in {@link SkyDraw}: {@link SkyOwnership#claim} is a no-op
-	 * for the stars, sunrise, sun, moon and End flash because no claim pipeline was prepared for
-	 * them, while the dark disc and End sky replay their ownership here.
+	 * The two non-indexed sky pieces outside the main disc have no extra geometry. Keeping this
+	 * direct-draw hook separate from the indexed one below makes the injection count match the
+	 * Minecraft 26.2 bytecode instead of pretending every sky mesh is recorded the same way.
 	 */
 	@WrapOperation(
-			method = {"renderDarkDisc", "renderStars", "renderSunriseAndSunset", "renderSun",
-					"renderMoon", "renderEndSky", "renderEndFlash"},
-			require = 7,
+			method = {"renderDarkDisc", "renderSunriseAndSunset"},
+			require = 2,
 			at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/RenderPass;draw(IIII)V"))
 	private void vitrail$claim(RenderPass pass, int vertices, int instances, int firstVertex,
 			int firstInstance, Operation<Void> original) {
@@ -258,6 +256,25 @@ public abstract class SkyRendererMixin {
 		if (this.vitrail$pipeline != null) {
 			SkyOwnership.claim(pass, this.vitrail$pipeline, vertices, instances, firstVertex,
 					firstInstance);
+		}
+	}
+
+	/**
+	 * The remaining five pieces use the renderer's index buffer. The index buffer and its type are
+	 * already bound by the game; the ownership replay switches only the pipeline and repeats the
+	 * exact indexed draw, preserving the moon's base vertex, the star count and the End sky indices.
+	 */
+	@WrapOperation(
+			method = {"renderStars", "renderSun", "renderMoon", "renderEndSky", "renderEndFlash"},
+			require = 5,
+			at = @At(value = "INVOKE",
+					target = "Lcom/mojang/blaze3d/systems/RenderPass;drawIndexed(IIIII)V"))
+	private void vitrail$claimIndexed(RenderPass pass, int indices, int instances, int firstIndex,
+			int vertexOffset, int firstInstance, Operation<Void> original) {
+		original.call(pass, indices, instances, firstIndex, vertexOffset, firstInstance);
+		if (this.vitrail$pipeline != null) {
+			SkyOwnership.claimIndexed(pass, this.vitrail$pipeline, indices, instances, firstIndex,
+					vertexOffset, firstInstance);
 		}
 	}
 
