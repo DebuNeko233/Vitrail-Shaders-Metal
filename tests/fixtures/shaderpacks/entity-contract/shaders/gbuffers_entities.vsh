@@ -1,5 +1,6 @@
 #version 120
 
+attribute vec4 mc_Entity;
 attribute vec2 mc_midTexCoord;
 attribute vec4 at_tangent;
 
@@ -9,6 +10,8 @@ varying float entityAbiOk;
 void main() {
     gl_Position = ftransform();
     texcoord = gl_MultiTexCoord0.st;
+
+    float entityIdFinite = step(0.0, mc_Entity.x + mc_Entity.y + mc_Entity.z + mc_Entity.w);
 
     float midRange = step(0.0, mc_midTexCoord.x) * step(mc_midTexCoord.x, 1.0)
         * step(0.0, mc_midTexCoord.y) * step(mc_midTexCoord.y, 1.0);
@@ -20,6 +23,6 @@ void main() {
     float handedness = abs(at_tangent.w);
     float tangentHandedness = step(0.70, handedness) * step(handedness, 1.30);
 
-    entityAbiOk = midRange * midWritten * midIsPolygonValue
+    entityAbiOk = entityIdFinite * midRange * midWritten * midIsPolygonValue
         * tangentDirection * tangentHandedness;
 }
