@@ -35,11 +35,11 @@ The current backend foundation includes:
 
 This remains backend GPU behaviour. Shader-pack target selection, ping-pong/history, custom-image policy, camera reanchor policy, program scheduling and resource naming remain Vitrail responsibilities.
 
-The current Metallum writable-target head is `81295f043f9f8dd3d13f349c14b6189daa625082`. GitHub Actions merge workflow `34768563289` completed successfully. This is compile validation only; Apple-Silicon runtime validation is still outstanding.
+At this status update the companion Metallum code baseline is `54ff6f0e22b153ea206cc726f68bccaee6ce4e70`. PR workflow `35237603552` completed successfully with the Apple-Silicon runner guard, Vitrail smoke-runtime configuration, consolidated Metal/Vitrail contracts, the Gradle build and artifact capture. That workflow is CI/contract evidence only. Separate real-device evidence has closed the PHASE 2 foundation and the baseline PHASE 5-16 acceptance on Apple M5 Pro / macOS 27 / Metal; PHASE 17 real-pack compatibility remains active and may still expose generic defects that must be fixed in their owning subsystem.
 
 ## Vitrail backend-neutralization
 
-Phase 1 is active on branch `feat/backend-neutral-sodium-terrain-hook` and Draft PR #1, targeting `dev` as required by repository policy.
+The backend-neutralization baseline is implemented on branch `feat/backend-neutral-sodium-terrain-hook` and Draft PR #1, targeting `dev` as required by repository policy. PHASE 17 real shader-pack compatibility is now active; the earlier phases remain acceptance baselines rather than a claim that those subsystems can no longer receive fixes.
 
 ### Backend-neutral Sodium terrain binding
 
@@ -48,6 +48,8 @@ Sodium 0.9.2 calls `pass.setPipeline(...)` before `DrawContext#setContext(...)`.
 ### Optional Metal capability providers
 
 Optional `@Pseudo` mixins bridge package-private Metallum classes without putting Metallum on Vitrail's common compile classpath. Current providers cover independent blending, mipmap generation, selective pipeline eviction, shader-storage-buffer allocation, writable storage-image allocation, ordinary shader-writable texture allocation, storage-image clear/copy commands, and compute pipeline/dispatch.
+
+A separate optional public-API probe covers background render-pipeline precompilation. Vitrail calls ordinary `GpuDevice.precompilePipeline` from its family warm-up workers only when Metallum explicitly advertises that narrow operation as background-safe; older/incompatible APIs fail closed and retain first-draw compilation. Command encoding is not included in that guarantee.
 
 Missing capabilities remain explicit narrow interfaces rather than backend-name guesses.
 
@@ -70,6 +72,8 @@ A compute can write a normal pack colour target through `colorimgN`, so the targ
 `TargetSurface` continues to decide whether a target is compute-writable. It unwraps the `GpuDeviceBackend` through the existing `GpuDeviceAccessor` and, when the backend implements `ShaderWritableTextureBackend`, asks for the same ordinary target texture with the one missing allocation fact added. The result remains a normal `GpuTexture`, including the existing render-attachment, sampled, copy and mip-chain semantics.
 
 Vulkan remains unchanged: when no explicit capability is present, `TargetSurface` still raises `TextureUsage` around the ordinary `GpuDevice.createTexture(...)` call and `VulkanConstMixin` adds `VK_IMAGE_USAGE_STORAGE_BIT`. Metallum instead uses its optional `MetalTextureBridge`, which selects the already-existing `MetalGpuTexture(..., shaderWrite=true)` path and therefore adds `MTLTextureUsageShaderWrite` without teaching Metallum any `colorimgN` naming or pack policy.
+
+Graphics-stage storage-image writes use the same ownership model. Metallum marks the written texture contents dirty and ends the native render encoder at the logical pass boundary so its existing fence transition makes untracked shader writes visible to later passes. Shader-pack resource meaning remains Vitrail-owned.
 
 ### Backend-neutral compute seam
 
@@ -101,7 +105,7 @@ The optional Metallum adapter resolves all three bridge methods inside a normal 
 
 This split is deliberate: Vitrail decides what a resource name means; the backend decides how that already-resolved facade object is bound natively.
 
-### Metal local-size and shared-memory refusal rules
+### Metal local-size and shared-memory rules
 
 Metal dispatch needs both workgroup counts and `threadsPerThreadgroup`, so the backend pass validates the actual shaderc-preprocessed compute text before compiling the native pipeline.
 
@@ -110,8 +114,12 @@ Metal dispatch needs both workgroup counts and `threadsPerThreadgroup`, so the b
 - An explicitly written axis whose value is still not a positive integer after preprocessing is refused rather than silently replaced with one.
 - Shared/threadgroup declarations are sized from the same preprocessed text.
 - A shared declaration that Vitrail cannot size is refused on native Metal.
-- A declaration over the currently verified 32768-byte Metal threadgroup-memory limit is refused.
-- The MoltenVK-only oversized-shared-memory rewrite is intentionally not reused on native Metal, because its single-workgroup storage-buffer substitution is a different policy with different memory semantics.
+- A declaration above the verified 32768-byte Metal threadgroup-memory limit is served by a transient storage-buffer fallback only when the dispatch is fixed to exactly one work group and the active backend exposes generic storage-buffer allocation.
+- Multi-workgroup oversized shared memory, or an oversized single-workgroup program on a backend without that allocation capability, fails closed rather than silently changing GLSL `shared` semantics.
+
+### Entity attribute compatibility
+
+The extended entity mesh already carries the four identifier lanes backing Iris's `iris_Entity` attribute. Vitrail now answers pack-facing `mc_Entity` from that same backing storage, with explicit conversion to the type declared by the shader, rather than treating it as an unavailable constant. This does not add another vertex element or change the entity stride.
 
 ### Vulkan-specific code that stays Vulkan-specific
 
@@ -119,47 +127,44 @@ Metal dispatch needs both workgroup counts and `threadsPerThreadgroup`, so the b
 
 ## Current validation status
 
-Both repositories remain Draft and unmerged.
+Both repositories remain Draft, open and unmerged. The Metal shader-pack route remains developer-validation-only.
 
-### Metallum
+The code baseline immediately before this documentation-only update was:
 
-Writable ordinary texture bridge head `81295f043f9f8dd3d13f349c14b6189daa625082` passed merge workflow `34768563289`. The earlier general compute bridge was already compile-validated before it.
+- Vitrail `d8e209cfa5878afa898ae1a7710a35115d68c6dd`;
+- Metallum `54ff6f0e22b153ea206cc726f68bccaee6ce4e70`.
 
-### Vitrail
+At those code baselines:
 
-The caller-side helper baseline `3b53b58086f5db42c526070a30216515917abead` passed both repository gates. Writable-target capability head `a39a54f36eb0a44fdb9b2075c708759673f0c6d0` then passed commit-policy `34768637464` and full build `34768637511`.
+- PHASE 2 foundation: **CLOSED / Real-device Verified**;
+- PHASE 5-15 baseline acceptance: **CLOSED / Real-device Verified**;
+- PHASE 16 Advanced Features baseline acceptance: **CLOSED / Real-device Verified** on Apple M5 Pro / macOS 27 / Metal;
+- PHASE 17 Real Shader Pack Compatibility: **active**.
 
-The actual `PackCompute` dispatch routing landed at `5e84c045332c3687dd0c7be94c894353bdfebcca`; the earlier green builds do not validate that later change.
+"Closed" here means the phase's acceptance baseline has real-device evidence. It does not mean that a later real pack cannot expose a generic defect in that subsystem; PHASE 17 findings continue to be fixed at the owning shader-pack contract, Minecraft contract or Metal capability.
 
-`python3 tests/test_metallum_compute_bridge.py` checks the real Java adapter against isolated fixtures: missing bridge, missing close method, repeated lookup failure, successful dispatch argument forwarding, and propagation of backend exceptions/errors. Facade stubs make this independent of Minecraft; it does not validate the Minecraft ABI or Metal execution. The build workflow runs this suite before Gradle so optional-backend failure handling is checked without a GPU. All three cases pass locally, and the pre-fix adapter reproduces both lookup-failure regressions. The full local JDK 25 `./gradlew build` passed on 2026-09-14; this is not a remote CI or runtime claim.
+Vitrail `d8e209c` completed Apple-Silicon build workflow `35253451385`, including the optional Metallum/smoke contracts and full Gradle build. Metallum `54ff6f0` completed PR workflow `35237603552`, including the Apple-Silicon guard, Vitrail smoke-runtime configuration, consolidated Metal/Vitrail contracts, full Gradle build and artifact capture. These are CI/contract claims, not GPU rendering claims.
 
-## Runtime validation required before merge
+Recent post-baseline changes include the entity `mc_Entity` alias/conversion fix, backend-neutral background family pipeline warm-up, graphics storage-image ownership/fence handling, and shadow attachment-feedback diagnostic classification. The last item changes diagnostics only; it is not evidence that every real shader pack's terrain shadow is visually correct.
 
-Before either Draft PR becomes ready, the combined path still needs at least:
+Photon v1.3b remains **Broken** on the last reviewed real-device execution. Fixes committed after that execution are code/CI verified where stated, but Photon requires a fresh real-device run before any compatibility status promotion.
 
-1. Apple-Silicon MRT output with distinct values in at least four targets;
-2. an unused middle MRT slot preserving fragment-output location;
-3. ordinary single-target vanilla/Sodium regression coverage;
-4. Metal colour mipmap generation sampled at non-zero LOD;
-5. safe fallback for unsupported shadow/depth mip chains;
-6. entity mesh-layout transition proving stale Metal pipeline stride is rebuilt safely;
-7. SSBO zero-at-birth plus shader write/read round trip without buffer-slot aliasing;
-8. writable storage-image zero/write/read using a true 3D texture;
-9. sampled alias of the same storage-image resource reading the expected contents;
-10. scratch-based storage-volume camera reanchor;
-11. `colorimgN` compute write proving its ordinary render target was created with Metal shader-write usage;
-12. shader-pack compute writing storage resources and a later render/compute stage consuming them through the routed `PackCompute` backend seam;
-13. Vulkan regression coverage for every shared path touched by backend-neutralization.
+## Acceptance required before merge
 
-A green Gradle build is necessary but is not evidence that these rendering semantics are correct.
+PHASE 17 remains the merge gate. Before either Draft PR becomes ready, real-pack evidence must be collected and reviewed under [`phase17-compatibility.md`](phase17-compatibility.md). In particular:
+
+1. rerun the exact Photon artifact against the current Vitrail/Metallum heads and retain the first generic fatal/diagnostic if execution still stops;
+2. verify that required compute/resource paths reach real dispatch/binding on hardware where the pack requests them;
+3. collect real draw and reference-visual evidence before assigning any non-`Broken` compatibility status;
+4. continue the required real-pack matrix rather than promoting support from CI, a fixture, a pack name or a warning count;
+5. keep Vulkan/shared-path regression coverage for every backend-neutral contract changed while fixing PHASE 17 findings.
+
+A green Gradle build or successful client launch is necessary evidence, but neither proves rendering correctness or shader-pack compatibility.
 
 ## Next work
 
-Immediate work is:
+Immediate work is to rerun Photon v1.3b on Apple Silicon with the current paired branches, review the first remaining generic failure (if any), and only then proceed to visual evidence and the rest of the PHASE 17 matrix. Real-pack findings should continue to be fixed at the owning abstraction rather than with pack-specific backend rules.
 
-- verify remote CI and the current companion bridge before publishing the combined change;
-- run Apple-Silicon compute smoke tests and Vulkan regression coverage before changing any startup support gate.
-
-Geometry-stage support and the remaining synchronization/startup boundaries follow. `HostReport.otherBackend()`, `PackScreens`, `GraphicsApiChoice`, `StartupGuard`, and the backend placeholder remain conservative until the required capabilities and Apple-Silicon validation are complete.
+The production Metal shader-pack gate remains conservative while PHASE 17 is incomplete. `phase17-compatibility.md` defines compatibility evidence; `VITRAIL_SMOKE.md` in the companion Metallum repository documents deterministic developer smoke launchers. Neither CI nor a smoke launcher alone changes the support claim.
 
 Any new Minecraft, Sodium, Mixin, Metallum, SPIRV-Cross or Metal API used by the next bridge must be checked against the exact Minecraft 26.2 / Sodium 0.9.2 source or published API before code is committed, as required by `AGENTS.md`.
