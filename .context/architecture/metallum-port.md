@@ -40,6 +40,19 @@ Vitrail owns shader-pack semantics and scheduling. Metallum owns native Metal ex
 - Vulkan behavior is the migration baseline. A Metal implementation must not force a Vulkan semantic rewrite unless the shared semantic model itself was wrong.
 - Unsupported or unvalidated Metal behavior must remain explicit. Do not advertise completeness because the screen contains a plausible image.
 
+## Reference vertex-ABI discipline
+
+Vertex formats are compatibility ABI, not a convenient place to silence shader warnings.
+
+- Match the exact Iris format used by the corresponding render family before adding an attribute or changing stride.
+- A pack declaring an attribute that the reference render family does not physically carry is not, by itself, evidence that Vitrail should add that element. First determine the reference translator/default/constant behavior.
+- Iris 26.1 `IrisVertexFormats.TERRAIN` carries `mc_Entity`, `mc_midTexCoord`, `at_tangent` and `at_midBlock`.
+- Iris 26.1 `IrisVertexFormats.ENTITY` carries `iris_Entity`, `mc_midTexCoord` and `at_tangent`, but **not** `at_midBlock`; ordinary entities and shadow entities use that `ENTITY` format.
+- Therefore an entity/shadow shader asking for `at_midBlock` must not cause Vitrail to grow a Vitrail-only entity vertex element. Classify/implement the same default behavior as the reference instead.
+- Apply the same source-first audit to sky, particle and weather warnings before changing their mesh formats.
+
+This rule is deliberately stricter than warning elimination: a quiet log with a divergent vertex ABI is a compatibility regression.
+
 ## Current storage-resource pattern
 
 Shader-storage buffers show the intended shape: Vitrail owns the name/policy and carries a Minecraft `GpuBuffer`; the backend allocates the real resource and classifies the raw compiled shader resource as storage when binding it.
@@ -58,4 +71,6 @@ Verify this model against current repository evidence before extending it:
 - `common/src/main/java/dev/vitrail/render/storage/StorageImageBackend.java`
 - `common/src/main/java/dev/vitrail/render/storage/StorageImageCommands.java`
 - `common/src/main/java/dev/vitrail/mixin/metallum/`
+- Iris 26.1 `common/src/main/java/net/irisshaders/iris/vertices/IrisVertexFormats.java`
+- Iris 26.1 `common/src/main/java/net/irisshaders/iris/pipeline/programs/ShaderKey.java`
 - companion repository `DebuNeko233/metallum`, draft PR #1

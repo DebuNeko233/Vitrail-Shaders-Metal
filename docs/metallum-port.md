@@ -31,15 +31,18 @@ The current backend foundation includes:
 - an optional bridge that creates an otherwise ordinary Minecraft texture with Metal `ShaderWrite` usage for writable colour targets;
 - raw SPIR-V storage-buffer and storage-image reflection;
 - storage-texture zero clear and exact region-copy primitives;
-- a general shader-pack compute bridge that compiles SPIR-V to MSL, owns `MTLComputePipelineState`, binds Minecraft facade resources by reflected name/binding, and dispatches exact workgroup counts.
+- a general shader-pack compute bridge that compiles SPIR-V to MSL, owns `MTLComputePipelineState`, binds Minecraft facade resources by reflected name/binding, and dispatches exact workgroup counts;
+- background-safe ordinary render-pipeline precompilation for Vitrail family warm-up.
 
 This remains backend GPU behaviour. Shader-pack target selection, ping-pong/history, custom-image policy, camera reanchor policy, program scheduling and resource naming remain Vitrail responsibilities.
 
-At this status update the companion Metallum code baseline is `54ff6f0e22b153ea206cc726f68bccaee6ce4e70`. PR workflow `35237603552` completed successfully with the Apple-Silicon runner guard, Vitrail smoke-runtime configuration, consolidated Metal/Vitrail contracts, the Gradle build and artifact capture. That workflow is CI/contract evidence only. Separate real-device evidence has closed the PHASE 2 foundation and the baseline PHASE 5-16 acceptance on Apple M5 Pro / macOS 27 / Metal; PHASE 17 real-pack compatibility remains active and may still expose generic defects that must be fixed in their owning subsystem.
+At this status update the companion Metallum branch head is `54ff6f0e22b153ea206cc726f68bccaee6ce4e70`. The Metal foundation and baseline PHASE 5-16 acceptance already have Apple-Silicon real-device evidence; PHASE 17 real-pack compatibility remains active and may still expose generic defects that must be fixed in their owning subsystem.
 
 ## Vitrail backend-neutralization
 
-The backend-neutralization baseline is implemented on branch `feat/backend-neutral-sodium-terrain-hook` and Draft PR #1, targeting `dev` as required by repository policy. PHASE 17 real shader-pack compatibility is now active; the earlier phases remain acceptance baselines rather than a claim that those subsystems can no longer receive fixes.
+The backend-neutralization baseline is implemented on branch `feat/backend-neutral-sodium-terrain-hook` and Draft PR #1, targeting `dev` as required by repository policy. Current branch head is `54f454bc2e4d45c9c8d72faad4a9cc15ef8bed31`.
+
+PHASE 17 real shader-pack compatibility is active. The earlier phases remain acceptance baselines rather than a claim that those subsystems can no longer receive fixes.
 
 ### Backend-neutral Sodium terrain binding
 
@@ -50,6 +53,8 @@ Sodium 0.9.2 calls `pass.setPipeline(...)` before `DrawContext#setContext(...)`.
 Optional `@Pseudo` mixins bridge package-private Metallum classes without putting Metallum on Vitrail's common compile classpath. Current providers cover independent blending, mipmap generation, selective pipeline eviction, shader-storage-buffer allocation, writable storage-image allocation, ordinary shader-writable texture allocation, storage-image clear/copy commands, and compute pipeline/dispatch.
 
 A separate optional public-API probe covers background render-pipeline precompilation. Vitrail calls ordinary `GpuDevice.precompilePipeline` from its family warm-up workers only when Metallum explicitly advertises that narrow operation as background-safe; older/incompatible APIs fail closed and retain first-draw compilation. Command encoding is not included in that guarantee.
+
+`DumpedProgram` also exposes backend-neutral warm-up eligibility. Optional program families that cannot draw in the current runtime configuration are refused before detached precompile rather than counted as failed warm-up compiles. `DistantProgram` uses this only for warm-up; its real first-draw `compile()` path remains available if the runtime later makes Distant Horizons usable.
 
 Missing capabilities remain explicit narrow interfaces rather than backend-name guesses.
 
@@ -117,9 +122,21 @@ Metal dispatch needs both workgroup counts and `threadsPerThreadgroup`, so the b
 - A declaration above the verified 32768-byte Metal threadgroup-memory limit is served by a transient storage-buffer fallback only when the dispatch is fixed to exactly one work group and the active backend exposes generic storage-buffer allocation.
 - Multi-workgroup oversized shared memory, or an oversized single-workgroup program on a backend without that allocation capability, fails closed rather than silently changing GLSL `shared` semantics.
 
+The 2026-09-18 Photon run exercises the oversized-single-workgroup fallback in real execution: `world0/deferred4_a` asks for 36864 bytes, compiles through the active backend and dispatches as groups `(1, 1, 1)` / local `(256, 1, 1)`.
+
+### Pack preprocessor macro redefinition
+
+Pack source expansion preserves the pack's own active-path redefinition semantics before shaderc sees the source. When the same pack macro is defined again on the same active preprocessing path, `IncludeExpander` emits a matching `#undef` immediately before the later `#define`, preserving later-definition-wins behavior without blanket-undefining Vitrail/compiler environment macros.
+
+This is a generic source-preparation rule, not a Bliss or `diagonal3` special case. The 2026-09-18 Bliss run no longer reports the earlier `diagonal3` shaderc redefinition failure.
+
 ### Entity attribute compatibility
 
-The extended entity mesh already carries the four identifier lanes backing Iris's `iris_Entity` attribute. Vitrail now answers pack-facing `mc_Entity` from that same backing storage, with explicit conversion to the type declared by the shader, rather than treating it as an unavailable constant. This does not add another vertex element or change the entity stride.
+The extended entity mesh already carries the four identifier lanes backing Iris's `iris_Entity` attribute. Vitrail answers pack-facing `mc_Entity` from that same backing storage, with explicit conversion to the type declared by the shader, rather than treating it as an unavailable constant. This does not add another vertex element or change the entity stride.
+
+The remaining entity-shadow `at_midBlock` warning must **not** be fixed by extending that stride. Iris 26.1 defines `at_midBlock` on `IrisVertexFormats.TERRAIN`; `IrisVertexFormats.ENTITY` contains `iris_Entity`, `mc_midTexCoord` and `at_tangent` but no `at_midBlock`, and Iris shader keys use `ENTITY` for both ordinary and shadow entities. Vitrail therefore needs reference-parity default/diagnostic handling for an entity shader that asks for `at_midBlock`, not a Vitrail-only entity ABI.
+
+The same source-first rule applies to the remaining sky and particle/weather attribute diagnostics: establish the exact Iris format and translation/default behavior before changing a mesh format or suppressing a warning.
 
 ### Vulkan-specific code that stays Vulkan-specific
 
@@ -129,12 +146,12 @@ The extended entity mesh already carries the four identifier lanes backing Iris'
 
 Both repositories remain Draft, open and unmerged. The Metal shader-pack route remains developer-validation-only.
 
-The code baseline immediately before this documentation-only update was:
+Current branch heads at this documentation update are:
 
-- Vitrail `d8e209cfa5878afa898ae1a7710a35115d68c6dd`;
+- Vitrail `54f454bc2e4d45c9c8d72faad4a9cc15ef8bed31`;
 - Metallum `54ff6f0e22b153ea206cc726f68bccaee6ce4e70`.
 
-At those code baselines:
+At those branch baselines:
 
 - PHASE 2 foundation: **CLOSED / Real-device Verified**;
 - PHASE 5-15 baseline acceptance: **CLOSED / Real-device Verified**;
@@ -143,27 +160,42 @@ At those code baselines:
 
 "Closed" here means the phase's acceptance baseline has real-device evidence. It does not mean that a later real pack cannot expose a generic defect in that subsystem; PHASE 17 findings continue to be fixed at the owning shader-pack contract, Minecraft contract or Metal capability.
 
-Vitrail `d8e209c` completed Apple-Silicon build workflow `35253451385`, including the optional Metallum/smoke contracts and full Gradle build. Metallum `54ff6f0` completed PR workflow `35237603552`, including the Apple-Silicon guard, Vitrail smoke-runtime configuration, consolidated Metal/Vitrail contracts, full Gradle build and artifact capture. These are CI/contract claims, not GPU rendering claims.
+### 2026-09-18 five-pack runtime evidence
 
-Recent post-baseline changes include the entity `mc_Entity` alias/conversion fix, backend-neutral background family pipeline warm-up, graphics storage-image ownership/fence handling, and shadow attachment-feedback diagnostic classification. The last item changes diagnostics only; it is not evidence that every real shader pack's terrain shadow is visually correct.
+A single Apple M5 Pro / macOS 27.0 / Metal client log runs Bliss v2.1.2, Complementary Reimagined r5.9.1, MakeUp Ultra Fast 9.5e, Photon v1.3b and Solas Shader V3.7b. The Vitrail module-cache path records build `54f454bc`; the mod list records Metallum 0.0.24. The log itself does not print a Metallum commit SHA, so a formal PHASE 17 evidence bundle should continue to carry the exact companion head separately.
 
-Photon v1.3b remains **Broken** on the last reviewed real-device execution. Fixes committed after that execution are code/CI verified where stated, but Photon requires a fresh real-device run before any compatibility status promotion.
+For the observed session:
+
+- every tested pack reaches a first full frame and the client later reaches clean `Stopping!`;
+- the initial Bliss warm-up reports 62/62 leftover pipelines, and the later pack loads report 155/155;
+- no Vitrail/Metallum shader compile `ERROR` occurs;
+- the only log-level `ERROR` is an invalid/missing PNG header from the enabled Prime's HD resource pack;
+- Photon, MakeUp and Complementary no longer attempt unusable no-DH `distant*` programs during detached warm-up;
+- Bliss no longer hits the `diagonal3` macro-redefinition failure;
+- Photon compiles past the previously recorded `world0/prepare/vertex` blocker, reaches its chain, compiles and dispatches `world0/deferred4_a` on Metal;
+- Solas compiles and dispatches `shadowcomp` on Metal as groups `(24, 12, 24)` / local `(8, 8, 8)`.
+
+This materially advances the old Photon blocker and closes the previously unverified compute-dispatch half for that observed path. It does **not** by itself promote Photon or any other pack to a new PHASE 17 compatibility status: the status policy still requires reviewed screenshot/reference evidence, not only a clean runtime log.
+
+The session still contains warnings that need source/reference classification rather than blanket suppression. Important groups include entity `at_midBlock`, sky `mc_midTexCoord` / `mc_Entity`, particle/weather extended inputs, comparison-vs-ordinary shadow sampler declarations, and first-frame `nothing fills them yet` resource diagnostics. The entity `at_midBlock` case is already source-classified as a reference-format/default-input issue rather than a missing entity vertex element; the other groups remain separate audits.
 
 ## Acceptance required before merge
 
 PHASE 17 remains the merge gate. Before either Draft PR becomes ready, real-pack evidence must be collected and reviewed under [`phase17-compatibility.md`](phase17-compatibility.md). In particular:
 
-1. rerun the exact Photon artifact against the current Vitrail/Metallum heads and retain the first generic fatal/diagnostic if execution still stops;
-2. verify that required compute/resource paths reach real dispatch/binding on hardware where the pack requests them;
-3. collect real draw and reference-visual evidence before assigning any non-`Broken` compatibility status;
-4. continue the required real-pack matrix rather than promoting support from CI, a fixture, a pack name or a warning count;
+1. turn the current five-pack runtime progress into reviewed pack evidence only where the required screenshot/reference material exists;
+2. preserve the real Photon compute-dispatch evidence and exact paired-head metadata in the formal evidence path;
+3. audit the remaining vertex/sampler/resource diagnostics against Iris before changing contracts or treating warning counts as compatibility scores;
+4. continue the required real-pack matrix, including pack families not covered by the current five-pack session;
 5. keep Vulkan/shared-path regression coverage for every backend-neutral contract changed while fixing PHASE 17 findings.
 
-A green Gradle build or successful client launch is necessary evidence, but neither proves rendering correctness or shader-pack compatibility.
+A green Gradle build, successful client launch, full warm-up count or successful compute dispatch is useful evidence, but none alone proves rendering correctness or shader-pack compatibility.
 
 ## Next work
 
-Immediate work is to rerun Photon v1.3b on Apple Silicon with the current paired branches, review the first remaining generic failure (if any), and only then proceed to visual evidence and the rest of the PHASE 17 matrix. Real-pack findings should continue to be fixed at the owning abstraction rather than with pack-specific backend rules.
+Immediate work is to correct the entity `at_midBlock` diagnostic/reference-default classification without changing entity ABI, then source-audit the remaining sky and particle/weather attribute warnings. Comparison/ordinary shadow sampler conflicts and first-frame empty-resource diagnostics should remain explicit until reference behavior or visual evidence identifies a concrete contract to change.
+
+In parallel, collect the PHASE 17 screenshot/reference evidence needed to assign compatibility statuses to the packs that now reach full frames. Do not promote support from this runtime log alone.
 
 The production Metal shader-pack gate remains conservative while PHASE 17 is incomplete. `phase17-compatibility.md` defines compatibility evidence; `VITRAIL_SMOKE.md` in the companion Metallum repository documents deterministic developer smoke launchers. Neither CI nor a smoke launcher alone changes the support claim.
 
