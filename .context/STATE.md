@@ -6,7 +6,7 @@ Scope: `feat/backend-neutral-sodium-terrain-hook`
 ## Confirmed from the current checkout
 
 - The migration boundary remains strict: Vitrail owns shader-pack semantics, scheduling, fallback interpretation and compatibility status; Metallum owns generic Metal execution. The two Draft PRs remain open and unmerged.
-- Current branch heads are Vitrail `76b7c69ca6dc551d6d956e01c7925432500fe04c` and companion Metallum `54ff6f0e22b153ea206cc726f68bccaee6ce4e70`.
+- Current code baselines are Vitrail `76b7c69ca6dc551d6d956e01c7925432500fe04c` and companion Metallum `54ff6f0e22b153ea206cc726f68bccaee6ce4e70`; later Vitrail commits may be documentation-only synchronization.
 - PHASE 2 and PHASE 5-16 have completed their recorded Apple-Silicon real-device acceptance. PHASE 17 — Real Shader Pack Compatibility — remains active.
 - PHASE 17 still uses the five-status conservative classifier: `Supported`, `Partially Supported`, `Fallback`, `Unsupported`, `Broken`. Runtime progress, CI, warning counts or a plausible frame do not by themselves promote a pack.
 
@@ -27,7 +27,7 @@ This runtime log clears the previously recorded Photon compile blocker and prove
 
 - Repeated entity-shadow warnings said the Vitrail entity mesh did not carry `at_midBlock`. This was a diagnostic-classification problem, not a missing entity vertex field.
 - Iris 26.1 defines `at_midBlock` on `IrisVertexFormats.TERRAIN`, while `IrisVertexFormats.ENTITY` contains `iris_Entity`, `mc_midTexCoord` and `at_tangent` but not `at_midBlock`. Iris shader keys use `ENTITY` for ordinary entities and shadow entities.
-- Vitrail commit `76b7c69c` keeps `EntityVertex.ANSWERED`, the three appended entity elements and entity stride unchanged. `EntityInputDiagnostics` adds `at_midBlock` only to the compatibility set used by the regular-entity missing-input diagnostic, so ordinary and shadow entity rows no longer claim a Vitrail-only missing real attribute where the reference has none.
+- Vitrail code baseline `76b7c69c` keeps `EntityVertex.ANSWERED`, the three appended entity elements and entity stride unchanged. `EntityInputDiagnostics` adds `at_midBlock` only to the compatibility set used by the regular-entity missing-input diagnostic, so ordinary and shadow entity rows no longer claim a Vitrail-only missing real attribute where the reference has none.
 - Glint, text and line entity-family rows keep their narrower diagnostic answers until their exact reference paths are audited; the fix is not a blanket synthesized-attribute suppression.
 - Sky `mc_midTexCoord` / `mc_Entity`, particle/weather extended attributes, comparison-vs-ordinary shadow sampler declarations, and first-frame `nothing fills them yet` diagnostics remain separate review items. They must be compared against the exact Iris format/translation behavior before changing runtime contracts or suppressing diagnostics.
 
