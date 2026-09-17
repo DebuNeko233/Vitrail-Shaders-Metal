@@ -13,7 +13,6 @@ import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
 
 import java.util.List;
-import java.util.Set;
 
 /**
  * One program the pack draws a half of the game's quad particles with, in place of the game's own.
@@ -47,14 +46,12 @@ final class ParticleProgram extends FamilyProgram {
 	private static final String NAMESPACE = Vitrail.MOD_ID;
 
 	/**
-	 * The names the particle mesh really carries under the spelling a pack writes, which is none of
-	 * them.
-	 * <p>
-	 * Empty for the reason {@code EntityProgram} gives about its own: {@code ParticleVertex} answers
-	 * every fixed function name out of the four elements of the format, and there is no room in those
-	 * four for anything a pack declares for itself.
+	 * The real particle mesh carries none of the pack extension names. Iris 26.1 uses
+	 * {@code DefaultVertexFormat.PARTICLE} here too, so {@link VertexInputDiagnostics} keeps those
+	 * real answers separate from the extension locations the reference also leaves without backing
+	 * vertex arrays.
 	 */
-	private static final Set<String> ANSWERED = Set.of();
+	private static final VertexInputDiagnostics.Inputs INPUTS = VertexInputDiagnostics.particle();
 
 	private ParticleProgram(GeometryProgram body) {
 		super(body);
@@ -86,7 +83,7 @@ final class ParticleProgram extends FamilyProgram {
 		RenderPipeline game = element.pipeline();
 
 		return new ParticleProgram(new GeometryProgram(new GeometryProgram.Pass(FAMILY,
-				element.element(), NAMESPACE, ANSWERED, false,
+				element.element(), NAMESPACE, INPUTS.diagnosticAnswered(), false,
 				game.getColorTargetState().blendFunction(),
 				// The coverage mask on the opaque half and not on the translucent one, which is the
 				// entities' rule and is what decides whether the pack owns draw buffer nought.

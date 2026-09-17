@@ -12,7 +12,6 @@ import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 
 import java.util.List;
-import java.util.Set;
 
 /**
  * One program the pack draws the game's rain and snow with, in place of the game's own.
@@ -45,14 +44,11 @@ final class WeatherProgram extends FamilyProgram {
 	private static final String NAMESPACE = Vitrail.MOD_ID;
 
 	/**
-	 * The names the particle mesh really carries under the spelling a pack writes, which is none of
-	 * them.
-	 * <p>
-	 * Empty for the reason {@code EntityProgram} gives about its own: {@code ParticleVertex} answers
-	 * every fixed function name out of the four elements of the format, and there is no room in those
-	 * four for anything a pack declares for itself.
+	 * Weather uses the same vanilla particle format as Iris 26.1's weather key. The format carries
+	 * none of the pack extension names; {@link VertexInputDiagnostics} keeps that real answer apart
+	 * from extension locations for which the reference also has no backing vertex array.
 	 */
-	private static final Set<String> ANSWERED = Set.of();
+	private static final VertexInputDiagnostics.Inputs INPUTS = VertexInputDiagnostics.weather();
 
 	private WeatherProgram(GeometryProgram body) {
 		super(body);
@@ -89,7 +85,7 @@ final class WeatherProgram extends FamilyProgram {
 		RenderPipeline game = element.pipeline();
 
 		return new WeatherProgram(new GeometryProgram(new GeometryProgram.Pass(FAMILY,
-				element.element(), NAMESPACE, ANSWERED, false,
+				element.element(), NAMESPACE, INPUTS.diagnosticAnswered(), false,
 				game.getColorTargetState().blendFunction(),
 				// No coverage mask, and the sky's rule is the one that decides it: the mask is written
 				// whatever the blend, so a curtain of rain that is a hundred parts transparent to one
