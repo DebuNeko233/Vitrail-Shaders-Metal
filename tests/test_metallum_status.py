@@ -29,17 +29,20 @@ public final class MetallumStatusCheck {
                 require(!status.present(), "missing API reported present");
                 require(!status.compatible(), "missing API reported compatible");
                 require(!status.metalPreferred(), "missing API reported Metal preference");
+                require(!MetallumStatus.backgroundPipelinePrecompile(), "missing API enabled background precompile");
                 require(!MetallumStatus.renderingEnabled(), "missing API enabled rendering");
             }
             case "version" -> {
                 require(status.present(), "versioned API not detected");
                 require(status.apiVersion() == 2, "wrong incompatible API version");
                 require(!status.compatible(), "incompatible version accepted");
+                require(!MetallumStatus.backgroundPipelinePrecompile(), "incompatible API enabled background precompile");
                 require(!MetallumStatus.renderingEnabled(), "incompatible version enabled rendering");
             }
             case "preference-off" -> {
                 require(status.present() && status.compatible(), "compatible API rejected");
                 require(!status.metalPreferred(), "false preference became true");
+                require(!MetallumStatus.backgroundPipelinePrecompile(), "legacy v1 guessed background safety");
                 BufferBlending.serve(true);
                 System.setProperty(MetallumStatus.SMOKE_PROPERTY, "true");
                 require(!MetallumStatus.renderingEnabled(), "preference-off enabled rendering");
@@ -47,6 +50,8 @@ public final class MetallumStatusCheck {
             case "preference-on" -> {
                 require(status.present() && status.compatible() && status.metalPreferred(),
                         "Prefer Metal not observed");
+                require(MetallumStatus.backgroundPipelinePrecompile(),
+                        "advertised background precompile capability not observed");
                 require(!MetallumStatus.renderingEnabled(), "capability-less path enabled rendering");
                 BufferBlending.serve(true);
                 require(!MetallumStatus.renderingEnabled(), "default smoke gate was open");
@@ -56,6 +61,7 @@ public final class MetallumStatusCheck {
             case "shape" -> {
                 require(status.present(), "malformed API should still be present");
                 require(!status.compatible(), "malformed API accepted");
+                require(!MetallumStatus.backgroundPipelinePrecompile(), "malformed API enabled background precompile");
                 require(!MetallumStatus.renderingEnabled(), "malformed API enabled rendering");
             }
             default -> throw new AssertionError("unknown mode " + mode);
@@ -75,6 +81,7 @@ def api_source(mode):
 public final class MetallumApi {
     public static int apiVersion() { return 2; }
     public static boolean isMetalPreferred() { return true; }
+    public static boolean supportsBackgroundPipelinePrecompile() { return true; }
 }
 '''
     if mode == 'preference-off':
@@ -89,6 +96,7 @@ public final class MetallumApi {
 public final class MetallumApi {
     public static int apiVersion() { return 1; }
     public static boolean isMetalPreferred() { return true; }
+    public static boolean supportsBackgroundPipelinePrecompile() { return true; }
 }
 '''
     if mode == 'shape':
@@ -96,6 +104,7 @@ public final class MetallumApi {
 public final class MetallumApi {
     public static String apiVersion() { return "1"; }
     public static boolean isMetalPreferred() { return true; }
+    public static boolean supportsBackgroundPipelinePrecompile() { return true; }
 }
 '''
     return None
@@ -134,6 +143,9 @@ class MetallumStatusTest(unittest.TestCase):
         self.run_fixture('version')
 
     def test_preference_false_cannot_enable_metal(self):
+        self.run_fixture('preference-off')
+
+    def test_legacy_v1_without_background_contract_fails_closed_for_warmup_only(self):
         self.run_fixture('preference-off')
 
     def test_preference_capability_and_explicit_smoke_gate_are_all_required(self):
