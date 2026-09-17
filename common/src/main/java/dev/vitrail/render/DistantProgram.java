@@ -14,8 +14,6 @@ import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.platform.CompareOp;
 import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.vertex.VertexFormat;
-import com.mojang.blaze3d.vulkan.VulkanDevice;
-import com.mojang.blaze3d.vulkan.glsl.GlslCompiler;
 
 import org.joml.Matrix4fc;
 
@@ -200,15 +198,11 @@ final class DistantProgram extends FamilyProgram {
 	}
 
 	@Override
-	public boolean warmAhead(VulkanDevice device, GlslCompiler compiler) {
-		// Without DH standing, nothing ever draws these. And measured on a bench without that
-		// mod, the two dh programs also refused shaderc outright, so compiling ahead here bought
-		// nothing but refusal lines for programs no frame would ever ask for.
-		if (!DhLods.usable()) {
-			return false;
-		}
-
-		return super.warmAhead(device, compiler);
+	public boolean warmable() {
+		// Without DH standing, nothing ever draws these. Keep that decision above the backend split:
+		// Vulkan's detached build and a backend-safe public precompile must skip the same family.
+		// A later real draw does not consult this method and can still compile after DH becomes usable.
+		return DhLods.usable();
 	}
 
 }

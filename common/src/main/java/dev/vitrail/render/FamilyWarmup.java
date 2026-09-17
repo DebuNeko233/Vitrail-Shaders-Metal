@@ -362,6 +362,13 @@ final class FamilyWarmup {
 					if (this.released || PackChain.stopped()) {
 						return;
 					}
+					if (!program.warmable()) {
+						// The family map may contain an optional program that cannot be drawn in this
+						// session. It was counted when the map was copied, so take it back out of the
+						// progress total rather than reporting an intentional skip as a failed compile.
+						this.warmTotal.decrementAndGet();
+						continue;
+					}
 
 					this.warmWalked.incrementAndGet();
 					if (program.warmAhead(device.vulkan(), compiler)) {
@@ -375,6 +382,13 @@ final class FamilyWarmup {
 		for (DumpedProgram program : programs) {
 			if (this.released || PackChain.stopped()) {
 				return;
+			}
+			if (!program.warmable()) {
+				// The family map may contain an optional program that cannot be drawn in this
+				// session. It was counted when the map was copied, so take it back out of the
+				// progress total rather than reporting an intentional skip as a failed compile.
+				this.warmTotal.decrementAndGet();
+				continue;
 			}
 
 			this.warmWalked.incrementAndGet();

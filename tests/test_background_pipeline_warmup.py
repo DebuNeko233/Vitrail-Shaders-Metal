@@ -5,6 +5,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 WARMUP = ROOT / 'common/src/main/java/dev/vitrail/render/FamilyWarmup.java'
 STATUS = ROOT / 'common/src/main/java/dev/vitrail/render/MetallumStatus.java'
+DUMPED = ROOT / 'common/src/main/java/dev/vitrail/render/DumpedProgram.java'
+DISTANT = ROOT / 'common/src/main/java/dev/vitrail/render/DistantProgram.java'
 
 
 class BackgroundPipelineWarmupTest(unittest.TestCase):
@@ -17,6 +19,18 @@ class BackgroundPipelineWarmupTest(unittest.TestCase):
         self.assertIn('BufferBlending.served() && MetallumStatus.backgroundPipelinePrecompile()', warmup)
         self.assertIn('program.compile(device.front())', warmup)
         self.assertNotIn('the backend is not the Vulkan one', warmup)
+
+    def test_optional_families_are_gated_before_either_backend_warms_them(self):
+        warmup = WARMUP.read_text(encoding='utf-8')
+        dumped = DUMPED.read_text(encoding='utf-8')
+        distant = DISTANT.read_text(encoding='utf-8')
+
+        self.assertIn('default boolean warmable()', dumped)
+        self.assertEqual(warmup.count('if (!program.warmable())'), 2)
+        self.assertEqual(warmup.count('this.warmTotal.decrementAndGet();'), 2)
+        self.assertIn('public boolean warmable()', distant)
+        self.assertIn('return DhLods.usable();', distant)
+        self.assertNotIn('public boolean warmAhead(VulkanDevice', distant)
 
     def test_optional_capability_fails_closed_for_older_api_v1(self):
         status = STATUS.read_text(encoding='utf-8')

@@ -628,7 +628,9 @@ public final class IncludeExpander {
 	private String track(String line, State state) {
 		Matcher undef = UNDEF.matcher(line);
 		if (undef.matches()) {
-			state.defines.remove(undef.group(1));
+			String name = undef.group(1);
+			state.defines.remove(name);
+			state.sourceDefines.remove(name);
 			return line;
 		}
 
@@ -637,11 +639,23 @@ public final class IncludeExpander {
 		Matcher applied = DEFINE.matcher(rewritten);
 
 		if (applied.matches()) {
-			state.defines.put(applied.group(1),
+			String name = applied.group(1);
+			// Iris hands a fully preprocessed token stream to the GLSL compiler, so a later
+			// pack-local definition replaces the earlier macro before the driver ever sees either
+			// directive. This expander deliberately leaves macros for shaderc; make that same
+			// last-definition-wins state explicit so a strict compiler does not reject the raw
+			// redefinition. Only names first defined by this pack are normalised here: compiler and
+			// engine environment macros keep their existing refusal semantics.
+			if (!state.sourceDefines.add(name)) {
+				state.emit("#undef " + name, true);
+			}
+			state.defines.put(name,
 					LINE_COMMENT.matcher(applied.group(2)).replaceAll("").trim());
 		} else if (original.matches()) {
 			// The line declared something and no longer does: a switch that was turned off.
-			state.defines.remove(original.group(1));
+			String name = original.group(1);
+			state.defines.remove(name);
+			state.sourceDefines.remove(name);
 		}
 
 		return rewritten;
@@ -703,6 +717,8 @@ public final class IncludeExpander {
 
 		private final Map<String, String> defines;
 		private final Set<String> loose;
+		/** Pack-local macros currently defined in the emitted active path. */
+		private final Set<String> sourceDefines = new HashSet<>();
 		private final List<String> output = new ArrayList<>();
 		private final BitSet live = new BitSet();
 		private final Set<String> onPath = new HashSet<>();

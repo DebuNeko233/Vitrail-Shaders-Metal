@@ -46,6 +46,16 @@ interface DumpedProgram {
 	void forgetCompiled();
 
 	/**
+	 * Whether background family warm-up should attempt this program at all. This is deliberately
+	 * separate from {@link #compile}: a program may be meaningful when its optional geometry source
+	 * is standing later, while there is no reason to compile it during a load where that source is
+	 * absent. The real first-draw path therefore never consults this switch.
+	 */
+	default boolean warmable() {
+		return true;
+	}
+
+	/**
 	 * Compiles this program's pipeline on the pack-load worker, so its first draw finds the work
 	 * already paid instead of paying shaderc on the render thread. {@link FamilyProgram} hands it
 	 * to the program for the six on-demand families; the terrain turns it off, compiling while
