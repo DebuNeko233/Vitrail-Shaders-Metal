@@ -21,11 +21,13 @@ import java.util.stream.Stream;
  * <p>
  * <strong>The three are Iris's own three and in its own order</strong>
  * ({@code vertices/IrisVertexFormats.java:49-60}: {@code iris_Entity}, then {@code mc_midTexCoord},
- * then {@code at_tangent}). The last two are what a pack asks of a POLYGON rather than of a corner,
- * the four corners of a quad carrying one pair and one tangent between them;
- * {@code render/EntityFrame} works both out, and the two roads that write them in are
- * {@code sodium/EntityMeshSerializer} for a mob and {@code mixin/BufferBuilderMixin} for everything
- * else this format draws.
+ * then {@code at_tangent}). The first is the backing storage for the pack-facing {@code mc_Entity}
+ * semantic; Iris binds {@code iris_Entity} and {@code mc_Entity} to the same attribute location and
+ * rewrites the latter to the former when its declared type needs conversion. The last two are what
+ * a pack asks of a POLYGON rather than of a corner, the four corners of a quad carrying one pair and
+ * one tangent between them; {@code render/EntityFrame} works both out, and the two roads that write
+ * them in are {@code sodium/EntityMeshSerializer} for a mob and {@code mixin/BufferBuilderMixin}
+ * for everything else this format draws.
  * <p>
  * <strong>All nine are declared, and no fewer.</strong> The pairing is by name and asymmetric in
  * both directions. A name the stage declares that the format has not got is refused outright,
@@ -121,11 +123,13 @@ public final class EntityVertex {
 	 * constant. What is left of that set is what the log has to call a constant, and
 	 * {@code EntityProgram} is what hands this on to it.
 	 * <p>
-	 * {@code mc_Entity} is not in here and is the one worth naming: the chunk mesh serves it out of
-	 * the block id it carries, and an entity is not a block state and has no id to travel on. Iris
-	 * does not serve it on this mesh either.
+	 * {@code mc_Entity} is backed by {@link #IDENTIFIERS}. Iris exposes the same storage as
+	 * {@code iris_Entity} and binds {@code mc_Entity} to the same attribute location before rewriting
+	 * the pack-facing declaration to the integer backing value. Keeping the semantic in this set is
+	 * therefore both a rendering contract and a diagnostic one: calling it a constant here would hide
+	 * a real compatibility regression.
 	 */
-	public static final Set<String> ANSWERED = Set.of("mc_midTexCoord", "at_tangent");
+	public static final Set<String> ANSWERED = Set.of("mc_Entity", "mc_midTexCoord", "at_tangent");
 
 	/**
 	 * What the light map names read on a piece the game draws at full light, which is the value a
@@ -183,10 +187,9 @@ public final class EntityVertex {
 
 		lines.add("#define of_Normal Normal.xyz");
 
-		// The two the mesh really carries are macros over their element, like every name above them
-		// and for the same reason: a global initialised from a vertex input is not a constant
-		// expression. The rest stay constants, mc_Entity among them, and what the picture is then
-		// wrong about is what the caller has to name in the log.
+		// The three pack-facing semantics the mesh really carries are macros over their backing
+		// elements, like every name above them and for the same reason: a global initialised from a
+		// vertex input is not a constant expression. Only names absent from ANSWERED stay constants.
 		VertexPrologue.globals(used, synthesized, Map.of()).forEach((name, type) -> lines.add(
 				ANSWERED.contains(name)
 						? "#define " + name + " " + answer(name, type)
@@ -195,9 +198,38 @@ public final class EntityVertex {
 		return List.copyOf(lines);
 	}
 
-	/** One of the two names the mesh answers, in the shape the pack declared it under. */
+	/** One of the three names the mesh answers, in the shape the pack declared it under. */
 	private static String answer(String name, String type) {
-		return name.equals("at_tangent") ? tangent(type) : midTexCoord(type);
+		return switch (name) {
+			case "mc_Entity" -> entityId(type);
+			case "at_tangent" -> tangent(type);
+			default -> midTexCoord(type);
+		};
+	}
+
+	/**
+	 * {@code mc_Entity} out of the four unsigned identifier lanes, in the shape the pack declared.
+	 * <p>
+	 * Iris stores the same four unsigned shorts in its extended entity format and aliases the
+	 * pack-facing declaration onto that backing attribute. The explicit constructors below do the
+	 * same integer-to-declared-type conversion without changing the mesh ABI or duplicating storage.
+	 */
+	private static String entityId(String type) {
+		return switch (type) {
+			case "float" -> "float(" + IDENTIFIERS + ".x)";
+			case "vec2" -> "vec2(" + IDENTIFIERS + ".xy)";
+			case "vec3" -> "vec3(" + IDENTIFIERS + ".xyz)";
+			case "vec4" -> "vec4(" + IDENTIFIERS + ")";
+			case "int" -> "int(" + IDENTIFIERS + ".x)";
+			case "ivec2" -> "ivec2(" + IDENTIFIERS + ".xy)";
+			case "ivec3" -> "ivec3(" + IDENTIFIERS + ".xyz)";
+			case "ivec4" -> "ivec4(" + IDENTIFIERS + ")";
+			case "uint" -> IDENTIFIERS + ".x";
+			case "uvec2" -> IDENTIFIERS + ".xy";
+			case "uvec3" -> IDENTIFIERS + ".xyz";
+			case "uvec4" -> IDENTIFIERS;
+			default -> VertexPrologue.zero(type);
+		};
 	}
 
 	/**
