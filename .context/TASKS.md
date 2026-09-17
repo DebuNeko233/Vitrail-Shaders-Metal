@@ -27,10 +27,11 @@ The 2026-09-18 runtime session also exercises Bliss v2.1.2, Complementary Reimag
 
 ## P1 - Classify remaining vertex and sampler diagnostics against Iris 26.1
 
-- [ ] Correct the entity-shadow `at_midBlock` diagnostic as a reference-parity/default-input case rather than extending the entity vertex ABI.
+- [x] Correct the entity-shadow `at_midBlock` diagnostic as a reference-parity/default-input case rather than extending the entity vertex ABI.
   - Iris 26.1 `IrisVertexFormats.ENTITY` carries `iris_Entity`, `mc_midTexCoord` and `at_tangent`, but not `at_midBlock`.
   - Iris 26.1 shader keys use `ENTITY` for ordinary entities and shadow entities.
-  - Acceptance: no Vitrail-only entity element, no entity stride change, and diagnostics no longer claim a missing real entity attribute where the reference format has none.
+  - Implementation keeps `EntityVertex.ANSWERED` and the three appended entity elements unchanged; `EntityInputDiagnostics` adds `at_midBlock` only to the compatibility set consumed by the missing-input diagnostic for regular entity rows.
+  - Glint, text and line rows remain on their narrower diagnostic answers until their own reference paths are audited.
 - [ ] Audit particle/weather warnings against `DefaultVertexFormat.PARTICLE` plus the exact Iris translation/default path before deciding whether `mc_Entity`, `mc_midTexCoord` or `at_tangent` need a runtime contract or only reference-parity defaults.
 - [ ] Audit sky warnings (`mc_midTexCoord` in Photon; `mc_Entity` in Solas) against the exact Iris sky vertex formats and translator behavior before changing mesh ABI or suppressing diagnostics.
 - [ ] Keep comparison-vs-ordinary shadow sampler warnings explicit unless source/reference evidence identifies a defined behavior Vitrail is missing. The current mixed declaration is already diagnosed as undefined under Iris too.
