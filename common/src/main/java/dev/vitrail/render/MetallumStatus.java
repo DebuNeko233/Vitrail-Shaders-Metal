@@ -24,6 +24,7 @@ public final class MetallumStatus {
 	private static final Status INCOMPATIBLE = new Status(true, -1, false, false);
 
 	private static volatile Status status;
+	private static volatile Boolean backgroundPipelinePrecompile;
 
 	private MetallumStatus() {
 	}
@@ -32,6 +33,34 @@ public final class MetallumStatus {
 	public static boolean compatibleAndPreferred() {
 		Status known = status();
 		return known.compatible() && known.metalPreferred();
+	}
+
+	/**
+	 * Whether this compatible Metallum build explicitly guarantees that the public pipeline
+	 * precompile entry point may run on a background worker.
+	 * <p>
+	 * This capability was added compatibly to API v1. An older v1 build therefore stays a valid
+	 * Metal integration but answers false here, leaving family pipelines on their first-draw path
+	 * rather than guessing that its implementation caches are thread-safe.
+	 */
+	public static boolean backgroundPipelinePrecompile() {
+		if (!status().compatible()) {
+			return false;
+		}
+
+		Boolean known = backgroundPipelinePrecompile;
+		if (known != null) {
+			return known;
+		}
+
+		synchronized (MetallumStatus.class) {
+			known = backgroundPipelinePrecompile;
+			if (known == null) {
+				known = probeBackgroundPipelinePrecompile();
+				backgroundPipelinePrecompile = known;
+			}
+			return known;
+		}
 	}
 
 	/**
@@ -93,6 +122,16 @@ public final class MetallumStatus {
 			return MISSING;
 		} catch (ReflectiveOperationException | LinkageError | RuntimeException ignored) {
 			return INCOMPATIBLE;
+		}
+	}
+
+	private static boolean probeBackgroundPipelinePrecompile() {
+		try {
+			Class<?> api = Class.forName(API_CLASS, true, MetallumStatus.class.getClassLoader());
+			Method method = api.getMethod("supportsBackgroundPipelinePrecompile");
+			return method.invoke(null) instanceof Boolean supported && supported;
+		} catch (ReflectiveOperationException | LinkageError | RuntimeException ignored) {
+			return false;
 		}
 	}
 
