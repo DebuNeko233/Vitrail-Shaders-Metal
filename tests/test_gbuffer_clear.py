@@ -165,7 +165,7 @@ class GbufferClearTest(unittest.TestCase):
 
         # The debt is taken as the attachment is handed in, and every clear the frame still owes is
         # flushed before the pass opens - whichever of the two actions the pass asked for beside it.
-        load_clear = pack.index('descriptor.withColorAttachment(view, emptyInsteadOfLoad')
+        load_clear = pack.index('descriptor.withColorAttachment(view, !elide || told')
         flush_check = pack.index('if (targets.hasPendingClears()) {', load_clear)
         flush = pack.index('targets.flushPending(encoder);', flush_check)
         open_pass = pack.index('encoder.createRenderPass(descriptor)', flush)

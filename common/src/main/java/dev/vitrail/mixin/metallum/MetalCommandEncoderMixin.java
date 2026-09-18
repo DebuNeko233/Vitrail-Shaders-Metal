@@ -1,7 +1,9 @@
 package dev.vitrail.mixin.metallum;
 
+import dev.vitrail.compat.metallum.MetallumAttachmentBridge;
 import dev.vitrail.compat.metallum.MetallumComputeBridge;
 import dev.vitrail.compat.metallum.MetallumDepthMipmapBridge;
+import dev.vitrail.render.AttachmentCommands;
 import dev.vitrail.render.MipmapCommands;
 import dev.vitrail.render.compute.ComputeCommands;
 import dev.vitrail.render.storage.StorageImageCommands;
@@ -24,7 +26,7 @@ import java.util.Map;
 @Pseudo
 @Mixin(targets = "com.metallum.render.MetalCommandEncoder", remap = false)
 public abstract class MetalCommandEncoderMixin implements MipmapCommands, StorageImageCommands,
-		ComputeCommands {
+		ComputeCommands, AttachmentCommands {
 
 	@Shadow(remap = false)
 	public abstract boolean generateMipmaps(GpuTexture texture);
@@ -73,6 +75,11 @@ public abstract class MetalCommandEncoderMixin implements MipmapCommands, Storag
 				sourceX, sourceY, sourceZ,
 				destinationX, destinationY, destinationZ,
 				width, height, depth);
+	}
+
+	@Override
+	public void vitrail$setNextPassContents(boolean[] readAfterwards, boolean[] overwritten) {
+		MetallumAttachmentBridge.setNextPassContents(this, readAfterwards, overwritten);
 	}
 
 	@Override

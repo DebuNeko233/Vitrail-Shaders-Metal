@@ -39,6 +39,7 @@ import net.minecraft.client.renderer.BindGroupLayouts;
 import net.minecraft.resources.Identifier;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -534,7 +535,7 @@ final class PackPass {
 		// that does not except by its numbers.
 		if (ELIDE_TARGET_LOADS && !this.mayLeavePixelsUnwritten && !this.readsWhatItWrites) {
 			line.append(", and elideTargetLoads is on, so a draw of this program over the whole "
-					+ "screen empties its targets instead of loading them");
+					+ "screen tells the backend its targets need not be loaded");
 		}
 
 		// Said here and nowhere else, because this is the one binding the pack's own text cannot be
@@ -598,16 +599,17 @@ final class PackPass {
 		}
 
 		RenderPassDescriptor descriptor = RenderPassDescriptor.create(this.label);
-		// Emptying a target this draw is about to write every pixel of, rather than loading what stood
-		// there: a tile fill against the target's own bytes read back off the device. A clear the
-		// frame already owes is taken as it stands and is never replaced, because it is owed for a
-		// reason this pass cannot see.
-		boolean emptyInsteadOfLoad = ELIDE_TARGET_LOADS
-				&& writesEveryPixelOfTheArea(screenWidth, screenHeight);
+		boolean writesEveryPixel = writesEveryPixelOfTheArea(screenWidth, screenHeight);
+		// Where the backend can be told, it skips the load itself; where it cannot, a clear is the
+		// same traffic saved by a tile fill this engine pays for instead. A clear the frame already
+		// owes is taken as it stands and is never replaced, because it is owed for a reason this
+		// pass cannot see.
+		boolean elide = ELIDE_TARGET_LOADS && writesEveryPixel;
+		boolean told = elide && tellTheBackend(encoder);
 		for (GpuTextureView view : this.attachedViews) {
-			descriptor.withColorAttachment(view, emptyInsteadOfLoad
-					? targets.takeClearOrEmpty(view)
-					: targets.takeClear(view));
+			descriptor.withColorAttachment(view, !elide || told
+					? targets.takeClear(view)
+					: targets.takeClearOrEmpty(view));
 		}
 
 		// Always at the tail. The encoder asserts that attachment zero is there, and a pipeline
@@ -656,6 +658,31 @@ final class PackPass {
 				&& !this.readsWhatItWrites
 				&& this.pass.size().width(screenWidth) == screenWidth
 				&& this.pass.size().height(screenHeight) == screenHeight;
+	}
+
+	/**
+	 * Tells the backend what this draw knows about its own targets, and answers whether it was told.
+	 * <p>
+	 * One fact is handed over and only one: this draw writes every pixel of the whole screen, so
+	 * nothing it is about to draw reads what stood in its targets. Whether anything reads them
+	 * <em>afterwards</em> belongs to the frame's schedule and not to one pass, and no pass may guess
+	 * at it - a wrong "nothing reads this" is a wrong image that reads as a pack defect, which is
+	 * the one mistake this shape cannot survive. So every slot is stated as still wanted, and the
+	 * store is left alone until the schedule can answer for it.
+	 * <p>
+	 * A backend that cannot be told answers false, and the caller falls back to a clear.
+	 */
+	private boolean tellTheBackend(CommandEncoder encoder) {
+		if (!(encoder instanceof AttachmentCommands commands)) {
+			return false;
+		}
+
+		boolean[] readAfterwards = new boolean[this.attachedViews.size()];
+		boolean[] overwritten = new boolean[this.attachedViews.size()];
+		Arrays.fill(readAfterwards, true);
+		Arrays.fill(overwritten, true);
+		commands.vitrail$setNextPassContents(readAfterwards, overwritten);
+		return true;
 	}
 
 	/**
