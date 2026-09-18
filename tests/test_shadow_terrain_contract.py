@@ -138,6 +138,19 @@ class ShadowTerrainContractTest(unittest.TestCase):
         self.assertIn("ShadowTerrain.captureCameraWalk(viewport, fogParameters);", mixin)
         self.assertIn('"sodium.MixinSodiumWorldRendererSetup"', config)
         self.assertIn("int shadowFrame = cameraFrame ^ Integer.MIN_VALUE;", terrain)
+        self.assertIn("int restoreFrame = frame ^ (1 << 30);", terrain)
+        restore = terrain.split("private static void restoreCameraWalk", 1)[1].split(
+            "private static void draw", 1
+        )[0]
+        self.assertIn("access.vitrail$setFrame(restoreFrame);", restore)
+        self.assertLess(
+            restore.index("access.vitrail$setFrame(restoreFrame);"),
+            restore.index("access.vitrail$readRenderListFromTree(viewport, fog);"),
+        )
+        self.assertGreater(
+            restore.rindex("access.vitrail$setFrame(frame);"),
+            restore.index("access.vitrail$readRenderListFromTree(viewport, fog);"),
+        )
         self.assertNotIn("prepareChunkRendering(", terrain)
         self.assertNotIn("finalizeRenderLists(", terrain)
         self.assertIn("access.vitrail$renderOutOfGraph(viewport, FogParameters.NONE);", terrain)

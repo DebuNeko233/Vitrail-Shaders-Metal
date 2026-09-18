@@ -15,6 +15,10 @@ what the next one holds.
 
 ### Fixed
 
+- **Photon-style same-frame shadow walks no longer exhaust Sodium's region lists after a few frames.**
+  The camera repair traversal now uses its own temporary frame token, so every camera-visible
+  region resets before it is rebuilt instead of appending duplicate sections to the list the real
+  camera already filled.
 - **View-centred coloured lighting no longer shifts or flickers when the camera turns.** The
   voxelising shadow draw and its shadow compute now run in the same level frame, and Vitrail
   restores Sodium's camera render-list state before the main world prepares its chunk batches.

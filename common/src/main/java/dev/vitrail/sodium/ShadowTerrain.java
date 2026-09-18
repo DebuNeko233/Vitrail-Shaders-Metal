@@ -321,17 +321,26 @@ public final class ShadowTerrain {
 	 * Rebuilds the contents of the persistent region lists the light overwrote, then restores the
 	 * manager objects and flags Sodium had after its real camera setup.
 	 * <p>
-	 * The temporary camera traversal runs under the ORIGINAL frame token. Camera-only regions were
-	 * never changed by the light and therefore keep their existing contents; overlapping regions
-	 * carry the shadow token and are reset and filled from the camera again. The original top-level
-	 * list can then be put back verbatim. Light-only regions keep the shadow token but are not in
-	 * that list, and the sign-bit token cannot masquerade as the next real frame.
+	 * The temporary camera traversal runs under a THIRD token, distinct from both the real camera
+	 * token and the sign-bit-flipped shadow token. That distinction is required even for regions the
+	 * light never touched: a full camera traversal visits them again, and reusing the real camera
+	 * token would append every visible section to an already-full persistent region list instead of
+	 * resetting it first. The third token therefore rebuilds every camera-visible region exactly
+	 * once; the original top-level list can then be put back verbatim. Light-only regions keep the
+	 * shadow token, and neither temporary token can masquerade as the next real frame.
 	 */
 	private static void restoreCameraWalk(RenderSectionManagerAccessor access,
 			Viewport viewport, FogParameters fog, int frame, SortedRenderLists lists,
 			@Nullable SectionTree tree, @Nullable DeferredTaskList tasks) {
+		// Reusing the real camera token here is unsafe. Regions visible to the camera but not the
+		// light still carry that token and already contain their complete list; walking the whole
+		// camera tree again would append duplicate sections until ChunkRenderList reports
+		// "Render list is full". Flip a different bit from the shadow token so every camera-visible
+		// region resets before this repair traversal, while the manager's real frame is restored
+		// immediately afterwards.
+		int restoreFrame = frame ^ (1 << 30);
 		try {
-			access.vitrail$setFrame(frame);
+			access.vitrail$setFrame(restoreFrame);
 
 			// Do NOT call finalizeRenderLists here. Its camera timing control updates
 			// previousPosition/isSyncRendering every time it is asked, so a second call in one
