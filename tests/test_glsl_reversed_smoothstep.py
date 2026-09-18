@@ -31,6 +31,8 @@ class ReversedSmoothstepContractTest(unittest.TestCase):
         self.assertIn("GlslTranslator.REVERSED_SMOOTHSTEP", source)
         self.assertIn("clamp((ofX - ofEdge0) / (ofEdge1 - ofEdge0), 0.0, 1.0)", source)
         self.assertIn("return ofT * ofT * (3.0 - 2.0 * ofT);", source)
+        self.assertIn('"dvec4"', source)
+        self.assertIn("(double ofEdge0, double ofEdge1,", source)
 
     def test_implementation_has_no_pack_or_cloud_special_case(self):
         slices = (
