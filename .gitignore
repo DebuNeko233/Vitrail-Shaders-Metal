@@ -35,6 +35,11 @@ hs_err_pid*.log
 replay_pid*.log
 *.hprof
 
+# Python bytecode. The contract scripts under tests/ are run directly, so a local
+# run leaves a cache beside the ones that import each other.
+__pycache__/
+*.py[cod]
+
 # Working notes, planning and measurement work. Useful to have next to the code,
 # but none of it is part of what the project ships. Matched by shape rather than
 # listed by name: any Markdown at the root that is not one of the published pages,
@@ -49,6 +54,12 @@ replay_pid*.log
 # The allow list earns its own the same way: a page added at the root without a line
 # here is not refused, it is passed over, so git add -A reports nothing and the commit
 # goes out without it. That is how CHANGELOG.md was first committed empty-handed.
+#
+# `.context/` belongs on it for that reason and not for tidiness. AGENTS.md tells a
+# reader to write a handoff, a decision record and a new architecture page there, and
+# every one of those would have been passed over the same way the first CHANGELOG.md
+# entry was: the directory is ignored whole, three files inside it are tracked anyway,
+# and a fourth is therefore neither refused nor reported.
 /*.md
 !/README.md
 !/INSTALL.md
@@ -60,6 +71,7 @@ replay_pid*.log
 /.*/
 !/.github/
 !/.githooks/
+!/.context/
 
 # Pages being written. A page moves out of here and into docs/ when it has been read back
 # against the source and stops moving; until then it is a draft, and publishing a draft is how
