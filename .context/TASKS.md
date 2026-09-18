@@ -111,14 +111,14 @@ The latest hardware baseline pairs Vitrail `97dcf76d` with Metallum `82a0c75e` o
   - The shadow terrain/voxel writer now runs at the frame head after Sodium's camera cull and before `shadowcomp`, so writer and compute share current camera/view uniforms as they do under Iris.
   - Sodium's exact camera `Viewport` / fog inputs are captured from `setupTerrain`. The light walk uses a sign-bit-flipped frame token and the synchronous private out-of-graph builder, then draws through Sodium 0.9.2's `drawChunkLayer`. Camera restoration uses the saved `renderTree` to choose the matching private list-builder. Neither path calls `finalizeRenderLists`, so the extra shadow scope never mutates camera timing control; the original render-list/tree/task references are restored afterwards.
   - The existing whole-block storage-image reanchor remains as a conservative fallback; the normal same-frame path should now request a zero move.
-- [ ] CI-verify the same-frame shadow scheduling/Mixin signatures on the fixed Vitrail branch.
+- [x] CI-verify the same-frame shadow scheduling/Mixin signatures at code-bearing head `11e2569f`: build #280 passes the smoke/contracts step and the full `./gradlew build` on the macOS arm64 runner.
 - [ ] Hardware-rerun Photon in `Ahead` mode around the same stationary emissive source while rotating without translating; require the shift/flicker to be gone before closing this gap.
 - [ ] Reconfirm ordinary shadow terrain and one non-view-centred voxel pack after the scheduling move.
 
 ## P2 - Keep acceptance and documentation synchronized
 
 - [ ] Keep both PRs Draft/open/unmerged while PHASE 17 real-pack acceptance is incomplete.
-- [x] Keep `.context/STATE.md` and `.context/TASKS.md` synchronized with the latest `97dcf76d + 82a0c75e` hardware evidence, including the Photon Ahead-vs-Player A/B and the same-frame Vitrail source correction awaiting CI/hardware validation.
+- [x] Keep `.context/STATE.md` and `.context/TASKS.md` synchronized with the latest `97dcf76d + 82a0c75e` hardware evidence and the CI-green `11e2569f` same-frame Vitrail correction awaiting hardware validation.
 - [ ] Bring `docs/metallum-port.md` forward from its older hardware-head wording in a dedicated documentation synchronization pass; do not silently treat its stale SHA as current evidence.
 - [ ] Keep Vitrail/Metallum ownership boundaries strict in every follow-up: pack semantics/defaults/diagnostics in Vitrail; generic Metal execution in Metallum.
 - [ ] Do not relax startup guards or claim general Metal shader-pack support from one runtime session, CI alone, or the absence of log-level errors.
