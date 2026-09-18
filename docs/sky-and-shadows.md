@@ -11,11 +11,11 @@ raises.
 There is no flag. If a pack serves no shadow program, and none is reachable through the fallback
 tree, there is no shadow stage at all.
 
-That refusal is not thrift, it is safety. The shadow stage runs at the end of the frame, and with
-no program to serve it, the pass the renderer opens is the game's own target, so the stage would
-paint the world, seen from the light, over the finished image. For the same reason, when a refusal
-arrives in the middle of a session the map is emptied rather than left frozen: a stale map is
-served to the pack as if it were current.
+That refusal is not thrift, it is safety. The shadow stage runs before the world's own draws, and
+with no program to serve it, the pass the renderer opens is the game's own target, so the stage
+would paint the world, seen from the light, over the image the chain is about to build. For the
+same reason, when a refusal arrives in the middle of a session the map is emptied rather than left
+frozen: a stale map is served to the pack as if it were current.
 
 ### The map is square, at the size the pack asked for
 
@@ -178,8 +178,8 @@ pipeline refused outright, by name and in the middle of the world.
 
 The terrain reaches the map through the chunk renderer's own lists. Everything that moves (mobs,
 the player, and the block entities a section carries beside its mesh) does not: the game clears
-both lists on the line after it submits them, and the shadow stage stands at the end of the frame,
-so by the time it runs there is nothing left to read. The map is therefore filled from a second
+both lists on the line after it submits them, and the shadow stage runs after that line, so by the
+time it runs there is nothing left to read. The map is therefore filled from a second
 walk of the world, with its own submission storage and its own feature dispatcher, which is also
 what Iris does and for a reason that holds here too: the camera's lists were culled against the
 camera, and what belongs in a shadow map is mostly what the camera cannot see.
@@ -243,8 +243,8 @@ call is inside the same two tests, so a pack that keeps the world out of its map
 land out with it.
 
 The geometry is not asked for a second time. That mod hands its terrain over once a frame, inside
-its own pass, which stands among the game's opaque chunks and is long over by the time the map is
-drawn at the tail of the frame. So the sections are kept as they arrive and drawn again from the
+its own pass, which stands among the game's opaque chunks and has not run yet when the map is drawn
+at the head of the frame. So the sections are kept as they arrive and drawn again from the
 light, in the pack's own shadow pair rather than in the volume that mod rasterises its own picture
 in.
 
@@ -274,13 +274,21 @@ That last fact also kills the obvious workaround. Saving and restoring the list 
 back objects whose *contents* are the light's, because the lists are per-region singletons rather
 than values.
 
-The way out is to draw the map at the end of the frame, for the next frame: advance the frame
-counter, force the synchronous walk that never consults the asynchronous structure, draw, and mark
-the lists for rebuild so the next camera walk starts clean. One extra walk per frame, no save, no
-restore.
+The way out is a scoped walk at the head of the level frame, after the camera's cull and before the
+chain: give the light a frame token of its own so every region it touches resets, run the
+synchronous walk that never consults the asynchronous structure, draw the map, and put the camera's
+lists back - token, contents and all - before the world's own chunk draws. One extra walk per frame,
+and the lists are restored rather than saved and handed over. That is Iris's order, and it is the
+order here: begins, then the shadow stage, then prepares, all inside the frame that samples the map.
 
-The price is a one-frame lag on shadows. That is a deliberate divergence from the reference
-implementation, and it is the first thing to suspect for any shadow artefact.
+**What follows from drawing inside the frame is that the four published shadow matrices have to be
+the pair that draw used.** They were not, for a while, and the fault is worth recording because no
+diff showed it: the draw moved into the frame and these names kept the older rule, whose premise was
+a map drawn at the end of the previous one. Every lookup then landed where the caster stood a frame
+earlier - invisible while the camera was still, a displaced shadow the moment it moved, and clearest
+on the fine shadow content a pack reads for leaf and grass self-shadowing. Publishing
+`drawnShadowModelView` and its three siblings is the answer: that accessor is the drawn pair on a
+frame which fills the map and the kept pair on a frame the reuse setting carries one over.
 
 **Shadow Reuse makes that lag settable, and the walk stops being one per frame.** The map holds a
 world that does not move between two frames of a player standing still, so it is kept for as many
@@ -295,11 +303,11 @@ whatever its age, so nothing slides. At nought the anchor moves every frame and 
 paragraph describes nothing. A pack that voxelises into its shadow pass never gets the reuse, its
 programs writing a volume the rest of the frame reads.
 
-Two more things fall out of drawing at the end of the frame. The chain has already closed the
-frame, so the shadow programs' preparation must not re-open it: otherwise previous-frame uniform
-values advance twice and the colour targets are cleared over what the chain just wrote. And the
-map's own clear has to move into the shadow stage's opening, because its contents cross the frame
-boundary.
+Two more things follow from where the stage stands. The shadow programs' preparation opens the
+frame's values itself, once, before the geometry writer is called: a second advance would turn every
+`gbufferPrevious*` of the next frame into the current one, and the colour targets would be cleared
+over what the chain writes. And the map's own clear has to move into the shadow stage's opening,
+because its contents cross the frame boundary.
 
 Finally, per-face batch culling has to be disabled for the shadow pass, and the pipeline state is
 not enough to do it: batches choose which faces to submit before any pipeline exists, and a face

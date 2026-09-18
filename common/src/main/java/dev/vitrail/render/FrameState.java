@@ -519,8 +519,8 @@ public final class FrameState implements WorldState {
 		this.view.advanceDistantVolume(scale, offset);
 
 		// Settled here and nowhere else, because the answer decides which pair of shadow matrices
-		// every sampling pass of this frame is handed, and that is built two lines down. The stage
-		// at the end of the frame reads the same decision back rather than making its own.
+		// every sampling pass of this frame is handed, and that is built two lines down. The shadow
+		// stage, later in this same frame, reads the same decision back rather than making its own.
 		float shadowAngle = sunAngle(isDay()) / 360.0F;
 		boolean drewLastFrame = ShadowAmortisation.beginFrame(this.shift.unshifted(), shadowAngle,
 				TerrainDraw.shadowAmortisable());
