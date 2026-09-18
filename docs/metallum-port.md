@@ -207,7 +207,7 @@ Immediate work is a hardware rerun of code-bearing `faed8e` with Photon `Voxel V
 
 The distant abrupt transition the tester reports is no longer treated as a cloud problem. The reversed-`smoothstep` candidate produced no visual improvement on hardware and was reverted in `c3a619e0429d683a19d5d80e1398ed899a158e22`, so no speculative cloud rewrite remains in production translation. Photon enables `BORDER_FOG` by default to hide the render-distance boundary, the failing run uses a 16-chunk view distance, and Vitrail's Iris-shaped horizon cone is also drawn at 256 blocks. The owning area to inspect is therefore terrain depth, reconstructed scene position, border fog and the terrain-to-sky/scene-seed handoff at that shared distance; `BORDER_FOG` is A/B'd only as a diagnostic, and cloud math is not patched from that symptom.
 
-After that, comparison/ordinary shadow sampler conflicts and first-frame empty-resource diagnostics remain explicit until reference behavior or visual evidence identifies a concrete contract to change. In parallel, collect the PHASE 17 screenshot/reference evidence needed to assign compatibility statuses to packs that reach full frames. Do not promote support from runtime logs alone.
+After that, collect the PHASE 17 screenshot and reference evidence needed to assign compatibility statuses to packs that reach full frames, and do not promote support from runtime logs alone.
 
 The production Metal shader-pack gate remains conservative while PHASE 17 is incomplete. `phase17-compatibility.md` defines compatibility evidence; `VITRAIL_SMOKE.md` in the companion Metallum repository documents deterministic developer smoke launchers. Neither CI nor a smoke launcher alone changes the support claim.
 
