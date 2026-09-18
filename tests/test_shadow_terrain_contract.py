@@ -16,6 +16,7 @@ ENGINE_STAGES = ROOT / "common/src/main/java/dev/vitrail/platform/EngineStages.j
 SECTION_MANAGER_ACCESSOR = ROOT / "common/src/main/java/dev/vitrail/mixin/access/RenderSectionManagerAccessor.java"
 SODIUM_SETUP_MIXIN = ROOT / "common/src/main/java/dev/vitrail/mixin/sodium/MixinSodiumWorldRendererSetup.java"
 MIXIN_CONFIG = ROOT / "common/src/main/resources/vitrail.mixins.json"
+SHADOW_FRAME_PROBE = ROOT / "common/src/main/java/dev/vitrail/render/timing/ShadowFrameProbe.java"
 
 
 def text(path):
@@ -169,6 +170,39 @@ class ShadowTerrainContractTest(unittest.TestCase):
         self.assertNotIn("vitrail$setNeedsRenderListUpdate", accessor)
         self.assertIn("void vitrail$readRenderListFromTree(Viewport viewport, FogParameters fog);", accessor)
         self.assertIn("void vitrail$renderOutOfGraph(Viewport viewport, FogParameters fog);", accessor)
+
+    def test_shadow_frame_probe_is_opt_in_and_cannot_change_what_it_measures(self):
+        """A per-frame answer to a per-frame question, and nothing more than that.
+
+        The lines this engine already prints about the light's walk are per block table, so they
+        cannot show an alternation between adjacent frames. This probe exists for that fork, and a
+        diagnostic that can move the state it reports would be worse than no diagnostic at all.
+        """
+        probe = compact(SHADOW_FRAME_PROBE)
+        terrain = compact(SHADOW_TERRAIN)
+
+        # Off unless a property or a marker file asks for it, and bounded when it is on.
+        self.assertIn('Boolean.getBoolean("vitrail.probeShadowFrames")', probe)
+        self.assertIn('Integer.getInteger("vitrail.shadowFrameBudget", 600)', probe)
+        self.assertIn("written >= BUDGET", probe)
+        self.assertIn('resolve("vitrail").resolve(MARKER)', probe)
+
+        # It reads the engine's own decision instead of a caller's copy of it.
+        self.assertIn("ShadowAmortisation.drawTerrainThisFrame()", probe)
+
+        # It reports and does nothing else: no accessor, no setter, no engine state.
+        self.assertNotIn("access.", probe)
+        self.assertNotIn(".set(", probe)
+
+        # The frame takes both counts behind the probe's own question, and the camera's count is
+        # read after its lists are put back, which is the pair the fork is drawn from.
+        self.assertIn("boolean probing = ShadowFrameProbe.armed();", terrain)
+        self.assertIn("int lightSections = probing ? sections(manager.getRenderLists()) : 0;", terrain)
+        self.assertIn("ShadowFrameProbe.frame(lightSections, sections(manager.getRenderLists()));", terrain)
+        self.assertLess(
+            terrain.index("restoreCameraWalk(access, restoreViewport, restoreFog, cameraFrame,"),
+            terrain.index("ShadowFrameProbe.frame(lightSections,"),
+        )
 
     def test_shadow_target_is_forward_d32_render_to_sample_image(self):
         targets = compact(SHADOW_TARGETS)

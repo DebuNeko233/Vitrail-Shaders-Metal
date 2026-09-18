@@ -11,6 +11,7 @@ import dev.vitrail.render.ShadowCullPlan;
 import dev.vitrail.render.ShadowGeometry;
 import dev.vitrail.render.TerrainDraw;
 import dev.vitrail.render.timing.RingTimings;
+import dev.vitrail.render.timing.ShadowFrameProbe;
 import dev.vitrail.Vitrail;
 
 import com.mojang.blaze3d.GpuDeviceLossException;
@@ -312,8 +313,18 @@ public final class ShadowTerrain {
 			// elapsed and the map was filled again every time.
 			draw(renderer, minecraft, camera);
 		} finally {
+			// Both counts are taken behind the probe's own question, so an unarmed frame pays one
+			// field read and nothing else: the light's before the camera's lists are put back, the
+			// camera's after, which is the pair the per-frame fork needs.
+			boolean probing = ShadowFrameProbe.armed();
+			int lightSections = probing ? sections(manager.getRenderLists()) : 0;
+
 			restoreCameraWalk(access, restoreViewport, restoreFog, cameraFrame,
 					cameraLists, cameraTree, cameraTasks);
+
+			if (probing) {
+				ShadowFrameProbe.frame(lightSections, sections(manager.getRenderLists()));
+			}
 		}
 	}
 
