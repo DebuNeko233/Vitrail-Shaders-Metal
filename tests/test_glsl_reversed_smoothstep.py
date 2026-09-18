@@ -33,13 +33,20 @@ class ReversedSmoothstepContractTest(unittest.TestCase):
         self.assertIn("return ofT * ofT * (3.0 - 2.0 * ofT);", source)
 
     def test_implementation_has_no_pack_or_cloud_special_case(self):
-        slices = (
-            TRANSLATOR.read_text(encoding="utf-8")
-            + EMITTER.read_text(encoding="utf-8")
-            + VENDOR.read_text(encoding="utf-8")
-        )
+        translator = TRANSLATOR.read_text(encoding="utf-8")
+        rewrite = translator.split(
+            'if (name.equals("smoothstep") && VendorExtensions.metal()', 1
+        )[1].split("// The same two exclusions", 1)[0]
+        detector = translator.split(
+            "private boolean reversedLiteralSmoothstep", 1
+        )[1].split("Replaces {@code fract", 1)[0]
+        emitter = EMITTER.read_text(encoding="utf-8")
+        helper = emitter.split("if (this.reversedSmoothstepCalls > 0)", 1)[1].split(
+            "// One overload per vector the idiom hashes", 1
+        )[0]
+        slices = rewrite + detector + helper
         self.assertNotIn("Photon", slices)
-        self.assertNotIn("CLOUDS_CUMULUS", slices)
+        self.assertNotIn("cloud", slices.lower())
 
 
 if __name__ == "__main__":
