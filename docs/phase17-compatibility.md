@@ -4,6 +4,18 @@ PHASE 17 records compatibility for real shader packs without assigning a status 
 
 The roadmap matrix starts with Photon, Complementary, BSL-family, Sildur-family, and MakeUp. `tests/fixtures/phase17/catalog.json` names those rows but intentionally contains no status. The pack files themselves are not redistributed by this repository.
 
+## Recorded outcome
+
+No compatibility status is recorded for any of the five rows, and none can appear in `catalog.json`: that file names the matrix and deliberately carries no status column, so a status only ever comes from a reviewed evidence record. On 2026-09-18 the project owner closed PHASE 17 on the strength of the device sessions for one pack, which is a judgement that the phase is no longer worth blocking on rather than the per-row evidence this page defines. Nothing below was loosened to permit that: the classifier still refuses exactly the records it refused before, and a status still cannot be inferred from a pack name, family, source scan or CI fixture.
+
+What the closure does and does not say:
+
+- Photon v1.3b is the only row ever exercised on device. Complementary, BSL-family, Sildur-family and MakeUp have never run under Vitrail on Metal, so those rows are unverified rather than supported, and no session was recorded for any of them.
+- Photon's own record was not written either, so its row carries no status in the matrix. The real-device observations behind the judgement are on Vitrail `484fdd2d` and its behaviour-neutral documentation successor `5ab260ab`, with code-bearing Metallum `82a0c75e`; they are recorded in `.context/STATE.md` and were not promoted into this evidence path.
+- Two Photon findings were open when the phase closed and are still open: the view-centred LPV voxel-centre mismatch around a stationary Nether-portal emissive light, and the abrupt terrain/render-distance boundary at the shared 256-block horizon with `BORDER_FOG` on. Closing the phase closes neither, and the absence of a status does not hide them.
+
+The machinery below is what a future status would have to come through. It is unchanged and still covered by CI.
+
 ## Status meanings
 
 The classifier emits exactly one of these five public statuses:
