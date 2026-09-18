@@ -77,6 +77,63 @@ what the hardware moved: a driver is free to elide a store whose contents nothin
 what P1 is for is to stop asking. So the number is the ceiling on the traffic, and the win is the
 gap between it and the wall time.
 
+## The run that is not a baseline, and the load it did measure
+
+A second log arrived with the probe armed and reads, at first glance, as the same frame measured
+cheaper:
+
+| | window covers a pack | window covers no pack |
+|---|---|---|
+| encoder boundaries, 600 frames | 2957 (2358 of them a pass change) | 1335 (736) |
+| attachment loaded, MiB | 119595.9 | 56611.1 |
+| attachment stored, MiB | 187947.4 | 113925.7 |
+
+Same pack, same 3600x2038 window, same 21 programs, and the two rows are not the same 600 frames.
+The second session opened with no pack applied: the probe spent its whole budget on the frames
+before one, and the pack was read twenty-two seconds after the window had closed. Nothing was
+halved and no light pack has been measured.
+
+The instrument could not have been aimed at anything else. `MetalFrameProbe` asked its marker once,
+before the first frame, so a window could only cover frames a launch reached by itself - which is
+why the first log is usable: it opened with a pack already selected. The companion backend now asks
+the marker again while the probe is off, at most once a second, and opens a window on the marker's
+return rather than on its presence, so a marker left in place still arms the window that read it and
+no other (`metallum#5`, with `tools/ci-frame-probe.py` pinning the shape on that side).
+
+What the run does measure is the load, because it is the one it starts cold. Four loads across the
+two logs, and what each of them paid:
+
+| load | archive | translating | flattening | making modules | leftover pipelines |
+|---|---|---|---|---|---|
+| Complementary, at launch | 793 ms | 299 ms / 56 calls, 48 served | 311 ms / 90 units | 39 ms / 124 modules | 62 pipelines, 707 ms |
+| Photon, switched to | 1100 ms | 1591 ms / 71 calls, 0 served | 330 ms / 86 units | 1951 ms / 124 modules | 62 pipelines, 3146 ms |
+| Photon, reopened in the same session | not read | 521 ms / 80 calls, 63 served | 353 ms / 77 units | 1553 ms / 324 modules | 155 pipelines, 2845 ms |
+| Photon, cold on a new build | 1488 ms | 2256 ms / 80 calls, 0 served | 713 ms / 163 units | 3524 ms / 328 modules | 155 pipelines, 4677 ms |
+
+**Only the modules the store missed cost anything.** The module cache lines in the same two logs
+say how many were served and how many were built, and they line up with the times above at twenty
+to twenty-eight milliseconds a built module:
+
+- Complementary, at launch: 229 served, 0 built - and making modules cost 39 ms.
+- Photon, reopened: 304 served, 73 built - and 73 at roughly 20 ms is the 1553 ms recorded.
+- Photon, cold: 250 served, 124 built - and 124 at roughly 28 ms is the 3524 ms recorded.
+
+So `making modules` is shaderc and SPIRV-Cross compiling the ones the module store did not answer,
+and it is the largest single item in every load here, larger than translation and flattening
+together in three of the four. That moves P3. It also sharpens the question rather than answering
+it: the reopen served 304 modules and still built 73, from one pack, in one session, on one settings
+set, with the translation store answering 30 of 30 at its own door. What those 73 differ by in the
+module key is worth an answer before any cache is widened.
+
+**The cold row is what a development build always sees, not a worst case.** Both disk stores name
+their directory after `Vitrail.cacheEdition()`, which is the version and the game for a release and
+adds the commit for a development build (`Vitrail.java:99-112`). A tester who rebuilds reads an
+edition of its own and starts from nothing, while the previous build's units sit unharmed under
+their own directory. That is intended - a developer's caches are worth nothing across two builds -
+and it has one consequence for this phase: a run-for-run comparison across a rebuild measures the
+store, not the engine. A warm number has to be taken twice on one build, or across two loads inside
+one session.
+
 ## What is genuinely absent
 
 1. **Store actions are always Store for pack passes, and load actions are never `dontCare`.**
@@ -155,13 +212,19 @@ re-measured in a normal session; the trace is what says which pass is expensive 
 
 **Exit criterion.** The three numbers exist for both baseline packs, a second run reproduces them
 within noise, the probe is off unless asked for, and a GPU trace of one frame has been taken and
-kept with the numbers.
+kept with the numbers. "Within noise" is a claim about one build: a development build reads a cache
+edition of its own, so two runs either side of a rebuild are two cold starts and comparing them
+compares that, not the engine.
 
 **Where it stands.** The probe is built and in the companion backend: `MetalFrameProbe` counts all
 four, off unless armed by `-Dmetallum.probeFrames=true` or a `metallum/probe-frames` marker in the
-game directory, and `tools/ci-frame-probe.py` pins it. One real run has been taken and is recorded
-above. What is still owed is the second run (a light pack, for the comparison) and a GPU trace of
-one frame kept beside the numbers.
+game directory, and `tools/ci-frame-probe.py` pins it. Its first shape asked the marker once, before
+the first frame, so a window could only cover frames a launch reached by itself; the backend now
+asks it again while the probe is off, at most once a second, and opens a window on the marker's
+return rather than on its presence (`metallum#5`), so a session can be told to count once the pack it
+is meant to measure is the one in force. One real run has been taken and is recorded above; a second
+was taken and is not one, for the reason in the section that follows. What is still owed is the
+second run (a light pack, for the comparison) and a GPU trace of one frame kept beside the numbers.
 
 ---
 
@@ -288,6 +351,14 @@ units, and 46 modules built by the compiler in a load the module cache otherwise
 translation cache is not broken - other moments in the same session report 48 and 63 programs served
 from it - so the question this phase now asks is why a cold-ish load translates everything again
 while a warm one does not, and what in the two caches misses.
+
+A second log, taken cold and decomposed in the baseline section above, makes the module store the
+largest item of the load rather than one of three: **making modules** cost 3524 ms over 328 modules
+with 124 of them built, and 1553 ms over 324 with 73 built on a reopen that the translation store
+answered completely. A module the store answers is free - 229 served for 39 ms - and one it does not
+is 20 to 28 ms. So the size of this phase is a count: how many of a load's 324 to 377 modules the
+store misses, and what those differ by in the key. That question comes before any widening of a
+cache, because the reopen already says the answer is not that the store is too small.
 
 That also demotes one argument for P5: the "same shaders, different colour state" pattern is real
 (440 pipeline states over 46 modules, so roughly ten states per module) but it is worth thirty
