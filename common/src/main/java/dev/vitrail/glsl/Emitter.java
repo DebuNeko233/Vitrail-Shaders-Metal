@@ -40,8 +40,8 @@ record Emitter(ProgramStage stage, VertexInputs inputs, List<String> bound, Alph
 		Set<String> declaredNames, Map<String, String> synthesized,
 		Map<String, VolumeAtlas> readVolumes, Map<Integer, Output> packOutputs,
 		int maxFragmentOutput, Map<String, String> owedOutputs, VaryingSplit splits,
-		int gameTextureMatrix, int gameModelView, int softRewrites, int trigCalls, int hashCalls,
-		Set<String> packBuiltinCalls,
+		int gameTextureMatrix, int gameModelView, int softRewrites, int trigCalls,
+		int reversedSmoothstepCalls, int hashCalls, Set<String> packBuiltinCalls,
 		boolean mainWrapped, boolean depthEpilogue, boolean terrainPrologue,
 		boolean distantPrologue, boolean entityWrapped, boolean linesWrapped,
 		boolean alphaEpilogue, boolean covers,
@@ -269,6 +269,20 @@ record Emitter(ProgramStage stage, VertexInputs inputs, List<String> bound, Alph
 						+ " + ofZ * (8.3321608736e-3 + ofZ * (-1.9515295891e-4)))); }");
 				lines.add(shape + " " + GlslTranslator.REDUCED_COS + "(" + shape + " ofX) {"
 						+ " return " + GlslTranslator.REDUCED_SIN + "(ofX + 1.5707964); }");
+			}
+		}
+
+		// A reversed-edge smoothstep is undefined in GLSL and poison in the SPIR-V extended
+		// instruction. Where the translator statically proved literal reversed scalar edges on
+		// native Metal, spell out the ordinary Hermite definition instead. The negative denominator
+		// makes this the de-facto inverse smoothstep OpenGL packs rely on without asking the backend
+		// to preserve undefined behaviour.
+		if (this.reversedSmoothstepCalls > 0) {
+			for (String shape : new String[] {"float", "vec2", "vec3", "vec4"}) {
+				lines.add(shape + " " + GlslTranslator.REVERSED_SMOOTHSTEP
+						+ "(float ofEdge0, float ofEdge1, " + shape + " ofX) {"
+						+ " " + shape + " ofT = clamp((ofX - ofEdge0) / (ofEdge1 - ofEdge0), 0.0, 1.0);"
+						+ " return ofT * ofT * (3.0 - 2.0 * ofT); }");
 			}
 		}
 

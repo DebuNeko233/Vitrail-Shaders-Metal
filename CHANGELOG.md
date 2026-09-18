@@ -15,6 +15,10 @@ what the next one holds.
 
 ### Fixed
 
+- **Far fades written with a reversed constant `smoothstep` work on native Metal.** OpenGL
+  shader packs sometimes use descending edges as an inverse fade even though GLSL leaves that
+  ordering undefined. Vitrail now gives only those statically reversed literal calls a defined
+  Hermite equivalent on native Metal; ordinary `smoothstep` calls and Vulkan are unchanged.
 - **View-centred coloured lighting no longer shifts or flickers when the camera turns.** The
   voxelising shadow draw and its shadow compute now run in the same level frame, and Vitrail
   restores Sodium's camera render-list state before the main world prepares its chunk batches.

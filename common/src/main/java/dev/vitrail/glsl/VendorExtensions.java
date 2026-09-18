@@ -82,6 +82,9 @@ public final class VendorExtensions {
 
 	private static volatile boolean moltenVk;
 
+	/** Whether the active device is Metallum's native Metal backend rather than Vulkan. */
+	private static volatile boolean metal;
+
 	private VendorExtensions() {
 	}
 
@@ -146,6 +149,22 @@ public final class VendorExtensions {
 	}
 
 	/**
+	 * Records whether translation is targeting Metallum's native Metal backend.
+	 * <p>
+	 * This is separate from MoltenVK on purpose: a compatibility rewrite needed by native Metal
+	 * must not silently change the established Vulkan translation. The answer participates in
+	 * {@link #key()}, so a translation cached under one backend is never served to the other.
+	 */
+	public static void serveMetal(boolean metalBackend) {
+		metal = metalBackend;
+	}
+
+	/** Whether native-Metal-only compatibility rewrites are active. */
+	static boolean metal() {
+		return metal;
+	}
+
+	/**
 	 * The absent names, the stages the subgroup extensions are absent from and whether the driver is
 	 * MoltenVK, joined, for a cache key. A device running them in every stage keeps the key it had
 	 * before stages were asked, and a driver other than MoltenVK the key it had before the driver
@@ -157,7 +176,9 @@ public final class VendorExtensions {
 				.map(Enum::name)
 				.collect(Collectors.joining(",", names + ";subgroups absent in ", ""));
 
-		return moltenVk ? stages + ";MoltenVK" : stages;
+		String driver = moltenVk ? stages + ";MoltenVK" : stages;
+
+		return metal ? driver + ";Metal" : driver;
 	}
 
 	/** The hidden spelling of a macro the compiler would define and the device would not answer for. */

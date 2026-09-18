@@ -203,6 +203,7 @@ public abstract class VulkanBackendMixin {
 				physical.vkPhysicalDeviceProperties().limits().maxPerStageDescriptorSamplers(),
 				moltenVk ? tableSamplers(physical) : 0);
 		VendorExtensions.serveMoltenVk(moltenVk);
+		VendorExtensions.serveMetal(false);
 		// And Metal's cap on the threadgroup memory of a compute, which Vulkan has no limit to name.
 		SharedMemory.serve(moltenVk);
 		// The vendor extensions a pack may gate a vendor instruction on, answered by the device

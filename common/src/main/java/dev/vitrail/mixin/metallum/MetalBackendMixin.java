@@ -1,5 +1,6 @@
 package dev.vitrail.mixin.metallum;
 
+import dev.vitrail.glsl.VendorExtensions;
 import dev.vitrail.render.BufferBlending;
 
 import com.mojang.blaze3d.shaders.GpuDebugOptions;
@@ -39,5 +40,6 @@ public abstract class MetalBackendMixin {
 			GpuDebugOptions debugOptions, Runnable criticalShaderLoader,
 			CallbackInfoReturnable<GpuDevice> callback) {
 		BufferBlending.serve(true);
+		VendorExtensions.serveMetal(true);
 	}
 }

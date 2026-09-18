@@ -24,7 +24,7 @@ The synthetic/runtime capability phases are closed; current work is evidence-bac
 - [ ] Do not promote Photon, Bliss or any other pack from runtime logs alone. Collect/review the screenshot/reference evidence required by `docs/phase17-compatibility.md` before changing a public compatibility status.
 - [ ] Continue the matrix through the remaining required pack families, including BSL-family and Sildur-family coverage, with the same evidence discipline.
 
-The latest hardware baseline pairs Vitrail `97dcf76d` with Metallum `82a0c75e` on Apple M5 Pro / macOS 27 / Metal. Sundial Lite v1.1.0 now compiles through the former trinary min/max blocker and reaches a first full frame. Photon v1.3b still exhibits view-dependent coloured-light displacement with slight flicker even though its 128³ storage volumes and `shadowcomp` compute compile and dispatch normally; the remaining defect is source-classified to Vitrail's one-frame view-centred voxel identity timing.
+The latest hardware baseline pairs Vitrail `c296caec` with Metallum `82a0c75e` on Apple M5 Pro / macOS 27 / native Metal. Photon v1.3b no longer exhibits the previously reproduced view-dependent coloured-light displacement/flicker in Ahead mode, hardware-validating the same-frame writer/compute direction at that ancestor. The same run exposes a separate missing far-cloud gradual fade; current Vitrail code is newer than the hardware baseline.
 
 ## P1 - Close remaining source-classified rendering gaps
 
@@ -112,8 +112,22 @@ The latest hardware baseline pairs Vitrail `97dcf76d` with Metallum `82a0c75e` o
   - Sodium's exact camera `Viewport` / fog inputs are captured from `setupTerrain`. The light walk uses a sign-bit-flipped frame token and the synchronous private out-of-graph builder, then draws through Sodium 0.9.2's `drawChunkLayer`. Camera restoration uses the saved `renderTree` to choose the matching private list-builder. Neither path calls `finalizeRenderLists`, so the extra shadow scope never mutates camera timing control; the original render-list/tree/task references are restored afterwards.
   - The existing whole-block storage-image reanchor remains as a conservative fallback; the normal same-frame path should now request a zero move.
 - [x] CI-verify the same-frame shadow scheduling/Mixin signatures at code-bearing head `11e2569f`: build #280 passes the smoke/contracts step and the full `./gradlew build` on the macOS arm64 runner.
-- [ ] Hardware-rerun Photon in `Ahead` mode around the same stationary emissive source while rotating without translating; require the shift/flicker to be gone before closing this gap.
+- [x] Hardware-rerun Photon in `Ahead` mode at Vitrail `c296caec`: the stationary Nether-portal emissive light no longer shifts or slightly flickers while the view rotates; `shadowcomp` and the shadow draw paths remain active through a full frame.
+- [ ] Re-run the current code-bearing Vitrail head after the later `11e2569f` Sodium-list isolation refinements; ancestor hardware evidence must not be silently promoted to the newer code.
 - [ ] Reconfirm ordinary shadow terrain and one non-view-centred voxel pack after the scheduling move.
+
+### Native-Metal reversed smoothstep / cloud cutoff fade
+
+- [x] Source-classify the newly observed Photon far-cloud fade gap without using `clouds_offset` as a false lead.
+  - Photon disables vanilla clouds and renders its own volumetric chain; the log's unanswered `clouds_offset` is not used by the far-distance density cutoff in the audited cloud shaders.
+  - Main cumulus hides its 20 km raymarch cutoff with literal descending `smoothstep(1.0, 0.95, ...)`; altocumulus uses the defined ascending form and subtracts it from one.
+  - GLSL leaves `smoothstep` undefined when the first edge is not less than the second, so the OpenGL result cannot be assumed across SPIR-V/native Metal.
+- [x] Implement a generic native-Metal compatibility normalization for statically reversed scalar literal edges only.
+  - The translator leaves normal-order calls, dynamic-edge calls and pack-defined `smoothstep` functions untouched.
+  - The helper writes the Hermite expression explicitly and the active-backend fact is part of the translation-cache key.
+  - Vulkan explicitly publishes native-Metal=false, preserving its established translation and cache-key spelling.
+- [ ] CI-verify the reversed-smoothstep translation change on the fixed Vitrail branch.
+- [ ] Hardware-rerun Photon and verify the far main-cumulus layer fades gradually before its cutoff.
 
 ## P2 - Keep acceptance and documentation synchronized
 
