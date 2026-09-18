@@ -48,6 +48,35 @@ What that table means: encoder merging, state shadowing, argument buffers, Priva
 target-copy pruning and a disk cache are **done or already the shape of the code**. The plan below
 therefore starts from what is genuinely absent.
 
+## The first measured baseline
+
+Phase P0 produced a probe; this is the first run that used it. It is one session, on one pack, on
+one machine, so it is a starting point rather than a general law, and every phase below that names a
+number is judged against a re-run of it rather than against this paragraph.
+
+- **Where.** Photon v1.3b at the tester's settings, on Vitrail `aef3db09` (the merge of the launch
+  argument removal, an ancestor of the current `dev`) with the companion Metallum on Apple Silicon.
+  The pack's window is 3600x2038, so one RGBA16F target of that shape is 56 MiB.
+- **The window.** 600 frames, about seventeen seconds, sixty-two per cent of them drawn at roughly
+  35 frames per second.
+- **Attachment traffic, per frame: 199 MiB loaded and 313 MiB stored.** In target terms that is
+  about three and a half loads and five and a half stores of a 56 MiB target every frame. The store
+  figure is the one P1 exists to move, and it is large because the store action is `Store` for every
+  attachment of every pack pass.
+- **Encoder boundaries, per frame: 4.9**, of which 3.9 are a render-pass configuration change and
+  1.0 is the frame's submission.
+- **Bindings, per frame: 222** - 71 textures, 71 samplers, 49 buffers, 13 pipelines, 11 scissors and
+  7 viewports. The texture and sampler counts are equal because a texture bound with a sampler
+  counts as one of each.
+- **Pipeline state creation: 440 over the session, 32 milliseconds in total.** This one changed the
+  plan, and the phase it changes is P3.
+
+**What a byte figure here is and is not.** It is what the engine asked Metal to load and store, from
+the actions it chose and the sizes of the attachments it chose them for. It is not a measurement of
+what the hardware moved: a driver is free to elide a store whose contents nothing reads, and part of
+what P1 is for is to stop asking. So the number is the ceiling on the traffic, and the win is the
+gap between it and the wall time.
+
 ## What is genuinely absent
 
 1. **Store actions are always Store for pack passes, and load actions are never `dontCare`.**
@@ -127,6 +156,12 @@ re-measured in a normal session; the trace is what says which pass is expensive 
 **Exit criterion.** The three numbers exist for both baseline packs, a second run reproduces them
 within noise, the probe is off unless asked for, and a GPU trace of one frame has been taken and
 kept with the numbers.
+
+**Where it stands.** The probe is built and in the companion backend: `MetalFrameProbe` counts all
+four, off unless armed by `-Dmetallum.probeFrames=true` or a `metallum/probe-frames` marker in the
+game directory, and `tools/ci-frame-probe.py` pins it. One real run has been taken and is recorded
+above. What is still owed is the second run (a light pack, for the comparison) and a GPU trace of
+one frame kept beside the numbers.
 
 ---
 
@@ -241,10 +276,23 @@ pack-visible value changes, and the uniform question is answered in writing eith
 
 # Phase P3 - Compilation: stop paying twice
 
-**For.** This is the phase a player feels most, and it is measured rather than argued: a pack switch
-costs 2.5 to 3.7 seconds, of which the background work alone is 2500 to 3731 ms, and a single load
-compiles 155 leftover pipelines. It is also the phase that has to be built so P5 can supersede it
-rather than compete with it.
+**For.** This is the phase a player feels most, and the baseline has moved where it should aim.
+The stall is real - a pack switch costs 2.5 to 3.7 seconds, and one load's background work alone is
+3146 ms - but it is **not** pipeline state creation, which the same run measured at 440 creations
+costing **32 milliseconds in total**. A persistent cache keyed on the Metal pipeline state would
+therefore buy about thirty milliseconds and nothing else.
+
+What the run shows instead is where the seconds are: **translation** at 1591 ms over 71 translator
+calls with **nothing served from the translation cache**, chain unit flattening at 620 ms over 160
+units, and 46 modules built by the compiler in a load the module cache otherwise served 78 of. The
+translation cache is not broken - other moments in the same session report 48 and 63 programs served
+from it - so the question this phase now asks is why a cold-ish load translates everything again
+while a warm one does not, and what in the two caches misses.
+
+That also demotes one argument for P5: the "same shaders, different colour state" pattern is real
+(440 pipeline states over 46 modules, so roughly ten states per module) but it is worth thirty
+milliseconds, not seconds. Specialisation remains the right shape for that work; it is no longer a
+compilation-time lever.
 
 **Needs first.** P0's compilation counter, so that "warm" and "cold" are separated and a cache miss
 can be told from a slow compile.
@@ -303,8 +351,13 @@ invisible in the number. And item 1 below must confirm what reflection already r
    `spvc_compiler_get_active_interface_variables` (`:606`) and reads resource names and bindings
    (`:350`, `:354`, `:698-699`). The first task is not to add reflection but to establish, by
    reading that code and printing its output for a real pack, which uniforms and samplers the active
-   interface variables already exclude. If the answer is already there, this phase is about
-   publishing it rather than computing it.
+   interface variables already exclude. **The baseline answers part of this already**: the same
+   session logs `Samplers bound from what a module reaches: 194 dropped across 33 of the 46 pack
+   modules walked`, so sampler reachability is not a proposal here, it is something the engine
+   already does at bind time. What is left for this phase is narrower and should be checked before
+   any of it is built: which parts of the plan still run on declaration text rather than on
+   reachability - `TargetCopies` is the one the repository has already recorded as over-counting -
+   and whether those parts are worth the reflection plumbing at all.
 2. **Send the answer back as a shader-level fact, not as a target fact.** Metallum can say "resource
    X is unreachable in program P". Vitrail owns the mapping from resource X to `colortexN`, so
    Vitrail is where the decision "therefore do not copy and do not bind" is made. Doing it the other
