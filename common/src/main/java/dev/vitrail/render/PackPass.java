@@ -528,6 +528,15 @@ final class PackPass {
 			line.append(", reading a target this same pass writes, so that target is loaded");
 		}
 
+		// Said for the program rather than for the frame, because the third answer - whether the draw
+		// covers the whole screen - is only known when one is built. Without this the property's
+		// effect is invisible in a session's log, and a run that has it on cannot be told from one
+		// that does not except by its numbers.
+		if (ELIDE_TARGET_LOADS && !this.mayLeavePixelsUnwritten && !this.readsWhatItWrites) {
+			line.append(", and elideTargetLoads is on, so a draw of this program over the whole "
+					+ "screen empties its targets instead of loading them");
+		}
+
 		// Said here and nowhere else, because this is the one binding the pack's own text cannot be
 		// read for: the pack never wrote colortex0 beside these names, and whether they read the
 		// scene or read nothing is the whole picture on a pack that calls the screen tex.
