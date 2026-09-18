@@ -24,7 +24,7 @@ The synthetic/runtime capability phases are closed; current work is evidence-bac
 - [ ] Do not promote Photon, Bliss or any other pack from runtime logs alone. Collect/review the screenshot/reference evidence required by `docs/phase17-compatibility.md` before changing a public compatibility status.
 - [ ] Continue the matrix through the remaining required pack families, including BSL-family and Sildur-family coverage, with the same evidence discipline.
 
-The latest hardware baseline pairs Vitrail `ac33fed3` with Metallum `82a0c75e` on Apple M5 Pro / macOS 27 / Metal. The session structurally verifies the latest claimed-sky ownership work on Solas and Photon: Solas no longer trips the Minecraft 26.2 attachment-format check, and Photon's outputless `world0/gbuffers_skybasic` compiles/draws with coverage as the only colour output. It reaches clean world exit. Bliss was not loaded in this run, so the Bliss visual acceptance item remains open and no compatibility status is promoted.
+The latest hardware baseline pairs Vitrail `3d951772` (code parent `ac33fed3`) with Metallum `82a0c75e` on Apple M5 Pro / macOS 27 / Metal. The multi-pack run keeps the repaired sky structure working and gives an informal simple visual observation that Bliss v2.1.2 shows no obvious issue, but that is not formal PHASE 17 acceptance. It also exposes a Photon view-centred coloured-light drift and a deterministic Sundial Lite v1.1.0 final-fragment compile blocker.
 
 ## P1 - Close remaining source-classified rendering gaps
 
@@ -85,13 +85,29 @@ The latest hardware baseline pairs Vitrail `ac33fed3` with Metallum `82a0c75e` o
   - Solas `gbuffers_basic` disc records its draw and horizon cone and continues without the former `RenderPass.setPipeline` attachment-format rejection.
   - Photon outputless `world0/gbuffers_skybasic` reports coverage-only rank 0, records its first draw and horizon cone, and continues without a missing `ofOrderOutputs()` compile failure or sky sibling warning.
   - This is structural runtime evidence only; the run did not load Bliss and did not exercise End sky.
-- [ ] Hardware-validate the ownership replay with Bliss `gbuffers_skybasic`: the claimed sky region should no longer be replaced by vanilla scene-seed fallback when the pack fragment discards.
+- [ ] Turn the tester's simple Bliss visual check into reviewed PHASE 17 screenshot/reference evidence; the reported frame has no obvious issue, but informal observation alone does not promote the pack.
 - [ ] Exercise the End sky branch if practical, because it is the other `covers=true` branch besides the two overworld discs.
+
+### GLSL compiler-builtin shadowing
+
+- [x] Source-fix Sundial Lite v1.1.0's first deterministic blocker without a pack-name special case.
+  - Its `root/final/fragment` declares pack-local `min3` and `max3` helpers and shaderc reports a parameter-precision overload mismatch before the final pass can compile.
+  - Vitrail already renames a pack-defined function when the compiler target reserves the same function name; the trinary min/max family was missing from that set.
+  - The generic shadowable-builtin set now includes `min3`, `max3` and `mid3`, and only fires when the unit declares the function itself.
+- [ ] Hardware-rerun Sundial Lite v1.1.0 and continue from the next owning failure, if any.
+
+### View-centred voxel identity timing
+
+- [x] Source-classify Photon's camera-following coloured-light position as a Vitrail one-frame scheduling mismatch.
+  - Photon can center its voxel volume ahead of the player from `gbufferModelViewInverse[2]`, so rotating the view changes the integer voxel-center offset even when camera position is fixed.
+  - Vitrail's shadow terrain writes the identity volume at the end of the previous frame while shadow compute runs at the head of the current one. The current storage-image reanchor compensates whole-block camera translation only.
+  - The current compute therefore may read identities centered for the previous view while propagating/sampling light under the current view center, matching the observed emissive-source drift on view rotation.
+- [ ] Implement a generic scheduling/anchor correction for view-centred voxel identity volumes without Photon names, shader-option forcing or Metallum pack policy, then hardware-rerun a stationary emissive source while rotating the view.
 
 ## P2 - Keep acceptance and documentation synchronized
 
 - [ ] Keep both PRs Draft/open/unmerged while PHASE 17 real-pack acceptance is incomplete.
-- [x] Keep `.context/STATE.md` and `.context/TASKS.md` synchronized with the current source findings and the latest `ac33fed3 + 82a0c75e` hardware baseline; distinguish the now-verified Solas/Photon structural replay from still-open Bliss visual and End-sky acceptance.
+- [x] Keep `.context/STATE.md` and `.context/TASKS.md` synchronized with the current source findings and the latest `3d951772 + 82a0c75e` multi-pack hardware baseline; preserve the distinction between informal Bliss visual evidence, the open Photon LPV timing defect and Sundial's deterministic compile blocker.
 - [ ] Bring `docs/metallum-port.md` forward from its older hardware-head wording in a dedicated documentation synchronization pass; do not silently treat its stale SHA as current evidence.
 - [ ] Keep Vitrail/Metallum ownership boundaries strict in every follow-up: pack semantics/defaults/diagnostics in Vitrail; generic Metal execution in Metallum.
 - [ ] Do not relax startup guards or claim general Metal shader-pack support from one runtime session, CI alone, or the absence of log-level errors.

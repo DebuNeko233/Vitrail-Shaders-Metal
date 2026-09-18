@@ -1464,7 +1464,7 @@ public final class GlslTranslator {
 
 			this.declaredNames.add(token.text());
 			this.declaredNames.addAll(continuationDeclarators(index));
-			if (LegacyGlsl.POST_120_BUILTINS.contains(token.text()) && this.tokens.callOpener(index) >= 0) {
+			if (LegacyGlsl.SHADOWABLE_BUILTINS.contains(token.text()) && this.tokens.callOpener(index) >= 0) {
 				this.shadowedBuiltins.add(token.text());
 			}
 		}

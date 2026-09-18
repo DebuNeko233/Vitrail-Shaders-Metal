@@ -420,24 +420,28 @@ public final class LegacyGlsl {
 	public static final List<String> FULLSCREEN_ELEMENTS = List.of("Position", "UV0");
 
 	/**
-	 * Functions GLSL gained after 120 that a pack written against 120 may define for itself. Its
-	 * own definition then collides with the built-in one, which is reported as a mismatch of
-	 * parameter precision and reads like anything but the name clash it is. Renaming the pack's
-	 * version is safe precisely because the built-in did not exist in the dialect it was written
-	 * for, so none of its calls can have meant the built-in.
+	 * Function names a compatibility-profile pack may define for itself but the compiler target
+	 * also exposes as built-ins.
 	 * <p>
-	 * The corpus only exercises {@code fma} and {@code tanh}. The rest are here because the rename
-	 * only fires on a name the pack actually defines, so listing one costs nothing and not listing
-	 * one costs a pack.
+	 * A pack definition then collides with the compiler's overload set, which is commonly reported
+	 * as a parameter-precision mismatch and reads like anything but the name clash it is. Renaming
+	 * the pack's own definition and its calls is safe because this path only fires when the unit
+	 * actually declares the function itself; a unit that meant the compiler built-in is untouched.
+	 * <p>
+	 * Most names below are functions GLSL gained after 120. {@code min3}, {@code max3} and
+	 * {@code mid3} are the trinary min/max family exposed by the compiler target and hit the same
+	 * collision in compatibility shaders. Keeping the whole family together prevents the next
+	 * helper spelling from failing for the same reason.
 	 */
-	public static final Set<String> POST_120_BUILTINS = Set.of(
+	public static final Set<String> SHADOWABLE_BUILTINS = Set.of(
 			"sinh", "cosh", "tanh", "asinh", "acosh", "atanh",
 			"fma", "frexp", "ldexp", "round", "roundEven", "trunc", "modf", "isnan", "isinf",
 			"inverse", "determinant", "outerProduct", "transpose",
 			"floatBitsToInt", "floatBitsToUint", "intBitsToFloat", "uintBitsToFloat",
 			"packUnorm2x16", "unpackUnorm2x16", "packSnorm2x16", "unpackSnorm2x16",
 			"packHalf2x16", "unpackHalf2x16",
-			"bitfieldExtract", "bitfieldInsert", "bitfieldReverse", "bitCount", "findLSB", "findMSB");
+			"bitfieldExtract", "bitfieldInsert", "bitfieldReverse", "bitCount", "findLSB", "findMSB",
+			"min3", "max3", "mid3");
 
 	/** The 8 and 16 bit types, each with the 32 bit type {@link #widened} declares it under. */
 	private static final Map<String, String> NARROW_TYPES = narrowTypes();

@@ -15,6 +15,9 @@ what the next one holds.
 
 ### Fixed
 
+- **Compatibility-profile packs can define their own three-argument min/max helpers again.** A pack-local
+  `min3`, `max3` or `mid3` is now kept separate from the compiler's built-in overload set, avoiding
+  the misleading parameter-precision compile failure that stopped Sundial Lite before its final pass.
 - Backend compute logs now identify programs with accepted non-zero dispatches, instead of
   counting programs that failed compilation or never dispatched any work.
 - An unavailable or incompatible optional Metallum compute bridge now reaches the compute
