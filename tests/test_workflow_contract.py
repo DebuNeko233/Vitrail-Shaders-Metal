@@ -104,7 +104,13 @@ def declared_permissions(text):
             if inline == "write-all":
                 # Every scope, contents included, without ever naming `contents`.
                 return {"contents": "write"}
-            return {"unrecognised": inline}
+            # Anything else as a bare scalar is not a permission shape GitHub defines, so the guard
+            # cannot tell what it grants and refuses to guess. Failing closed matters more here than
+            # in an ordinary parser: this is the check that decides whether CI may write.
+            raise AssertionError(
+                f"unrecognised `permissions: {inline}`; the guard cannot tell whether it grants "
+                "repository content write"
+            )
         granted = {}
         for follower in lines[index + 1:]:
             if follower.strip() and follower[:1] not in (" ", "\t"):
@@ -257,6 +263,12 @@ class WorkflowContract(unittest.TestCase):
             with self.subTest(permissions=permissions):
                 body = step("      - run: echo hi\n", permissions)
                 self.assertEqual(content_writers({"tmp.yml": body}), [], permissions)
+
+    def test_an_unreadable_permission_fails_closed(self):
+        # A bare scalar that is not `read-all` or `write-all` is not a permission shape GitHub
+        # defines. Treating it as harmless would be the one failure mode this check cannot have.
+        with self.assertRaises(AssertionError):
+            content_writers({"tmp.yml": step("      - run: echo hi\n", "permissions: write\n")})
 
 
 if __name__ == "__main__":
