@@ -140,6 +140,23 @@ class PassWritesEveryPixel(unittest.TestCase):
         handover = self.text.split('private boolean tellTheBackend', 1)[1].split('\n\t}', 1)[0]
         self.assertIn('readAfterwards[slot] = this.stillRead', handover)
 
+    def test_a_pass_says_whether_it_may_read_a_storage_image(self):
+        # The boundary an untracked graphics write owes is taken by the backend where the pass that
+        # reads it is built, so the pass has to say. Certain means both halves - no writable image of
+        # its own and no name it samples used for one anywhere in the chain - and everything else is
+        # "may read", because the boundary is what makes such a read correct.
+        self.assertIn('Boolean.getBoolean("vitrail.narrowStorageBoundary")', self.text)
+        self.assertIn('private final boolean readsStorageImage;', self.text)
+        self.assertIn('this.readsStorageImage = !this.storageImages.isEmpty()', self.text)
+        self.assertIn('|| this.samplers.stream().anyMatch(imageNames::contains);', self.text)
+        self.assertIn('boundary.vitrail$setNextPassReadsStorageImage(this.readsStorageImage);', self.text)
+        # Said before the pass is built, because the backend decides as it builds one.
+        said = self.text.index('vitrail$setNextPassReadsStorageImage(this.readsStorageImage)')
+        built = self.text.index('RenderPassDescriptor descriptor = RenderPassDescriptor.create(this.label);')
+        self.assertLess(said, built)
+        chain = PACK_CHAIN.read_text(encoding='utf-8')
+        self.assertIn('imageNames.addAll(PackStorageImages.names(each));', chain)
+
     def test_the_contract_is_named_by_a_workflow(self):
         self.assertIn('tests/test_pack_pass_writes_every_pixel.py',
                       BUILD.read_text(encoding='utf-8'))

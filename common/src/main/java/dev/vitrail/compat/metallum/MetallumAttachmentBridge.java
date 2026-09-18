@@ -60,6 +60,26 @@ public final class MetallumAttachmentBridge {
 		}
 	}
 
+	/**
+	 * Tells the encoder whether the pass it is about to create may read a storage image written
+	 * since the live encoder opened.
+	 * <p>
+	 * A no-op wherever the backend cannot be told, which leaves it owing the boundary exactly as it
+	 * did before this existed.
+	 */
+	public static void setNextPassReadsStorageImage(Object encoder, boolean reads) {
+		Surface found = surface();
+		if (found == null) {
+			return;
+		}
+
+		try {
+			found.reads().invoke(encoder, reads);
+		} catch (ReflectiveOperationException | RuntimeException exception) {
+			giveUp(exception);
+		}
+	}
+
 	private static synchronized Surface surface() {
 		if (surface != null || refused) {
 			return surface;
@@ -71,7 +91,9 @@ public final class MetallumAttachmentBridge {
 					contents,
 					contents.getConstructor(boolean.class, boolean.class),
 					Class.forName(ENCODER_CLASS).getMethod(
-							"setNextPassContents", Array.newInstance(contents, 0).getClass()));
+							"setNextPassContents", Array.newInstance(contents, 0).getClass()),
+					Class.forName(ENCODER_CLASS).getMethod(
+							"setNextPassReadsStorageImage", boolean.class));
 		} catch (ReflectiveOperationException | RuntimeException exception) {
 			// A backend that is not Metallum at all, or an older one. Not an error: the passes keep
 			// the behaviour they had before this existed, and the reason is kept for the log.
@@ -94,6 +116,6 @@ public final class MetallumAttachmentBridge {
 				+ "pass after it keeps its load and store actions: {}", exception.toString());
 	}
 
-	private record Surface(Class<?> contents, Constructor<?> answer, Method setter) {
+	private record Surface(Class<?> contents, Constructor<?> answer, Method setter, Method reads) {
 	}
 }

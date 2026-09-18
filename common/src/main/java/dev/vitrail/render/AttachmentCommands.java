@@ -27,4 +27,19 @@ public interface AttachmentCommands {
 	 * @param overwritten    one entry per slot; true only from a pass that writes every pixel of it
 	 */
 	void vitrail$setNextPassContents(boolean[] readAfterwards, boolean[] overwritten);
+
+	/**
+	 * Declares whether the next render pass created on this encoder may read a storage image written
+	 * since the live one opened.
+	 * <p>
+	 * A graphics stage's write to such an image is untracked, so a read of one afterwards has to be
+	 * ordered against it, and the backend can only order across an encoder boundary. Whether that
+	 * boundary is owed is therefore a fact about the pass that reads, which the layer that owns the
+	 * chain is the one that knows.
+	 *
+	 * @param reads true where the pass may read one, and true wherever that is not certain: the
+	 *              boundary is what makes the read correct, and going without one is a wrong image
+	 *              rather than a slower frame
+	 */
+	void vitrail$setNextPassReadsStorageImage(boolean reads);
 }

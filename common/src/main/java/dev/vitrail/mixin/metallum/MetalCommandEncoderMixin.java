@@ -78,6 +78,11 @@ public abstract class MetalCommandEncoderMixin implements MipmapCommands, Storag
 	}
 
 	@Override
+	public void vitrail$setNextPassReadsStorageImage(boolean reads) {
+		MetallumAttachmentBridge.setNextPassReadsStorageImage(this, reads);
+	}
+
+	@Override
 	public void vitrail$setNextPassContents(boolean[] readAfterwards, boolean[] overwritten) {
 		MetallumAttachmentBridge.setNextPassContents(this, readAfterwards, overwritten);
 	}

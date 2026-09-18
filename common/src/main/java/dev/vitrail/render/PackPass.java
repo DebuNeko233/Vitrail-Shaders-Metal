@@ -124,6 +124,16 @@ final class PackPass {
 	 * pass, so it is the chain that answers it and this class only carries the answer.
 	 */
 	private final Set<ChainPlan.Attachment> stillRead;
+
+	/**
+	 * Whether this pass may read a storage image written by an earlier pass of the frame.
+	 * <p>
+	 * True wherever that is not certain, because what the answer decides is whether the backend takes
+	 * an encoder boundary to order the two, and an unordered read of an untracked write is a wrong
+	 * image. Certain means both halves: this program declares no writable image of its own, and none
+	 * of the names it samples is one any program of this chain uses for a writable image.
+	 */
+	private final boolean readsStorageImage;
 	private final List<ChainPlan.Attachment> attachments;
 	private final PackValues values;
 	private final PackUniforms uniforms;
@@ -190,6 +200,17 @@ final class PackPass {
 	private static final boolean ELIDE_TARGET_TRAFFIC = Boolean.getBoolean("vitrail.elideTargetTraffic");
 
 	/**
+	 * Whether the property asked for the encoder boundary an untracked write owes to be taken only
+	 * where a pass may read one.
+	 * <p>
+	 * A boundary costs a pass's whole attachment set, loaded into tile memory and stored back again,
+	 * and the backend used to take one after every graphics write to a storage image whether or not
+	 * anything read it. Off unless asked for, because the boundary is what makes such a read correct.
+	 */
+	private static final boolean NARROW_STORAGE_BOUNDARY =
+			Boolean.getBoolean("vitrail.narrowStorageBoundary");
+
+	/**
 	 * Whether any sampler of this program names a target this pass also writes, on the same half.
 	 * <p>
 	 * The other half of the load-action question, and the half the pass's own text cannot answer: a
@@ -251,7 +272,7 @@ final class PackPass {
 	 */
 	PackPass(String place, String program, PackProgram.Loaded loaded, ChainPlan.Pass pass,
 			ColorTargets targets, PackValues values, int load, int offset,
-			Set<ChainPlan.Attachment> stillRead) {
+			Set<ChainPlan.Attachment> stillRead, Set<String> imageNames) {
 		this.path = place.isEmpty() ? program : place + "/" + program;
 		this.textureStage = TextureStage.of(program).orElse(null);
 		this.loaded = loaded;
@@ -305,6 +326,8 @@ final class PackPass {
 		String fragment = loaded.program().stages().get(ProgramStage.FRAGMENT).text();
 		this.mayLeavePixelsUnwritten = fragment.contains(DISCARD);
 		this.readsWhatItWrites = readsWhatItWrites();
+		this.readsStorageImage = !this.storageImages.isEmpty()
+				|| this.samplers.stream().anyMatch(imageNames::contains);
 		String stem = "pack/" + load + "/" + (place.isEmpty() ? "root" : place) + "/" + program;
 		Identifier vertexId = Identifier.fromNamespaceAndPath(Vitrail.MOD_ID, stem + "/vertex");
 		Identifier fragmentId = Identifier.fromNamespaceAndPath(Vitrail.MOD_ID, stem + "/fragment");
@@ -622,6 +645,11 @@ final class PackPass {
 		this.attachedViews.clear();
 		for (ChainPlan.Attachment attachment : this.attachments) {
 			this.attachedViews.add(view(targets, attachment));
+		}
+
+		// Said before the pass exists, because the backend decides the boundary as it builds one.
+		if (NARROW_STORAGE_BOUNDARY && encoder instanceof AttachmentCommands boundary) {
+			boundary.vitrail$setNextPassReadsStorageImage(this.readsStorageImage);
 		}
 
 		RenderPassDescriptor descriptor = RenderPassDescriptor.create(this.label);

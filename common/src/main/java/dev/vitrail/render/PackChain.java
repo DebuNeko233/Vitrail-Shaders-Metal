@@ -2539,6 +2539,14 @@ public final class PackChain {
 		// chain answers by position, and two passes of one chain may compare equal while standing at
 		// different points of the frame. A pass the chain does not know answers "everything", which
 		// is the direction that only ever keeps a store.
+		// Every name any program of this chain uses for a writable image, whichever program declares
+		// it: an image written by one pass and sampled by another is read through a name this set
+		// holds, and a pass whose own samplers avoid all of them cannot be reading one.
+		Set<String> imageNames = new HashSet<>();
+		for (PackProgram.Loaded each : this.chain.programs().values()) {
+			imageNames.addAll(PackStorageImages.names(each));
+		}
+
 		IdentityHashMap<ChainPlan.Pass, Integer> slots = new IdentityHashMap<>();
 		List<ChainPlan.Pass> planned = plan.passes();
 		for (int slot = 0; slot < planned.size(); slot++) {
@@ -2559,7 +2567,7 @@ public final class PackChain {
 					? Set.copyOf(pass.attachments())
 					: plan.neededAfterWrite(slot);
 			built.add(new PackPass(this.chain.place(), pass.program(), loaded, pass, this.targets,
-					this.values, this.load, offset, stillRead));
+					this.values, this.load, offset, stillRead, imageNames));
 			offset += Mth.roundToward(PackPass.uniformSizeOf(loaded), alignment);
 		}
 
