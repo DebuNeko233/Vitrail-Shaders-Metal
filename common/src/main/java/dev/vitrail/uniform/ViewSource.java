@@ -133,13 +133,19 @@ public interface ViewSource {
 	Matrix4fc gbufferPreviousProjection();
 
 	/**
-	 * The four published shadow matrices are the pair the shadow map ON HAND was drawn with, moved
-	 * onto this frame's camera. The map is drawn at the end of a frame for the next one, so its
-	 * light direction and its grid cell are the previous frame's; but these matrices act on player
-	 * space, which every frame measures from wherever its own camera stands, so the drawn matrix
-	 * handed over as it is would ask about a point one frame of camera motion away from the one
-	 * being shaded. What is left a frame late once that motion is added back is the sun angle alone.
-	 * The {@code drawn} four are the pair as it stands, for the one stage that draws the map itself.
+	 * The four published shadow matrices are the pair the shadow map BEING SAMPLED was drawn with,
+	 * moved onto this frame's camera. Since the draw moved into the frame that fills it - it has to,
+	 * so that a pack which voxelises into its shadow pass shares one frame with the compute reading
+	 * the volume - that is this frame's pair on a frame that draws the map, and the kept pair on a
+	 * frame the reuse setting carries one over. {@code drawnShadowModelView} and its three siblings
+	 * are exactly that choice, and the four names below publish it.
+	 * <p>
+	 * The map pair is not the same thing and must not be published under these names. Its premise is
+	 * the older design, where the draw stood at the end of a frame for the next one and the map on
+	 * hand therefore really was the one it described; published on a frame that fills the map it is
+	 * one draw old, which puts every lookup where the caster stood a frame ago. That is invisible
+	 * while the camera is still and a displaced shadow as soon as it moves, which is what a pack's
+	 * leaf and grass self-shadowing shows first.
 	 */
 	Matrix4fc shadowModelView();
 

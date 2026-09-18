@@ -17,6 +17,8 @@ SECTION_MANAGER_ACCESSOR = ROOT / "common/src/main/java/dev/vitrail/mixin/access
 SODIUM_SETUP_MIXIN = ROOT / "common/src/main/java/dev/vitrail/mixin/sodium/MixinSodiumWorldRendererSetup.java"
 MIXIN_CONFIG = ROOT / "common/src/main/resources/vitrail.mixins.json"
 SHADOW_FRAME_PROBE = ROOT / "common/src/main/java/dev/vitrail/render/timing/ShadowFrameProbe.java"
+SHADOW_MATRIX_VALUES = ROOT / "common/src/main/java/dev/vitrail/uniform/values/ShadowMatrixValues.java"
+SHADOW_GEOMETRY_VALUES = ROOT / "common/src/main/java/dev/vitrail/uniform/values/ShadowGeometryValues.java"
 
 
 def text(path):
@@ -170,6 +172,35 @@ class ShadowTerrainContractTest(unittest.TestCase):
         self.assertNotIn("vitrail$setNeedsRenderListUpdate", accessor)
         self.assertIn("void vitrail$readRenderListFromTree(Viewport viewport, FogParameters fog);", accessor)
         self.assertIn("void vitrail$renderOutOfGraph(Viewport viewport, FogParameters fog);", accessor)
+
+    def test_published_shadow_matrices_are_the_pair_the_stage_draws_with(self):
+        """The four names a pack reads must describe the map it is about to sample.
+
+        They used to be the `map` fields, which was right while the draw stood at the end of a frame
+        for the next one. The draw moved into the frame, the premise went with it, and nothing held
+        the two together: every sampling pass was handed a matrix one draw old, so every lookup
+        landed where the caster stood a frame earlier. That is invisible while the camera is still
+        and a displaced shadow as soon as it moves. `drawnShadow*` is the choice that survives both
+        designs, so these names are pinned to it rather than to the fields behind it.
+        """
+        values = compact(SHADOW_MATRIX_VALUES)
+        for name in ("shadowModelView", "shadowModelViewInverse",
+                     "shadowProjection", "shadowProjectionInverse"):
+            self.assertIn(f'builder.add("{name}", UniformShape.MAT4,',
+                          values)
+            self.assertIn(f"(world, out) -> out.set(world.drawnShadow{name[6:]}())",
+                          values)
+
+        # The fields behind those names are the carried-over pair and must not be published as them.
+        for field in ("world.shadowModelView()", "world.shadowModelViewInverse()",
+                      "world.shadowProjection()", "world.shadowProjectionInverse()"):
+            self.assertNotIn(field, values)
+
+        # The shadow programs already read the drawn pair, so the two halves agree: one stage draws
+        # the map and the rest sample it, and both ask the same accessor.
+        geometry = compact(SHADOW_GEOMETRY_VALUES)
+        self.assertIn("world.drawnShadowModelView()", geometry)
+        self.assertIn("world.drawnShadowProjection()", geometry)
 
     def test_shadow_frame_probe_is_opt_in_and_cannot_change_what_it_measures(self):
         """A per-frame answer to a per-frame question, and nothing more than that.

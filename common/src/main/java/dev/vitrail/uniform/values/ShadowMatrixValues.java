@@ -12,9 +12,22 @@ import dev.vitrail.uniform.UniformShape;
  * they cost nothing to compute: an unshifted camera position, the sky angle, and an orthographic
  * matrix built from the pack's own distance.
  * <p>
- * What they answer is the pair the map ON HAND was drawn with, moved onto this frame's camera, see
- * {@link dev.vitrail.uniform.ViewSource}. The shadow programs alone read that pair as it stands, and
- * they get it from the layer {@link ShadowGeometryValues} puts over these four names.
+ * <strong>What they answer is the pair the map BEING SAMPLED was drawn with, moved onto this
+ * frame's camera</strong> - which is the pair the stage draws with, and it is answered through
+ * {@code drawnShadowModelView} and its three siblings for that reason rather than through the
+ * {@code map} fields directly.
+ * <p>
+ * Those four names used to be the {@code map} pair, and that was right while the shadow draw stood
+ * at the end of a frame, for the next one: the map on hand then really was the one that pair
+ * described. The draw moved into the frame - it has to, so that a pack which voxelises into its
+ * shadow pass shares one frame with the compute that reads the volume - and the premise went with
+ * it. Publishing the {@code map} fields on a frame that fills the map hands every sampling pass a
+ * matrix one draw old, so every lookup lands where the caster was a frame ago: invisible while the
+ * camera is still, a displaced shadow the moment it moves, and worst on the fine shadow content a
+ * pack reads for leaf and grass self-shadowing. {@link ShadowGeometryValues} already overrides
+ * these four for the shadow programs, which is the same answer on either kind of frame; after this
+ * change the two agree everywhere, and the override is kept because it also carries names these do
+ * not.
  */
 public final class ShadowMatrixValues {
 
@@ -23,12 +36,12 @@ public final class ShadowMatrixValues {
 
 	public static void register(UniformCatalog.Builder builder) {
 		builder.add("shadowModelView", UniformShape.MAT4,
-				(world, out) -> out.set(world.shadowModelView()));
+				(world, out) -> out.set(world.drawnShadowModelView()));
 		builder.add("shadowModelViewInverse", UniformShape.MAT4,
-				(world, out) -> out.set(world.shadowModelViewInverse()));
+				(world, out) -> out.set(world.drawnShadowModelViewInverse()));
 		builder.add("shadowProjection", UniformShape.MAT4,
-				(world, out) -> out.set(world.shadowProjection()));
+				(world, out) -> out.set(world.drawnShadowProjection()));
 		builder.add("shadowProjectionInverse", UniformShape.MAT4,
-				(world, out) -> out.set(world.shadowProjectionInverse()));
+				(world, out) -> out.set(world.drawnShadowProjectionInverse()));
 	}
 }
