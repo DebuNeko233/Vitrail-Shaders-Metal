@@ -120,9 +120,11 @@ class ShadowTerrainContractTest(unittest.TestCase):
 
     def test_shadow_and_shadowcomp_share_the_current_frame(self):
         stages = compact(ENGINE_STAGES)
+        begin = stages.index("PackChain.beginShadowFrame();")
         draw = stages.index("ShadowTerrain.draw();")
         compute = stages.index("PackChain.dispatchShadowCompute();")
         after_level = stages.index("public static void afterLevel()")
+        self.assertLess(begin, draw)
         self.assertLess(draw, compute)
         self.assertLess(draw, after_level)
         self.assertEqual(stages.count("ShadowTerrain.draw();"), 1)

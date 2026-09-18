@@ -193,6 +193,11 @@ public final class EngineStages {
 	private static void shadowStage(Matrix4fc modelView, Vec3 cameraPosition) {
 		ShadowTerrain.capture(modelView, cameraPosition);
 
+		// The writer must see this frame's values too. Previously beginFrame lived only inside
+		// dispatchShadowCompute, which was late enough while the shadow draw belonged to the
+		// previous frame but would hand a same-frame voxel writer stale matrices and camera state.
+		PackChain.beginShadowFrame();
+
 		// Match Iris's semantic order: clear/write the shadow custom images and the shadow map,
 		// then dispatch shadowcomp, all under this frame's camera/view uniforms. The compute still
 		// runs before the gbuffers that read its ping-pong output, so frameCounter parity remains

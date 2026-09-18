@@ -1020,6 +1020,23 @@ public final class PackChain {
 	}
 
 	/**
+	 * Opens the pack-value frame before this frame's shadow geometry writes anything.
+	 * <p>
+	 * A begin pass may already have opened it; {@link #beginFrame()} is idempotent for the rest of
+	 * the frame. The explicit call is for packs whose first work is the shadow stage: their
+	 * voxelising shadow program must see the same current camera/view values as the shadow compute
+	 * that follows it.
+	 */
+	public static void beginShadowFrame() {
+		PackChain chain = active;
+		if (disabled || chain == null) {
+			return;
+		}
+
+		chain.beginFrame();
+	}
+
+	/**
 	 * Dispatches {@code shadowcomp} immediately after this frame's shadow geometry, matching Iris's
 	 * clear -> shadow draw -> shadow compute ordering ({@code ShadowRenderer.java:632-633}).
 	 * The dispatch still stands before the gbuffers that read the propagated volumes, so its
@@ -1031,12 +1048,9 @@ public final class PackChain {
 			return;
 		}
 
-		// The frame opens HERE, not at the first draw, and the compute's correctness hangs on it.
-		// The values only move at beginFrame, so without this the dispatch reads the PREVIOUS
-		// frame's numbers: the floodfill then runs under the old frameCounter parity and writes
-		// the half this frame's gbuffers do not read, and every voxel light flickers as the
-		// player moves. Idempotent for the rest of the frame, which sees the same numbers it
-		// always did, only settled a moment earlier.
+		// The same-frame shadow caller opens the values before the geometry writer. Keep this
+		// idempotent ensure here as well: a future caller that dispatches without a shadow draw
+		// must still use this frame's frameCounter parity and previous/current matrices.
 		chain.beginFrame();
 		chain.reanchorCustomImages();
 		chain.compute.dispatch(chain.values, chain.targets);
@@ -2991,9 +3005,9 @@ public final class PackChain {
 		// silently reprojects against itself and a smooth() of the pack fades at twice the speed.
 		// Idempotent, and whoever gets here first pays it, WHICH IS OFTEN NOT THIS LINE. A pack with
 		// a begin opens the frame here, at the head of the level frame and one step ahead of the
-		// shadow stage. A pack with no begin and a shadow compute opens it at dispatchShadowCompute
-		// instead, PackChain.java:964, which stands between the two ranges and carries a reason of
-		// its own; a pack with a prepare and neither of those opens it here too, one step behind
+		// shadow stage. A pack with no begin but a shadow stage opens it through beginShadowFrame
+		// immediately before the shadow writer; dispatchShadowCompute then only confirms the same
+		// frame is open. A pack with a prepare and neither of those opens it here too, one step behind
 		// that stage. On a place with none of the three, the terrain opens it during the world and
 		// this is free.
 		beginFrame();
