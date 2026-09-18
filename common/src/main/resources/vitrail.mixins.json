@@ -73,6 +73,7 @@
 		"SkyRendererMixin",
 		"access.MixinSodiumWorldRenderer",
 		"sodium.MixinSodiumWorldRendererInit",
+		"sodium.MixinSodiumWorldRendererSetup",
 		"StagedVertexBufferDrawMixin",
 		"access.TextureManagerAccessor",
 		"TextFeatureRendererMixin",

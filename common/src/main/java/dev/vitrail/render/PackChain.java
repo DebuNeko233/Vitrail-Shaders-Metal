@@ -1008,11 +1008,10 @@ public final class PackChain {
 		// Taken with the clear rather than after the geometry, because the clear is the line that
 		// says the volume from here on holds THIS frame's writes and nothing older. A pack anchors
 		// what it stores on the block the camera stands in, so that block is what says which cell
-		// each identity lands in, and the frame reading it is not this one.
+		// each identity lands in. The normal path now reads it later in this same shadow stage.
 		//
 		// Not taken at all from a chain that has never opened a frame: see everAdvanced. The value
-		// store would answer the origin of the world, and the next frame would read a move of the
-		// player's whole coordinates, which reanchor answers by emptying the volume.
+		// store would answer the origin of the world, so there is no meaningful anchor to record.
 		if (chain.everAdvanced) {
 			Vector3dc camera = chain.values.world().cameraPositionUnshifted();
 			chain.voxelAnchor.set(block(camera.x()), block(camera.y()), block(camera.z()));
@@ -1021,14 +1020,10 @@ public final class PackChain {
 	}
 
 	/**
-	 * Dispatches {@code shadowcomp} at the head of the frame, over the shadow geometry the frame
-	 * before it wrote.
-	 * <p>
-	 * Iris dispatches it inside its own shadow render ({@code ShadowRenderer.java:632-633}), which is
-	 * the same moment relative to the READERS: there the map is drawn and read within one frame,
-	 * here the shadow stage stands at the end of a frame and the map is one frame late, so the
-	 * moment that shares the frame of the gbuffers reading the volumes is this one. The caller in
-	 * {@code EngineStages} carries what putting it beside the shadow map instead would cost.
+	 * Dispatches {@code shadowcomp} immediately after this frame's shadow geometry, matching Iris's
+	 * clear -> shadow draw -> shadow compute ordering ({@code ShadowRenderer.java:632-633}).
+	 * The dispatch still stands before the gbuffers that read the propagated volumes, so its
+	 * {@code frameCounter} parity is the reader's parity.
 	 */
 	public static void dispatchShadowCompute() {
 		PackChain chain = active;
@@ -1058,9 +1053,11 @@ public final class PackChain {
 	}
 
 	/**
-	 * Moves the identity volume onto the anchor of the frame about to read it, before the compute
-	 * and before any gbuffer samples it. {@link StorageImages#reanchor} carries the whole of why,
-	 * against what Iris does. This half only works out how far.
+	 * Reconciles a cleared identity volume with the camera-block anchor about to read it.
+	 * <p>
+	 * With the same-frame shadow stage this is normally a zero move: the clear/write and compute
+	 * share one camera position and one view. The path remains as a conservative fallback for a
+	 * stage that reached the clear under one anchor and the dispatch under another.
 	 */
 	private void reanchorCustomImages() {
 		if (!this.voxelAnchored) {

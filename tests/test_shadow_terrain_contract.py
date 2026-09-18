@@ -11,6 +11,11 @@ TERRAIN_PROGRAM = ROOT / "common/src/main/java/dev/vitrail/render/TerrainProgram
 TERRAIN_DRAW = ROOT / "common/src/main/java/dev/vitrail/render/TerrainDraw.java"
 GEOMETRY_PROGRAM = ROOT / "common/src/main/java/dev/vitrail/render/GeometryProgram.java"
 SHADOW_TARGETS = ROOT / "common/src/main/java/dev/vitrail/render/ShadowTargets.java"
+SHADOW_TERRAIN = ROOT / "common/src/main/java/dev/vitrail/sodium/ShadowTerrain.java"
+ENGINE_STAGES = ROOT / "common/src/main/java/dev/vitrail/platform/EngineStages.java"
+SECTION_MANAGER_ACCESSOR = ROOT / "common/src/main/java/dev/vitrail/mixin/access/RenderSectionManagerAccessor.java"
+SODIUM_SETUP_MIXIN = ROOT / "common/src/main/java/dev/vitrail/mixin/sodium/MixinSodiumWorldRendererSetup.java"
+MIXIN_CONFIG = ROOT / "common/src/main/resources/vitrail.mixins.json"
 
 
 def text(path):
@@ -112,6 +117,32 @@ class ShadowTerrainContractTest(unittest.TestCase):
         self.assertIn("shadowing = true; try { draw.run(); } finally { shadowing = false; }", draw)
         self.assertIn("return shadowing ? pass.inShadow() : pass;", draw)
         self.assertIn("return wanted && shadowWanted && PackChain.terrain() != null;", draw)
+
+    def test_shadow_and_shadowcomp_share_the_current_frame(self):
+        stages = compact(ENGINE_STAGES)
+        draw = stages.index("ShadowTerrain.draw();")
+        compute = stages.index("PackChain.dispatchShadowCompute();")
+        after_level = stages.index("public static void afterLevel()")
+        self.assertLess(draw, compute)
+        self.assertLess(draw, after_level)
+        self.assertEqual(stages.count("ShadowTerrain.draw();"), 1)
+
+    def test_light_walk_restores_the_exact_camera_manager_state(self):
+        terrain = compact(SHADOW_TERRAIN)
+        accessor = compact(SECTION_MANAGER_ACCESSOR)
+        mixin = compact(SODIUM_SETUP_MIXIN)
+        config = text(MIXIN_CONFIG)
+
+        self.assertIn("ShadowTerrain.captureCameraWalk(camera, viewport, fogParameters);", mixin)
+        self.assertIn('"sodium.MixinSodiumWorldRendererSetup"', config)
+        self.assertIn("int shadowFrame = cameraFrame ^ Integer.MIN_VALUE;", terrain)
+        self.assertIn("renderer.prepareChunkRendering(matrices, camera.x, camera.y, camera.z);", terrain)
+        self.assertIn("manager.finalizeRenderLists(camera, viewport, fog, true);", terrain)
+        self.assertIn("access.vitrail$setRenderLists(lists);", terrain)
+        self.assertIn("access.vitrail$setRenderTree(tree);", terrain)
+        self.assertIn("access.vitrail$setTaskLists(tasks);", terrain)
+        self.assertIn("SortedRenderLists vitrail$getRenderLists();", accessor)
+        self.assertIn("void vitrail$setCameraChanged(boolean value);", accessor)
 
     def test_shadow_target_is_forward_d32_render_to_sample_image(self):
         targets = compact(SHADOW_TARGETS)

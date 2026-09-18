@@ -1,6 +1,10 @@
 package dev.vitrail.mixin.access;
 
 import net.caffeinemc.mods.sodium.client.render.chunk.RenderSectionManager;
+import net.caffeinemc.mods.sodium.client.render.chunk.lists.DeferredTaskList;
+import net.caffeinemc.mods.sodium.client.render.chunk.lists.SortedRenderLists;
+import net.caffeinemc.mods.sodium.client.render.chunk.occlusion.SectionTree;
+import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 import org.spongepowered.asm.mixin.gen.Invoker;
@@ -9,20 +13,38 @@ import org.spongepowered.asm.mixin.gen.Invoker;
  * Reaches the walk state the shadow stage has to move without going through
  * {@code prepareRender}.
  * <p>
- * {@code finalizeRenderLists} lowers the rebuild flag on its way out, whoever called it. The
- * shadow stage calls it at the end of a frame with the light's viewport, so without putting the
- * flag back the camera's own finalize at the top of the next frame would keep the light's lists,
- * and the world would be drawn from the sun.
+ * The shadow stage temporarily replaces Sodium's camera render lists with a light walk, draws
+ * the map, then rebuilds the camera contents before Minecraft prepares its chunk batches. The
+ * manager fields are snapshotted and restored around that scope so the extra traversal does not
+ * become Sodium's state for the next frame.
  * <p>
- * The second walk also has to bump the frame counter: the per-region lists only reset on the
- * first walk of a number, and a second walk under the same one appends until they overflow.
- * {@code prepareRender} does that bump and then rotates Sodium's indirect command ring. The
- * rotation is the cost this accessor exists to skip. The camera already rotated at the top of
- * the frame; doing it again fences a buffer the GPU is still reading and stalls the render
- * thread on the busy frames.
+ * The light walk uses a shadow-only frame token rather than advancing Sodium's real frame. Region
+ * lists reset on a frame-token change; using the next real frame number would leave light-only
+ * regions looking already visited when that next frame arrives.
  */
 @Mixin(value = RenderSectionManager.class, remap = false)
 public interface RenderSectionManagerAccessor {
+
+	@Accessor("renderLists")
+	SortedRenderLists vitrail$getRenderLists();
+
+	@Accessor("renderLists")
+	void vitrail$setRenderLists(SortedRenderLists value);
+
+	@Accessor("renderTree")
+	@Nullable SectionTree vitrail$getRenderTree();
+
+	@Accessor("renderTree")
+	void vitrail$setRenderTree(@Nullable SectionTree value);
+
+	@Accessor("taskLists")
+	@Nullable DeferredTaskList vitrail$getTaskLists();
+
+	@Accessor("taskLists")
+	void vitrail$setTaskLists(@Nullable DeferredTaskList value);
+
+	@Accessor("needsRenderListUpdate")
+	boolean vitrail$needsRenderListUpdate();
 
 	@Accessor("needsRenderListUpdate")
 	void vitrail$setNeedsRenderListUpdate(boolean value);
@@ -35,6 +57,9 @@ public interface RenderSectionManagerAccessor {
 
 	@Accessor("cameraChanged")
 	boolean vitrail$cameraChanged();
+
+	@Accessor("cameraChanged")
+	void vitrail$setCameraChanged(boolean value);
 
 	@Invoker("invalidateRenderLists")
 	void vitrail$invalidateRenderLists();

@@ -106,13 +106,19 @@ The latest hardware baseline pairs Vitrail `97dcf76d` with Metallum `82a0c75e` o
   - `voxel_img` is allocated as a cleared 128³ identity volume and physically camera-block reanchored; `light_img_a/b` are persistent 128³ floodfill volumes.
   - `world0/shadowcomp` compiles and dispatches as groups `(4, 128, 128)` / local `(32, 1, 1)`, and the pack reaches full frames and clean exit.
   - Iris's matrix-bobbing path matches Vitrail's placement of bob/nausea/portal effects in `gbufferModelView`, so that matrix split is not the remaining divergence.
-- [ ] If practical, A/B Photon with `Voxel Volume Center = Player` while standing still and only rotating. Use the result only to discriminate the missing view-center term; do not auto-force the option in production.
-- [ ] Implement a generic scheduling/anchor correction for view-centred voxel identity volumes without Photon names, Photon center arithmetic, shader-option forcing or Metallum pack policy, then hardware-rerun a stationary emissive source while rotating the view.
+- [x] A/B Photon with `Voxel Volume Center = Player` while standing still and only rotating: the displacement/flicker basically disappears compared with `Ahead`. This isolates the missing view-centre term; do not auto-force the option in production.
+- [x] Implement the generic source correction without Photon names, Photon center arithmetic, shader-option forcing or Metallum pack policy.
+  - The shadow terrain/voxel writer now runs at the frame head after Sodium's camera cull and before `shadowcomp`, so writer and compute share current camera/view uniforms as they do under Iris.
+  - Sodium's exact camera `Viewport` / fog inputs are captured from `setupTerrain`. The light walk uses a sign-bit-flipped frame token, prepares and draws its own lists, then a camera traversal repairs the persistent region-list contents and the manager's original render-list/tree/task/flag state is restored before the main-world batch prepare.
+  - The existing whole-block storage-image reanchor remains as a conservative fallback; the normal same-frame path should now request a zero move.
+- [ ] CI-verify the same-frame shadow scheduling/Mixin signatures on the fixed Vitrail branch.
+- [ ] Hardware-rerun Photon in `Ahead` mode around the same stationary emissive source while rotating without translating; require the shift/flicker to be gone before closing this gap.
+- [ ] Reconfirm ordinary shadow terrain and one non-view-centred voxel pack after the scheduling move.
 
 ## P2 - Keep acceptance and documentation synchronized
 
 - [ ] Keep both PRs Draft/open/unmerged while PHASE 17 real-pack acceptance is incomplete.
-- [x] Keep `.context/STATE.md` and `.context/TASKS.md` synchronized with the current source findings and the latest `97dcf76d + 82a0c75e` hardware baseline; record Sundial's blocker as hardware-closed and Photon LPV view-centre drift/flicker as still open.
+- [x] Keep `.context/STATE.md` and `.context/TASKS.md` synchronized with the latest `97dcf76d + 82a0c75e` hardware evidence, including the Photon Ahead-vs-Player A/B and the same-frame Vitrail source correction awaiting CI/hardware validation.
 - [ ] Bring `docs/metallum-port.md` forward from its older hardware-head wording in a dedicated documentation synchronization pass; do not silently treat its stale SHA as current evidence.
 - [ ] Keep Vitrail/Metallum ownership boundaries strict in every follow-up: pack semantics/defaults/diagnostics in Vitrail; generic Metal execution in Metallum.
 - [ ] Do not relax startup guards or claim general Metal shader-pack support from one runtime session, CI alone, or the absence of log-level errors.

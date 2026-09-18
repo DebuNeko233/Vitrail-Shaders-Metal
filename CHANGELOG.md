@@ -15,6 +15,11 @@ what the next one holds.
 
 ### Fixed
 
+- **View-centred coloured lighting no longer shifts or flickers when the camera turns.** The
+  voxelising shadow draw and its shadow compute now run in the same level frame, and Vitrail
+  restores Sodium's camera render-list state before the main world prepares its chunk batches.
+  Packs can therefore choose a voxel origin from the current view without Vitrail reading an
+  identity volume written under the previous view.
 - **Compatibility-profile packs can define their own three-argument min/max helpers again.** A pack-local
   `min3`, `max3` or `mid3` is now kept separate from the compiler's built-in overload set, avoiding
   the misleading parameter-precision compile failure that stopped Sundial Lite before its final pass.

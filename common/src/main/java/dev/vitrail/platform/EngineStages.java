@@ -145,8 +145,9 @@ public final class EngineStages {
 	 * While the level's frame graph is being built, which is the one moment the model view and the
 	 * camera position of this frame are both to hand and neither has been pushed anywhere yet.
 	 * <p>
-	 * The frame graph carries no pass of ours, only this reading: the shadow map is drawn
-	 * at the end of the frame, for the next one, and this is what the stage needs from here.
+	 * The frame graph carries no pass of ours. Sodium has already culled the terrain for the
+	 * camera when this method runs, and its camera chunk batches have not been prepared yet; that
+	 * gap is where the shadow stage can make a scoped light walk and restore the camera lists.
 	 * <p>
 	 * It is also the top of the level frame, which is a second thing entirely and is why the first
 	 * and the last lines below have nothing to do with the two arguments.
@@ -192,14 +193,11 @@ public final class EngineStages {
 	private static void shadowStage(Matrix4fc modelView, Vec3 cameraPosition) {
 		ShadowTerrain.capture(modelView, cameraPosition);
 
-		// The pack's shadow compute, HERE at the head of the frame and not beside the shadow map
-		// that feeds it, and the placement is the parity contract. Complementary's floodfill
-		// ping-pongs on frameCounter % 2, writing one half and having this frame's gbuffers read
-		// the other. Dispatched at the end of the frame it runs under the WRITER's parity, and
-		// every reader is a frame late forever after: the coloured light smears and snaps as the
-		// player walks. Run here it shares the frame, and so the parity, of its readers, which is
-		// the moment Iris gives it inside its own shadow render. The volumes it propagates are the
-		// previous frame's shadow-geometry writes, one frame late like the shadow map itself.
+		// Match Iris's semantic order: clear/write the shadow custom images and the shadow map,
+		// then dispatch shadowcomp, all under this frame's camera/view uniforms. The compute still
+		// runs before the gbuffers that read its ping-pong output, so frameCounter parity remains
+		// the reader's parity rather than the previous frame's.
+		ShadowTerrain.draw();
 		PackChain.dispatchShadowCompute();
 	}
 
@@ -310,10 +308,6 @@ public final class EngineStages {
 		// and again on the settings screen through PackChoice.lastError.
 		PackChain.draw();
 
-		// After the chain and not before: the composites above read the map the previous frame
-		// drew, and this draws the next frame's over it. The end of the frame is the whole
-		// culling design, see ShadowTerrain.
-		ShadowTerrain.draw();
 	}
 
 	/**

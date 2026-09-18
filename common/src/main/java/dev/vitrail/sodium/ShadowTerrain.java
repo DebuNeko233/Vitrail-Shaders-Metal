@@ -22,10 +22,13 @@ import net.caffeinemc.mods.sodium.client.render.SodiumWorldRenderer;
 import net.caffeinemc.mods.sodium.client.render.chunk.ChunkRenderMatrices;
 import net.caffeinemc.mods.sodium.client.render.chunk.RenderSectionManager;
 import net.caffeinemc.mods.sodium.client.render.chunk.lists.ChunkRenderList;
+import net.caffeinemc.mods.sodium.client.render.chunk.lists.DeferredTaskList;
 import net.caffeinemc.mods.sodium.client.render.chunk.lists.SortedRenderLists;
+import net.caffeinemc.mods.sodium.client.render.chunk.occlusion.SectionTree;
 import net.caffeinemc.mods.sodium.client.render.viewport.Viewport;
 import net.caffeinemc.mods.sodium.client.util.FogParameters;
 import net.caffeinemc.mods.sodium.client.util.GameRendererStorage;
+import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayerGroup;
@@ -39,50 +42,30 @@ import org.joml.Vector3d;
 import org.joml.Vector3f;
 
 /**
- * Draws the chunk renderer once more, at the very end of the frame, into the shadow map the next
- * frame will read.
+ * Draws the chunk renderer once more for the light at the head of the level frame, after Sodium
+ * has culled for the camera and before Minecraft asks Sodium to prepare the camera's chunk batches.
  * <p>
- * The stage stands at the end of a frame and not at its top, and that placement is the culling
- * design. The world is walked a second time for the light, under the shape
- * {@link ShadowCullFrustum} chooses for it. <strong>The walk is the light's own</strong>: it is
- * Sodium's synchronous traversal of every built section, under the light's frustum alone, with no
- * occlusion and no fog, so nothing the camera can or cannot see decides what the map holds. What
- * it reuses is the CONTAINERS: {@code ChunkRenderList} is one persistent object per region, so
- * there is nothing to save and restore, only an order to respect. Advancing the frame counter first
- * is what lets the second walk of a frame reset those lists instead of overflowing them, and raising
- * {@code needsRenderListUpdate} afterwards is what makes the camera's walk at the top of the next
- * frame take them back. One extra walk per frame, no bookkeeping.
+ * The light walk and the camera walk share Sodium's persistent per-region render-list objects.
+ * A shadow-only frame token makes the light traversal reset those objects without advancing
+ * Sodium's real frame. The light lists are prepared and drawn immediately; then the exact camera
+ * viewport captured from {@code SodiumWorldRenderer.setupTerrain} is traversed again to put the
+ * camera contents back into every region the light overwrote. The manager's top-level render-list,
+ * tree and deferred-task references and its flags are restored afterwards, so the extra walk is a
+ * scoped operation rather than the state Sodium carries into the next frame.
  * <p>
- * The one thing the walk leaves behind for the length of the stage is the occlusion tree Sodium
- * answers visibility questions from, which is the light's after the walk and the camera's before
- * it. The entities are gathered AFTER the walk for that reason: Sodium's entity culling asks that
- * tree, and asked before the walk it drops every caster whose sections the camera's walk did not
- * reach, a mob behind the player first of all (spared: a box touching a section with no geometry,
- * a glowing or named mob, a huge one). Iris extracts its entities inside its shadow scope, where
- * that tree is never the camera's ({@code shadows/ShadowRenderer.java:549}, the swap at
- * {@code compat/sodium/mixin/MixinRenderSectionManagerShadow.java:150}).
+ * Running here rather than at the end of the previous frame is required by voxelising packs. Iris
+ * clears custom images, draws the shadow geometry and dispatches {@code shadowcomp} in one frame.
+ * A pack may derive its voxel-grid origin from the current view direction as well as the camera
+ * position; writing the identity volume under one frame's view and reading it under the next makes
+ * that grid jump when the view-centred origin crosses an integer cell. Keeping writer and compute
+ * in the same frame fixes the semantic mismatch without knowing how any pack computes its centre.
  * <p>
- * <strong>The price is that the shadows are one frame late</strong>, drawn with this frame's sun for
- * the next frame's picture. That is a deliberate divergence from Iris, which culls, draws and reads
- * within one frame at the cost of restoring every piece of walk state it touched; a design this
- * project measured three failed attempts against. A sub-frame of sun motion is invisible - but only
- * the sun is allowed to be late, and the camera is not: the map is drawn around wherever the camera
- * stood on this frame, and the next frame measures its own player space from somewhere else. That
- * difference is put back where the pair is published, {@code ViewMatrices}, and without it every
- * shadow in the picture sits one frame of camera motion out of place.
+ * Nothing of the terrain draw itself is reimplemented here. {@code drawChunkLayer} and
+ * {@code prepareChunkRendering} are Sodium's public entries; Vitrail only supplies the light's
+ * render lists and changes its own shadow routing while the draw runs.
  * <p>
- * Nothing of the draw itself is ours. {@code drawChunkLayer} is Sodium's own public entry; what
- * changes is that our two mixins answer differently while {@link TerrainDraw#shadowPass} holds its
- * flag, so the pipeline is the pack's {@code shadow} program and the render pass is opened on the
- * shadow map. The geometry, the regions and the push constants stay exactly where they were, which
- * is the only way to touch the most internal code Sodium has under a licence this project may not
- * copy from.
- * <p>
- * <strong>The matrices handed over are the camera's, deliberately, and they are not what the shadow
- * is drawn with.</strong> They go into Sodium's own {@code u_Globals}, which our programs never
- * read: they take their matrices from their own block, where the shadow pair is. Handing the shadow
- * pair here would leave that uniform holding the light's view for any chunk pass the pack does not
- * serve, and the game's own shader would then draw it from the sun.
+ * The matrices handed to Sodium remain the camera's deliberately. They feed Sodium's own
+ * {@code u_Globals}; pack shadow programs read their shadow matrices from Vitrail's own block.
  */
 public final class ShadowTerrain {
 
@@ -97,6 +80,11 @@ public final class ShadowTerrain {
 	private static final Vector3f LIGHT_VECTOR = new Vector3f();
 
 	private static Vec3 camera;
+
+	/** The exact camera traversal inputs Sodium used before the level render begins. */
+	private static @Nullable Camera cameraWalkCamera;
+	private static @Nullable Viewport cameraWalkViewport;
+	private static @Nullable FogParameters cameraWalkFog;
 
 	/**
 	 * The block table the cull was last measured against, or -1 for none. Counted rather than
@@ -131,9 +119,8 @@ public final class ShadowTerrain {
 	}
 
 	/**
-	 * Takes what the frame was set up with, at the moment the frame graph is built. Read there and
-	 * used at the end of the frame: by then the camera state has been walked over by everything in
-	 * between, and the draw has to agree with what this frame's chunk passes were given.
+	 * Takes the frame's model view and camera position immediately before the same-frame shadow
+	 * stage runs.
 	 */
 	public static void capture(Matrix4fc modelView, Vec3 cameraPosition) {
 		MODEL_VIEW.set(modelView);
@@ -141,8 +128,19 @@ public final class ShadowTerrain {
 	}
 
 	/**
-	 * Walks the world for the light and draws the shadow map, using the state captured when this
-	 * frame was set up. One draw per capture: a frame that never set a graph up draws no map.
+	 * Takes the camera traversal Sodium has just completed. The three references are consumed by
+	 * the next shadow stage so a frame that never ran terrain setup cannot accidentally reuse an
+	 * older camera viewport.
+	 */
+	public static void captureCameraWalk(Camera camera, Viewport viewport, FogParameters fog) {
+		cameraWalkCamera = camera;
+		cameraWalkViewport = viewport;
+		cameraWalkFog = fog;
+	}
+
+	/**
+	 * Walks the world for the light and draws the shadow map in the frame whose state was captured.
+	 * One draw per capture: a frame that never set a graph up draws no map.
 	 * <p>
 	 * Caught like every other entry point the bus calls into, and this was the one that was not. What
 	 * it latches is the stage rather than the pack, see {@link TerrainDraw#shadowStageFailed}.
@@ -161,9 +159,27 @@ public final class ShadowTerrain {
 		Vec3 camera = ShadowTerrain.camera;
 		ShadowTerrain.camera = null;
 
+		Camera restoreCamera = cameraWalkCamera;
+		Viewport restoreViewport = cameraWalkViewport;
+		FogParameters restoreFog = cameraWalkFog;
+		cameraWalkCamera = null;
+		cameraWalkViewport = null;
+		cameraWalkFog = null;
+
 		SodiumWorldRenderer renderer = SodiumWorldRenderer.instanceNullable();
 		Minecraft minecraft = Minecraft.getInstance();
 		if (camera == null || renderer == null || minecraft == null) {
+			return;
+		}
+
+		// Without the exact camera viewport there is no safe way to give Sodium its per-region
+		// lists back after a light walk. Clear the pack's transient images rather than keeping a
+		// stale identity volume, and leave the stage closed.
+		if (restoreCamera == null || restoreViewport == null || restoreFog == null) {
+			PackChain.clearCustomImages();
+			Vitrail.logger().warn("The shadow stage has no captured Sodium camera traversal this "
+					+ "frame, so it was skipped rather than leaving the world's render lists on "
+					+ "the light");
 			return;
 		}
 
@@ -216,28 +232,26 @@ public final class ShadowTerrain {
 
 		ShadowCasters casters = TerrainDraw.shadowCasters();
 
-		// The frame counter first, and it is the piece easiest to miss: the per region lists only
-		// reset themselves for the first walk of a frame, so a second walk under the same number
-		// appends to the camera's lists until it overflows
-		// them. The walk itself is the synchronous fallback, which is the one path that neither
-		// consults the asynchronous occlusion tree, empty for a viewport it has never seen, nor
-		// waits for it.
-		//
-		// prepareRender would then rotate the indirect command ring. The camera already did that
-		// at the top of the frame; a second rotate in the same frame is the stall #115 names.
-		// The steps live here rather than as a default on the accessor: Mixin treats an interface
-		// mixin with a default method as targeting an interface, and RenderSectionManager is a
-		// class, so the config fails to prepare. The check is Mixin's own, seen on the Fabric boot.
-		// keepShadowRotate puts the old call back so the two paths can be timed on the same jar.
+		RenderSectionManagerAccessor access = (RenderSectionManagerAccessor) manager;
+		SortedRenderLists cameraLists = access.vitrail$getRenderLists();
+		SectionTree cameraTree = access.vitrail$getRenderTree();
+		DeferredTaskList cameraTasks = access.vitrail$getTaskLists();
+		int cameraFrame = access.vitrail$getFrame();
+		boolean cameraNeedsUpdate = access.vitrail$needsRenderListUpdate();
+		boolean cameraChanged = access.vitrail$cameraChanged();
+
+		// Region lists reset when their last-visible frame differs from the collector's frame. The
+		// light therefore needs a distinct token, but it must NOT be the next real frame: a region
+		// visible only to the light would then look already visited when that frame arrives. Flip
+		// the sign bit instead. It is unique for this real frame and the manager is restored before
+		// anything else in Sodium reads its frame counter.
+		int shadowFrame = cameraFrame ^ Integer.MIN_VALUE;
 		if (RingTimings.keepSecondRotate()) {
+			// Developer timing probe only: keep the old second ring rotation measurable without
+			// letting prepareRender's increment become the collector token.
 			manager.prepareRender();
-		} else {
-			RenderSectionManagerAccessor access = (RenderSectionManagerAccessor) manager;
-			access.vitrail$setFrame(access.vitrail$getFrame() + 1);
-			if (access.vitrail$cameraChanged()) {
-				access.vitrail$invalidateRenderLists();
-			}
 		}
+		access.vitrail$setFrame(shadowFrame);
 		try {
 			// The shape the pack asked for, and a box around the camera cut out of it wherever a
 			// shadow distance bounds the walk. Distance, default and Advanced keep that box and
@@ -302,10 +316,37 @@ public final class ShadowTerrain {
 			// elapsed and the map was filled again every time.
 			draw(renderer, minecraft, camera);
 		} finally {
-			// The flag finalizeRenderLists just lowered, back up whatever happened above: the
-			// camera's walk at the top of the next frame has to rebuild, or the world would be
-			// drawn from the sun.
-			((RenderSectionManagerAccessor) manager).vitrail$setNeedsRenderListUpdate(true);
+			restoreCameraWalk(manager, access, restoreCamera, restoreViewport, restoreFog,
+					cameraFrame, cameraLists, cameraTree, cameraTasks,
+					cameraNeedsUpdate, cameraChanged);
+		}
+	}
+
+	/**
+	 * Rebuilds the contents of the persistent region lists the light overwrote, then restores the
+	 * manager objects and flags Sodium had after its real camera setup.
+	 * <p>
+	 * The temporary camera traversal runs under the ORIGINAL frame token. Camera-only regions were
+	 * never changed by the light and therefore keep their existing contents; overlapping regions
+	 * carry the shadow token and are reset and filled from the camera again. The original top-level
+	 * list can then be put back verbatim. Light-only regions keep the shadow token but are not in
+	 * that list, and the sign-bit token cannot masquerade as the next real frame.
+	 */
+	private static void restoreCameraWalk(RenderSectionManager manager,
+			RenderSectionManagerAccessor access, Camera camera, Viewport viewport,
+			FogParameters fog, int frame, SortedRenderLists lists,
+			@Nullable SectionTree tree, @Nullable DeferredTaskList tasks,
+			boolean needsUpdate, boolean changed) {
+		try {
+			access.vitrail$setFrame(frame);
+			manager.finalizeRenderLists(camera, viewport, fog, true);
+		} finally {
+			access.vitrail$setFrame(frame);
+			access.vitrail$setRenderLists(lists);
+			access.vitrail$setRenderTree(tree);
+			access.vitrail$setTaskLists(tasks);
+			access.vitrail$setNeedsRenderListUpdate(needsUpdate);
+			access.vitrail$setCameraChanged(changed);
 		}
 	}
 
@@ -315,6 +356,11 @@ public final class ShadowTerrain {
 		Matrix4fc projection =
 				((GameRendererStorage) minecraft.gameRenderer).sodium$getProjectionMatrix();
 		ChunkRenderMatrices matrices = new ChunkRenderMatrices(projection, MODEL_VIEW);
+
+		// The light walk changed the per-region lists after Sodium prepared no batches for them.
+		// Prepare those batches now, before any shadow draw. Minecraft's ordinary camera prepare
+		// runs later in LevelRenderer.render, after this stage has restored the camera lists.
+		renderer.prepareChunkRendering(matrices, camera.x, camera.y, camera.z);
 
 		// The game's own chunk sampler, mipmapped and clamped, and it is NOT what the pack's shadow
 		// programs read the atlas through: the renderer hands this to begin, where the chunk

@@ -414,8 +414,8 @@ public final class StorageImages implements AutoCloseable {
 	 * Complementary's coarse reflection volume is stored at a QUARTER of the voxel position
 	 * ({@code lib/voxelization/reflectionVoxelization.glsl}), one cell per four blocks, and it is
 	 * cleared each stage exactly like the identity volume. Moved by a block count it would land four
-	 * cells out in the direction of travel, which is worse than the frame of lag it carries today,
-	 * and nothing in an {@code image.} directive tells the two apart. It has no uncleared twin, so
+	 * cells out in the direction of travel, which is worse than leaving it untouched, and nothing
+	 * in an {@code image.} directive tells the two apart. It has no uncleared twin, so
 	 * the rule excludes it.
 	 * <p>
 	 * <strong>The rule is sufficient and not necessary, and the log says so.</strong> The same
@@ -440,36 +440,18 @@ public final class StorageImages implements AutoCloseable {
 	}
 
 	/**
-	 * Moves every volume {@link #movable} accepts onto the anchor of the frame about to read it, by
-	 * the whole blocks the camera has crossed since it was filled.
+	 * Moves every volume {@link #movable} accepts by whole camera blocks when a writer and reader
+	 * nevertheless arrive under different anchors.
 	 * <p>
-	 * <strong>What Iris does.</strong> It empties the custom images at the head of the level render
-	 * ({@code pipeline/IrisRenderingPipeline.java:892}), draws the shadow geometry that stores block
-	 * identities into them, and dispatches {@code shadowcomp} at the foot of that stage
-	 * ({@code shadows/ShadowRenderer.java:632}). Three points of ONE frame, so writer and reader
-	 * share a {@code cameraPosition}, and the volume Complementary indexes as
-	 * {@code scenePos + cameraPositionBestFract + half} is anchored on the same block for both.
+	 * The ordinary shadow path no longer needs that repair: it clears custom images, draws the
+	 * voxelising shadow geometry and dispatches {@code shadowcomp} in one frame, matching Iris, so
+	 * both sides share the same camera position and any pack-defined view-centred origin. This
+	 * operation remains as a backend-neutral safety path for an actual anchor delta; the scale
+	 * guard above is still required because not every cleared 3D image is one texel per block.
 	 * <p>
-	 * <strong>What prevents it here.</strong> This engine draws the shadow stage at the END of a
-	 * frame for the next one ({@link dev.vitrail.sodium.ShadowTerrain}, and that placement is not a
-	 * preference: Sodium's per region lists reset on the FIRST walk of a frame, so the light's walk
-	 * has to follow the camera's rather than precede it). The identities are therefore written under
-	 * the previous frame's anchor, and {@code shadowcomp} runs at the head of this one, where it has
-	 * to run or the floodfill ping-pong lands on the half this frame's gbuffers do not read.
-	 * <p>
-	 * <strong>What it costs the image without this.</strong> The compute reads the floodfill at
-	 * {@code pos - (floor(previousCameraPosition) - floor(cameraPosition))}, so the light it carries
-	 * forward IS reprojected; the identities at {@code pos} are not. One frame per block crossed,
-	 * every block is read as its neighbour, and the cost is not symmetric: crossing UPWARDS the
-	 * reader takes each block for the one below it, so the layer of air just over the floor reads as
-	 * {@code voxel == 1u}, which the pack answers with {@code light = 0}. The coloured light around
-	 * the player collapses for that frame (a halo on a jump, continuous while climbing). Crossing
-	 * DOWNWARDS the same error makes a solid block read as air, which merely lights a cell buried in
-	 * the floor and shows nothing. That asymmetry is the signature the defect was reported under.
-	 * <p>
-	 * The {@code |d|} planes at the leading face keep what they held rather than being emptied. They
-	 * sit at the far edge of the volume, they are rewritten by the shadow stage at the end of this
-	 * same frame, and a stale identity there blocks light where an emptied one would leak it.
+	 * The {@code |d|} leading planes keep what they held rather than being emptied. They sit at the
+	 * far edge of the volume and are the conservative choice: a stale identity there blocks light
+	 * where an emptied one would leak it.
 	 */
 	public void reanchor(CommandEncoder encoder, int dx, int dy, int dz) {
 		if (dx == 0 && dy == 0 && dz == 0) {
