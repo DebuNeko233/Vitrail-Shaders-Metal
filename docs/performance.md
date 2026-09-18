@@ -471,11 +471,12 @@ must be true at every step, and a half-removed backend is the worst state for th
 
 **Work, in this order.**
 
-1. **`HostReport` and the status pages in one commit.** `HostReport.otherBackend()`
-   (`common/src/main/java/dev/vitrail/HostReport.java:143-154`) still documents Vulkan as the
-   production path and accepts Metal only behind the developer smoke switch. Leaving that in place
-   while the documentation claims Metal is the maintained path is exactly the defect this repository
-   has spent a week removing from its own pages, so these two change together or neither does.
+1. **`HostReport` and the status pages changed together, and half of that is already done.**
+   `HostReport.otherBackend()` no longer documents Vulkan as the production path, and the developer
+   switch that used to gate Metal (`-Dvitrail.experimentalMetal=true`) has been removed, so a session
+   on Metal is now accepted on its own answers alone: a compatible Metallum, that build's Prefer
+   Metal, and a device that came up. What remains under this step is the rest of the page's Vulkan
+   guidance, which still sends a non-Metal session to a graphics API this phase is meant to delete.
 2. **The Vulkan-only mixins and their accessors**, in batches that each keep the build green. The
    mixins that exist only to reach Vulkan types are the easiest to remove first.
 3. **The contract test and its `build.yml` line in the same commit.** A contract script that no
