@@ -100,6 +100,15 @@ the marker again while the probe is off, at most once a second, and opens a wind
 return rather than on its presence, so a marker left in place still arms the window that read it and
 no other (`metallum#5`, with `tools/ci-frame-probe.py` pinning the shape on that side).
 
+**A third window landed on a third kind of frame, for the reason that shape does not fix.** The next
+log was armed by a marker already in place before the launch, so its budget went on the frames before
+there was a world to draw: the pack is applied at `02:15:28`, the integrated server only starts at
+`02:17:33`, and the 600 frames counted between `02:15:27` and `02:15:39` are the main menu. They read
+829 encoders, 16366 MiB loaded and 23978 MiB stored - lower than either the pack window or the
+no-pack window, and measuring a menu. No instrument can tell a frame worth counting from one that is
+not, so the marker has to be absent before the launch and created once the world is up; that is the
+only way to arm this probe at something real.
+
 What the run does measure is the load, because it is the one it starts cold. Four loads across the
 two logs, and what each of them paid:
 
@@ -119,26 +128,39 @@ to twenty-eight milliseconds a built module:
 - Photon, cold: 250 served, 124 built - and 124 at roughly 28 ms is the 3524 ms recorded.
 
 So `making modules` is shaderc and SPIRV-Cross compiling the ones the module store did not answer,
-and it is the largest single item in every load here, larger than translation and flattening
-together in three of the four. That moves P3. It also sharpens the question rather than answering
-it: the reopen served 304 modules and still built 73, from one pack, in one session, on one settings
-set, with the translation store answering 30 of 30 at its own door. What those 73 differ by in the
-module key is worth an answer before any cache is widened.
+and it is the largest single item in every cold load here. It also sharpens the question rather than
+answering it: the reopen served 304 modules and still built 73, from one pack, in one session, on one
+settings set, with the translation store answering 30 of 30 at its own door. What those 73 differ by
+in the module key is worth an answer before any cache is widened.
 
-**How long the wait is.** Both logs also record what the player waits, because every load that is not
-interrupted prints one line for its first full frame:
+**A third log answers that question, and the answer withdraws it.** It reaches the same pack with
+both stores already holding the edition, and builds nothing at all: four loads, **1317 modules served
+and 0 built**, at 32 to 100 milliseconds of `making modules` for 124 to 377 modules each time, with
+the translation store answering 30, 30, 15 and 58 programs and translating none of them. So a load at
+the edition the store already holds compiles no module, and the 73 above cannot be the reopen's: the
+module-cache line that reports them spans the tail of the preceding switch as well. What is left is
+narrower and cleaner than the question it replaces - **the whole multi-second cost is the modules
+built when the edition changes**, which only a rebuild does, and nothing else in either store misses.
 
-| load | pack opened | first full frame | waited |
-|---|---|---|---|
-| Photon, reopened in the same session | 01:03:45 | 01:03:51 | 6 s |
-| Photon, cold on a new build | 01:38:31 | 01:38:40 | 9 s |
+**How long the wait is.** Every load that is not interrupted prints one line for its first full
+frame, so the wait is measured rather than inferred:
 
-That is what the loading page has to cover, and it is more than the compile work the earlier
-sessions put at 2.5 to 3.7 s. The rest is visible in the same seconds: the world's chunk sections are
-all built again because the mesh has to start carrying what the pack reads, 826 MiB of colour
-targets are allocated at 3600x2260, and the chain's leftover pipelines are compiled ahead of their
-first draw. Two of the first log's three opens never reach a line at all, because the next switch
-arrived first, so six seconds is the shortest wait recorded here rather than the longest.
+| load | pack opened | first full frame | waited | what it was doing |
+|---|---|---|---|---|
+| Photon to Complementary, both stores warm | 02:17:43 | 02:17:44 | 1 s | 155 pipelines, 1218 ms of background work |
+| Complementary back to Photon, both stores warm | 02:17:53 | 02:17:54 | 1 s | 155 pipelines, 1385 ms |
+| Photon, reopened in the same session | 01:03:45 | 01:03:51 | 6 s | 155 pipelines, 2845 ms, and 73 modules built |
+| Photon, cold on a new build | 01:38:31 | 01:38:40 | 9 s | 155 pipelines, 4677 ms, and 124 modules built |
+
+The first two rows are the same packs on the same machine and window as the last two, and the
+difference between them is the caches: **one second against six**, with the leftover-pipeline work
+still 1.2 to 1.4 seconds of it. So the wait the loading page covers is about a second when the stores
+hold the edition, and the seconds it was written for are the rebuild case.
+
+The rest of a cold wait is visible in the same seconds: the world's chunk sections are all built
+again because the mesh has to start carrying what the pack reads, 826 MiB of colour targets are
+allocated at 3600x2260, and the chain's leftover pipelines are compiled ahead of their first draw.
+Two of the first log's three opens never reach a line at all, because the next switch arrived first.
 
 **The cold row is what a development build always sees, not a worst case.** Both disk stores name
 their directory after `Vitrail.cacheEdition()`, which is the version and the game for a release and
