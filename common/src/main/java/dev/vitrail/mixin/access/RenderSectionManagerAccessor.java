@@ -4,6 +4,8 @@ import net.caffeinemc.mods.sodium.client.render.chunk.RenderSectionManager;
 import net.caffeinemc.mods.sodium.client.render.chunk.lists.DeferredTaskList;
 import net.caffeinemc.mods.sodium.client.render.chunk.lists.SortedRenderLists;
 import net.caffeinemc.mods.sodium.client.render.chunk.occlusion.SectionTree;
+import net.caffeinemc.mods.sodium.client.render.viewport.Viewport;
+import net.caffeinemc.mods.sodium.client.util.FogParameters;
 import org.jspecify.annotations.Nullable;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
@@ -63,4 +65,10 @@ public interface RenderSectionManagerAccessor {
 
 	@Invoker("invalidateRenderLists")
 	void vitrail$invalidateRenderLists();
+
+	@Invoker("readRenderListFromTree")
+	void vitrail$readRenderListFromTree(Viewport viewport, FogParameters fog);
+
+	@Invoker("renderOutOfGraph")
+	void vitrail$renderOutOfGraph(Viewport viewport, FogParameters fog);
 }

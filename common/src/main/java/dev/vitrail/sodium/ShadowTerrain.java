@@ -23,6 +23,7 @@ import net.caffeinemc.mods.sodium.client.render.chunk.ChunkRenderMatrices;
 import net.caffeinemc.mods.sodium.client.render.chunk.RenderSectionManager;
 import net.caffeinemc.mods.sodium.client.render.chunk.lists.ChunkRenderList;
 import net.caffeinemc.mods.sodium.client.render.chunk.lists.DeferredTaskList;
+import net.caffeinemc.mods.sodium.client.render.chunk.lists.FallbackVisibleChunkCollector;
 import net.caffeinemc.mods.sodium.client.render.chunk.lists.SortedRenderLists;
 import net.caffeinemc.mods.sodium.client.render.chunk.occlusion.SectionTree;
 import net.caffeinemc.mods.sodium.client.render.viewport.Viewport;
@@ -85,7 +86,6 @@ public final class ShadowTerrain {
 	private static @Nullable Camera cameraWalkCamera;
 	private static @Nullable Viewport cameraWalkViewport;
 	private static @Nullable FogParameters cameraWalkFog;
-	private static boolean cameraWalkUpdatesImmediately;
 
 	/**
 	 * The block table the cull was last measured against, or -1 for none. Counted rather than
@@ -133,12 +133,10 @@ public final class ShadowTerrain {
 	 * the next shadow stage so a frame that never ran terrain setup cannot accidentally reuse an
 	 * older camera viewport.
 	 */
-	public static void captureCameraWalk(Camera camera, Viewport viewport, FogParameters fog,
-			boolean updateChunksImmediately) {
+	public static void captureCameraWalk(Camera camera, Viewport viewport, FogParameters fog) {
 		cameraWalkCamera = camera;
 		cameraWalkViewport = viewport;
 		cameraWalkFog = fog;
-		cameraWalkUpdatesImmediately = updateChunksImmediately;
 	}
 
 	/**
@@ -165,11 +163,9 @@ public final class ShadowTerrain {
 		Camera restoreCamera = cameraWalkCamera;
 		Viewport restoreViewport = cameraWalkViewport;
 		FogParameters restoreFog = cameraWalkFog;
-		boolean restoreUpdatesImmediately = cameraWalkUpdatesImmediately;
 		cameraWalkCamera = null;
 		cameraWalkViewport = null;
 		cameraWalkFog = null;
-		cameraWalkUpdatesImmediately = false;
 
 		SodiumWorldRenderer renderer = SodiumWorldRenderer.instanceNullable();
 		Minecraft minecraft = Minecraft.getInstance();
@@ -321,9 +317,8 @@ public final class ShadowTerrain {
 			// elapsed and the map was filled again every time.
 			draw(renderer, minecraft, camera);
 		} finally {
-			restoreCameraWalk(manager, access, restoreCamera, restoreViewport, restoreFog,
-					restoreUpdatesImmediately, cameraFrame, cameraLists, cameraTree, cameraTasks,
-					cameraNeedsUpdate, cameraChanged);
+			restoreCameraWalk(access, restoreViewport, restoreFog, cameraFrame,
+					cameraLists, cameraTree, cameraTasks, cameraNeedsUpdate, cameraChanged);
 		}
 	}
 
@@ -337,18 +332,25 @@ public final class ShadowTerrain {
 	 * list can then be put back verbatim. Light-only regions keep the shadow token but are not in
 	 * that list, and the sign-bit token cannot masquerade as the next real frame.
 	 */
-	private static void restoreCameraWalk(RenderSectionManager manager,
-			RenderSectionManagerAccessor access, Camera camera, Viewport viewport,
-			FogParameters fog, boolean updateChunksImmediately, int frame, SortedRenderLists lists,
+	private static void restoreCameraWalk(RenderSectionManagerAccessor access,
+			Viewport viewport, FogParameters fog, int frame, SortedRenderLists lists,
 			@Nullable SectionTree tree, @Nullable DeferredTaskList tasks,
 			boolean needsUpdate, boolean changed) {
 		try {
 			access.vitrail$setFrame(frame);
-			// The light walk reset every overlapping persistent region list under its own token.
-			// Force one camera traversal to refill those objects, but use the SAME synchronous/
-			// asynchronous choice Sodium's real setupTerrain call used for this frame.
-			access.vitrail$setNeedsRenderListUpdate(true);
-			manager.finalizeRenderLists(camera, viewport, fog, updateChunksImmediately);
+
+			// Do NOT call finalizeRenderLists here. Its camera timing control updates
+			// previousPosition/isSyncRendering every time it is asked, so a second call in one
+			// frame changes Sodium's decision for the next frame. Rebuild only the list contents.
+			//
+			// The saved renderTree says which path the real camera setup actually took. A fallback
+			// tree means it rendered synchronously/out of graph; otherwise the regular tree reader
+			// reproduces the camera traversal from the unchanged cullResults.
+			if (tree instanceof FallbackVisibleChunkCollector || tree == null) {
+				access.vitrail$renderOutOfGraph(viewport, fog);
+			} else {
+				access.vitrail$readRenderListFromTree(viewport, fog);
+			}
 		} finally {
 			access.vitrail$setFrame(frame);
 			access.vitrail$setRenderLists(lists);

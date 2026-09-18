@@ -27,6 +27,6 @@ public abstract class MixinSodiumWorldRendererSetup {
 	private void vitrail$captureCameraWalk(Camera camera, Viewport viewport,
 			FogParameters fogParameters, boolean useOcclusionCulling,
 			boolean updateChunksImmediately, Matrix4f cullMatrix, CallbackInfo ci) {
-		ShadowTerrain.captureCameraWalk(camera, viewport, fogParameters, updateChunksImmediately);
+		ShadowTerrain.captureCameraWalk(camera, viewport, fogParameters);
 	}
 }
