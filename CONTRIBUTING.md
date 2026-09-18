@@ -338,6 +338,23 @@ Minecraft import in one of those three packages costs more than it looks.
 there is argued from the code and from the log it produces, and it is worth saying which of the two
 a claim rests on rather than leaving it implied.
 
+### When a run on the device is required
+
+A change needs a real-device run **before** it is merged when it changes what is drawn or written: a
+pass, an attachment, a load or store action, a clear value, a pipeline state, a draw, a vertex
+layout, or a value a shader reads. CI cannot see a frame, so nothing stands in for that run.
+
+A change that only observes or records does not need one first: a log line, a counter, a diagnostic,
+a page, a test, a document. Those merge on the checks alone, and the run that follows is what checks
+that the observation says the right thing. Merging first is not a shortcut there - the instrument has
+to be in the build before it can be read out of it.
+
+Two things bound what a run settles, and both have already cost a session here. A run measures the
+build it was made on, and a development build reads a cache edition of its own, so a head that was
+measured and then rebased is not the head that was measured: rebuild and re-run, or take the mark
+twice on one build. And a run shows what happened rather than what should have, so a plausible frame
+is still not evidence that a pack's semantics are right.
+
 What each check covers, and what a clone cannot run at all because shader packs are not
 redistributable, is in [developing](docs/developing.md).
 
