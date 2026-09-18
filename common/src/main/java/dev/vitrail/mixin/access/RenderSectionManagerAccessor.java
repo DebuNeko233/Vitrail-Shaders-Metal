@@ -16,8 +16,8 @@ import org.spongepowered.asm.mixin.gen.Invoker;
  * {@code prepareRender}.
  * <p>
  * The shadow stage temporarily replaces Sodium's camera render lists with a light walk, draws
- * the map, then rebuilds the camera contents before Minecraft prepares its chunk batches. The
- * manager fields are snapshotted and restored around that scope so the extra traversal does not
+ * the map, then rebuilds the camera contents before the world's chunk draws. The list/tree/task
+ * references are snapshotted and restored around that scope so the extra traversal does not
  * become Sodium's state for the next frame.
  * <p>
  * The light walk uses a shadow-only frame token rather than advancing Sodium's real frame. Region
@@ -45,26 +45,11 @@ public interface RenderSectionManagerAccessor {
 	@Accessor("taskLists")
 	void vitrail$setTaskLists(@Nullable DeferredTaskList value);
 
-	@Accessor("needsRenderListUpdate")
-	boolean vitrail$needsRenderListUpdate();
-
-	@Accessor("needsRenderListUpdate")
-	void vitrail$setNeedsRenderListUpdate(boolean value);
-
 	@Accessor("frame")
 	int vitrail$getFrame();
 
 	@Accessor("frame")
 	void vitrail$setFrame(int frame);
-
-	@Accessor("cameraChanged")
-	boolean vitrail$cameraChanged();
-
-	@Accessor("cameraChanged")
-	void vitrail$setCameraChanged(boolean value);
-
-	@Invoker("invalidateRenderLists")
-	void vitrail$invalidateRenderLists();
 
 	@Invoker("readRenderListFromTree")
 	void vitrail$readRenderListFromTree(Viewport viewport, FogParameters fog);

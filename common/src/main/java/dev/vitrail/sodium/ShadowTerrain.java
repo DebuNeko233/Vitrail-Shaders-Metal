@@ -29,7 +29,6 @@ import net.caffeinemc.mods.sodium.client.render.chunk.occlusion.SectionTree;
 import net.caffeinemc.mods.sodium.client.render.viewport.Viewport;
 import net.caffeinemc.mods.sodium.client.util.FogParameters;
 import net.caffeinemc.mods.sodium.client.util.GameRendererStorage;
-import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.chunk.ChunkSectionLayerGroup;
@@ -83,7 +82,6 @@ public final class ShadowTerrain {
 	private static Vec3 camera;
 
 	/** The exact camera traversal inputs Sodium used before the level render begins. */
-	private static @Nullable Camera cameraWalkCamera;
 	private static @Nullable Viewport cameraWalkViewport;
 	private static @Nullable FogParameters cameraWalkFog;
 
@@ -98,7 +96,8 @@ public final class ShadowTerrain {
 	 * What the last walk for the light kept, drew and measured against, held for the F3 line.
 	 * <p>
 	 * Held rather than asked for where it is shown, because by then the render lists belong to the
-	 * camera again: this stage temporarily walks them for the light and hands them straight back, so a count
+	 * camera again: this stage temporarily walks them for the light and hands them straight back,
+	 * so a count
 	 * taken from the overlay would be the camera's under a shadow heading. Iris holds the same thing
 	 * for the same reason, a string taken inside its shadow scope and read outside it
 	 * ({@code shadows/ShadowRenderer.java:119} and {@code :606}).
@@ -133,8 +132,7 @@ public final class ShadowTerrain {
 	 * the next shadow stage so a frame that never ran terrain setup cannot accidentally reuse an
 	 * older camera viewport.
 	 */
-	public static void captureCameraWalk(Camera camera, Viewport viewport, FogParameters fog) {
-		cameraWalkCamera = camera;
+	public static void captureCameraWalk(Viewport viewport, FogParameters fog) {
 		cameraWalkViewport = viewport;
 		cameraWalkFog = fog;
 	}
@@ -160,10 +158,8 @@ public final class ShadowTerrain {
 		Vec3 camera = ShadowTerrain.camera;
 		ShadowTerrain.camera = null;
 
-		Camera restoreCamera = cameraWalkCamera;
 		Viewport restoreViewport = cameraWalkViewport;
 		FogParameters restoreFog = cameraWalkFog;
-		cameraWalkCamera = null;
 		cameraWalkViewport = null;
 		cameraWalkFog = null;
 
@@ -176,7 +172,7 @@ public final class ShadowTerrain {
 		// Without the exact camera viewport there is no safe way to give Sodium its per-region
 		// lists back after a light walk. Clear the pack's transient images rather than keeping a
 		// stale identity volume, and leave the stage closed.
-		if (restoreCamera == null || restoreViewport == null || restoreFog == null) {
+		if (restoreViewport == null || restoreFog == null) {
 			PackChain.clearCustomImages();
 			Vitrail.logger().warn("The shadow stage has no captured Sodium camera traversal this "
 					+ "frame, so it was skipped rather than leaving the world's render lists on "
@@ -238,9 +234,6 @@ public final class ShadowTerrain {
 		SectionTree cameraTree = access.vitrail$getRenderTree();
 		DeferredTaskList cameraTasks = access.vitrail$getTaskLists();
 		int cameraFrame = access.vitrail$getFrame();
-		boolean cameraNeedsUpdate = access.vitrail$needsRenderListUpdate();
-		boolean cameraChanged = access.vitrail$cameraChanged();
-
 		// Region lists reset when their last-visible frame differs from the collector's frame. The
 		// light therefore needs a distinct token, but it must NOT be the next real frame: a region
 		// visible only to the light would then look already visited when that frame arrives. Flip
@@ -272,8 +265,10 @@ public final class ShadowTerrain {
 			// loaded (compat/sodium/mixin/MixinRenderSectionManager.java, iris$disableFogOcclusion);
 			// the camera's walk here still keeps its own fog, a gap of the picture and not of the
 			// map, and not this stage's to close.
-			manager.finalizeRenderLists(minecraft.gameRenderer.mainCamera(), viewport,
-					FogParameters.NONE, true);
+			// The light always wants Sodium's synchronous fallback traversal. Call that builder
+			// directly instead of finalizeRenderLists: the latter also advances camera timing
+			// state, which belongs only to the real camera setup.
+			access.vitrail$renderOutOfGraph(viewport, FogParameters.NONE);
 
 			// The entities, now that the tree Sodium answers visibility from is the light's, and the
 			// class note says what asking the camera's would drop. The block entities follow: this
@@ -318,7 +313,7 @@ public final class ShadowTerrain {
 			draw(renderer, minecraft, camera);
 		} finally {
 			restoreCameraWalk(access, restoreViewport, restoreFog, cameraFrame,
-					cameraLists, cameraTree, cameraTasks, cameraNeedsUpdate, cameraChanged);
+					cameraLists, cameraTree, cameraTasks);
 		}
 	}
 
@@ -334,8 +329,7 @@ public final class ShadowTerrain {
 	 */
 	private static void restoreCameraWalk(RenderSectionManagerAccessor access,
 			Viewport viewport, FogParameters fog, int frame, SortedRenderLists lists,
-			@Nullable SectionTree tree, @Nullable DeferredTaskList tasks,
-			boolean needsUpdate, boolean changed) {
+			@Nullable SectionTree tree, @Nullable DeferredTaskList tasks) {
 		try {
 			access.vitrail$setFrame(frame);
 
@@ -356,8 +350,6 @@ public final class ShadowTerrain {
 			access.vitrail$setRenderLists(lists);
 			access.vitrail$setRenderTree(tree);
 			access.vitrail$setTaskLists(tasks);
-			access.vitrail$setNeedsRenderListUpdate(needsUpdate);
-			access.vitrail$setCameraChanged(changed);
 		}
 	}
 

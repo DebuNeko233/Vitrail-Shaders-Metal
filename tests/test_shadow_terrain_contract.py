@@ -135,14 +135,12 @@ class ShadowTerrainContractTest(unittest.TestCase):
         mixin = compact(SODIUM_SETUP_MIXIN)
         config = text(MIXIN_CONFIG)
 
-        self.assertIn("ShadowTerrain.captureCameraWalk(camera, viewport, fogParameters);", mixin)
+        self.assertIn("ShadowTerrain.captureCameraWalk(viewport, fogParameters);", mixin)
         self.assertIn('"sodium.MixinSodiumWorldRendererSetup"', config)
         self.assertIn("int shadowFrame = cameraFrame ^ Integer.MIN_VALUE;", terrain)
         self.assertNotIn("prepareChunkRendering(", terrain)
-        self.assertIn(
-            "manager.finalizeRenderLists(minecraft.gameRenderer.mainCamera(), viewport, FogParameters.NONE, true);",
-            terrain,
-        )
+        self.assertNotIn("finalizeRenderLists(", terrain)
+        self.assertIn("access.vitrail$renderOutOfGraph(viewport, FogParameters.NONE);", terrain)
         self.assertNotIn(
             "manager.finalizeRenderLists(camera, viewport, fog, updateChunksImmediately);",
             terrain,
@@ -154,7 +152,8 @@ class ShadowTerrainContractTest(unittest.TestCase):
         self.assertIn("access.vitrail$setRenderTree(tree);", terrain)
         self.assertIn("access.vitrail$setTaskLists(tasks);", terrain)
         self.assertIn("SortedRenderLists vitrail$getRenderLists();", accessor)
-        self.assertIn("void vitrail$setCameraChanged(boolean value);", accessor)
+        self.assertNotIn("vitrail$setCameraChanged", accessor)
+        self.assertNotIn("vitrail$setNeedsRenderListUpdate", accessor)
         self.assertIn("void vitrail$readRenderListFromTree(Viewport viewport, FogParameters fog);", accessor)
         self.assertIn("void vitrail$renderOutOfGraph(Viewport viewport, FogParameters fog);", accessor)
 
