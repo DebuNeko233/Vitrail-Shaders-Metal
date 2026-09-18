@@ -128,9 +128,9 @@ public final class HostReport {
 	}
 
 	/**
-	 * Whether this session is a valid Metal smoke-test candidate before the final developer opt-in.
-	 * The backend must actually be Metal, Metallum's versioned API must match and report Prefer Metal,
-	 * and Vitrail's Metal capability provider must already have published after device creation.
+	 * Whether this session is on Metal with everything the path needs: the backend is actually Metal,
+	 * Metallum's versioned API matches and reports Prefer Metal, and Vitrail's Metal capability
+	 * provider has already published after device creation. True here means Vitrail draws.
 	 */
 	public static boolean metalCandidate() {
 		return METAL.equals(backend())
@@ -140,9 +140,13 @@ public final class HostReport {
 
 	/**
 	 * Whether the game is known to have come up on a backend this mod will not draw a pack on.
-	 * Vulkan is the production path. Metal remains validation-only: it is accepted here only when
-	 * the compatible Metallum preference/device checks pass and the explicit developer smoke switch
-	 * is enabled. Unknown is not refused because the device may simply not exist yet.
+	 * <p>
+	 * Metal is the maintained path, and it is accepted once its own three answers hold: a compatible
+	 * Metallum, that build's Prefer Metal, and a device that came up. Nothing here asks about a
+	 * developer switch any more. Unknown is not refused because the device may simply not exist yet,
+	 * and Vulkan is not refused because that path is still in the tree even though it is no longer
+	 * one that has to keep working ({@code AGENTS.md} says so, and {@code docs/performance.md}
+	 * schedules its removal).
 	 */
 	public static boolean otherBackend() {
 		String backend = backend();
@@ -193,11 +197,12 @@ public final class HostReport {
 			return;
 		}
 
-		// A valid Metal candidate with only the developer smoke switch closed is not OpenGL and is
-		// not a reason to tell the player to replace their graphics preference with Vulkan. The
-		// startup log and the pack screen explain the validation-only gate; keep the old red switch
-		// guidance for genuinely unsupported/fallback backends only.
-		if (metalCandidate() && !MetallumStatus.smokeEnabled()) {
+		// A session already on Metal is never told to replace its graphics preference with Vulkan,
+		// whether or not the path came up: the answer there is a compatible Metallum, which the
+		// startup log and the pack screen both name, and telling a player to change the Graphics API
+		// would send them away from the only maintained path to one that is scheduled for removal.
+		// The red switch guidance stays for genuinely unsupported and fallback backends only.
+		if (METAL.equals(backend())) {
 			return;
 		}
 
@@ -249,14 +254,19 @@ public final class HostReport {
 			return;
 		}
 
-		if (metalCandidate() && !MetallumStatus.smokeEnabled()) {
-			Vitrail.logger().warn("This game is running Metal through compatible Metallum API v{} and "
-					+ "Prefer Metal is selected, but {} keeps the Metal shader-pack path disabled by "
-					+ "default until the Apple-Silicon runtime acceptance matrix is complete. For a "
-					+ "developer smoke run only, launch with -D{}=true; this flag is not a support "
-					+ "guarantee and is intentionally not persisted in game settings",
-					MetallumStatus.SUPPORTED_API_VERSION, Vitrail.MOD_NAME,
-					MetallumStatus.SMOKE_PROPERTY);
+		if (METAL.equals(backend())) {
+			// Metal is the maintained path, so a session on it that Vitrail will not draw on is a
+			// missing or unusable backend rather than a switch somebody forgot to pass. Said once,
+			// naming the contract this build understands, because an absent mod, one that implements
+			// a different API version, one nobody has told to prefer Metal, and one whose device
+			// never came up all look the same from the other side of a reflective probe.
+			Vitrail.logger().warn("This game is running the Metal backend, but {} will not draw a pack "
+					+ "on it: no Metallum answered the probe, or the one that did does not implement "
+					+ "API v{}, or Metal is not selected as its preference, or its device never came "
+					+ "up. Install or update Metallum and check its own settings; until then nothing of "
+					+ "a pack is read or drawn",
+					Vitrail.MOD_NAME, MetallumStatus.SUPPORTED_API_VERSION);
+
 			return;
 		}
 

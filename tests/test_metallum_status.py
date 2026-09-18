@@ -44,7 +44,6 @@ public final class MetallumStatusCheck {
                 require(!status.metalPreferred(), "false preference became true");
                 require(!MetallumStatus.backgroundPipelinePrecompile(), "legacy v1 guessed background safety");
                 BufferBlending.serve(true);
-                System.setProperty(MetallumStatus.SMOKE_PROPERTY, "true");
                 require(!MetallumStatus.renderingEnabled(), "preference-off enabled rendering");
             }
             case "preference-on" -> {
@@ -54,9 +53,8 @@ public final class MetallumStatusCheck {
                         "advertised background precompile capability not observed");
                 require(!MetallumStatus.renderingEnabled(), "capability-less path enabled rendering");
                 BufferBlending.serve(true);
-                require(!MetallumStatus.renderingEnabled(), "default smoke gate was open");
-                System.setProperty(MetallumStatus.SMOKE_PROPERTY, "true");
-                require(MetallumStatus.renderingEnabled(), "explicit smoke gate did not open");
+                require(MetallumStatus.renderingEnabled(),
+                        "a served device with a compatible preference did not enable rendering");
             }
             case "shape" -> {
                 require(status.present(), "malformed API should still be present");
@@ -148,7 +146,7 @@ class MetallumStatusTest(unittest.TestCase):
     def test_legacy_v1_without_background_contract_fails_closed_for_warmup_only(self):
         self.run_fixture('preference-off')
 
-    def test_preference_capability_and_explicit_smoke_gate_are_all_required(self):
+    def test_preference_and_a_served_device_are_all_that_is_required(self):
         self.run_fixture('preference-on')
 
     def test_metal_blocked_ui_does_not_reuse_opengl_switch_prompt(self):
@@ -157,8 +155,11 @@ class MetallumStatusTest(unittest.TestCase):
 
         self.assertIn('METAL.equals(HostReport.backend())', routing)
         self.assertIn('BackendPlaceholder.metalValidation(parent)', routing)
-        self.assertIn('MetallumStatus.SMOKE_PROPERTY', placeholder)
-        self.assertIn('HostReport.metalCandidate()', placeholder)
+        # The placeholder no longer names a system property, because there is none to name: the
+        # answer for a session it describes is a usable backend rather than a launch argument.
+        self.assertNotIn('experimentalMetal', placeholder)
+        self.assertNotIn('SMOKE_PROPERTY', placeholder)
+        self.assertNotIn('validation-only', placeholder)
         self.assertIn('Vitrail will not change your Graphics API here', placeholder)
 
         branch = placeholder.split('if (this.metalValidation) {', 1)[1].split('\n\t\t}', 1)[0]
@@ -166,14 +167,20 @@ class MetallumStatusTest(unittest.TestCase):
         self.assertIn('return;', branch)
         self.assertNotIn('switchToVulkan', branch)
 
-    def test_metal_validation_gate_does_not_emit_vulkan_switch_chat(self):
+    def test_metal_session_is_never_told_to_switch_to_vulkan(self):
         source = HOST_REPORT.read_text(encoding='utf-8')
         in_world = source.split('public static void sayInWorld() {', 1)[1].split(
             '\n\t/**\n\t * Says what an install decides', 1)[0]
+        logged = source.split('private static void sayBackend() {', 1)[1]
 
-        candidate_guard = 'metalCandidate() && !MetallumStatus.smokeEnabled()'
-        self.assertIn(candidate_guard, in_world)
-        self.assertLess(in_world.index(candidate_guard), in_world.index('ScreenText.OTHER_BACKEND'))
+        # The guard used to be about the developer switch; it is now about the backend itself, and
+        # the reason is stronger than it was: a session on Metal is sent to a compatible Metallum,
+        # which is the maintained path, rather than to a Vulkan path that is scheduled for removal.
+        metal_guard = 'if (METAL.equals(backend())) {'
+        self.assertIn(metal_guard, in_world)
+        self.assertLess(in_world.index(metal_guard), in_world.index('ScreenText.OTHER_BACKEND'))
+        self.assertIn(metal_guard, logged)
+        self.assertLess(logged.index(metal_guard), logged.index('programs are translated'))
 
     def test_malformed_api_shape_fails_closed(self):
         self.run_fixture('shape')

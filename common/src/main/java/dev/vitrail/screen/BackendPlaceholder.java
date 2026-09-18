@@ -1,9 +1,7 @@
 package dev.vitrail.screen;
 
-import dev.vitrail.HostReport;
 import dev.vitrail.ScreenText;
 import dev.vitrail.Vitrail;
-import dev.vitrail.render.MetallumStatus;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.PreferredGraphicsApi;
@@ -21,8 +19,10 @@ import org.jspecify.annotations.Nullable;
  * <p>
  * OpenGL keeps the reference behaviour: a sentence saying so, a button that switches the game to
  * Vulkan and closes it, and one that goes back. Metal is deliberately different. When the actual
- * device is Metal but Vitrail's validation-only Metal path is still gated, this screen only explains
- * that state and returns. It never rewrites the graphics API on Metallum's behalf.
+ * device is Metal and Vitrail will not draw on it, this screen only explains that state and returns:
+ * it names the compatible backend the session needs rather than a launch argument, because the
+ * developer opt-in that used to gate the path is gone. It never rewrites the graphics API on
+ * Metallum's behalf.
  * <p>
  * The OpenGL switch is the reference's screen for the same situation the other way round, which Iris
  * opens on Vulkan in place of its pack screen ({@code IrisConfig.java:50-51},
@@ -84,17 +84,14 @@ public final class BackendPlaceholder extends Screen {
 	}
 
 	private static Component metalMessage() {
-		if (HostReport.metalCandidate()) {
-			return Component.literal(Vitrail.MOD_NAME + " is running on Metal through compatible Metallum, "
-					+ "but the Metal shader-pack path is still validation-only and is disabled for this "
-					+ "session. For a developer smoke run, restart with -D"
-					+ MetallumStatus.SMOKE_PROPERTY + "=true. Vitrail will not change your Graphics API here.");
-		}
-
-		return Component.literal(Vitrail.MOD_NAME + " is running on Metal, but this session has not "
-				+ "confirmed the compatible Metallum preference and device capabilities required for the "
-				+ "validation-only Metal shader-pack path. Vitrail will not change your Graphics API here; "
-				+ "use Video Settings and restart if you want a different backend.");
+		// One sentence rather than two, now that the developer opt-in is gone: there is no longer a
+		// session that has everything the path needs and is being held back anyway, so a session on
+		// Metal that Vitrail will not draw on is missing a compatible backend or a live device.
+		return Component.literal(Vitrail.MOD_NAME + " is running on Metal, but this session did not get "
+				+ "the compatible Metallum preference and device capabilities the Metal path needs, so "
+				+ "no shader pack will be read or drawn. Install or update Metallum and check that Metal "
+				+ "is selected as its preference. Vitrail will not change your Graphics API here; use "
+				+ "Video Settings and restart if you want a different backend.");
 	}
 
 	private void switchToVulkan() {
