@@ -3,7 +3,7 @@
 	"id": "${mod_id}",
 	"version": "${mod_version}",
 	"name": "Vitrail",
-	"description": "OptiFine-format shader packs, on Minecraft's native Vulkan renderer",
+	"description": "OptiFine-format shader packs, on Minecraft's native Vulkan and Metal renderers",
 	"authors": [
 		"avpbynf"
 	],
