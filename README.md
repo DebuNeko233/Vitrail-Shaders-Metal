@@ -57,6 +57,28 @@ was taken from Iris and from Kroppeb's stareval is credited file by file in
 know. If the mod is useful, there is a coffee link below, and the issues here
 are where I answer.
 
+## Requirements
+
+| Component | Version |
+| --- | --- |
+| Minecraft | 26.2, below 26.3 |
+| NeoForge | 26.2.0.32-beta or later in the 26.2 line |
+| or Fabric Loader | 0.19.3 or later, with Fabric API |
+| Sodium | 0.9.x, required, the build for whichever loader is in front |
+| Java | 25 |
+| Metallum | optional: the Metal backend, API v1, on Apple Silicon only |
+
+**Sodium is not optional.** It owns the command submission this engine draws through, so the game
+refuses to start without it rather than showing a picture that is missing quietly. On Fabric, two
+modules of Fabric API are declared as required and they are the whole of what this mod takes from
+it; nothing of the world's rendering goes through Fabric API.
+
+Those ranges are what the jar's own metadata declares, so the loader enforces them whether or not
+this table is current: `fabric/src/main/resources/fabric.mod.json` on Fabric and
+`neoforge/src/main/resources/META-INF/neoforge.mods.toml` on NeoForge. Metallum appears in neither,
+because the Metal path is reached reflectively and a Vitrail without it still draws on the backend
+the game chose. [INSTALL.md](INSTALL.md) has the same set with the installation steps.
+
 ## Quick start
 
 - One jar for Fabric and NeoForge, on Minecraft 26.2. On
