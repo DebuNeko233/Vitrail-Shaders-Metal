@@ -34,8 +34,10 @@ import org.joml.Matrix4f;
  * than chosen.</strong> The game clears the two lists this would have read the moment it has
  * submitted them: {@code LevelRenderer.submitFeatures} calls
  * {@code levelRenderState.entityRenderStates.clear()} on the line after {@code submitEntities} and
- * does the same for the block entities ({@code LevelRenderer.java:284-287}). The shadow stage stands
- * at the very end of the frame, so by the time it runs both are empty. Iris does not read the
+ * does the same for the block entities ({@code LevelRenderer.java:284-287}). The shadow stage runs at
+ * the head of the level frame, so by the time it reaches this walk both are empty twice over: the
+ * frame before emptied them on the line after it had submitted, and this frame's own submissions do
+ * not happen until the game's main pass, which is still ahead. Iris does not read the
  * frame's lists either: it keeps a level render state, a storage and a dispatcher of its own
  * ({@code shadows/ShadowRenderer.java:180-182}) and submits into them ({@code :659} and
  * {@code :684}). The reason it does holds here too: the camera's lists were culled against the
@@ -326,10 +328,11 @@ public final class ShadowGeometry {
 		try {
 			dispatcher.renderAllFeatures(storage);
 		} finally {
-			// Lowered whatever happened, and this is the one flag of the three that nothing else
-			// would lower: the other two are closed by the game's own events, and there is no event
-			// after this one. Left standing, every entity of the next frame would be drawn with the
-			// shadow program into the picture.
+			// Lowered whatever happened, and this is the one flag of the three that no other caller
+			// lowers: the game's own stages close the other two, and EntityDraw.rotate closes them
+			// again at the end of the frame in case one was left standing, while the shadow window is
+			// opened and closed by this walk alone. Left standing, every entity drawn later in this
+			// same frame would go through the shadow program and into the picture.
 			EntityDraw.shadowFeatures(false);
 			STATE.reset();
 		}

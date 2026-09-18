@@ -574,14 +574,17 @@ public final class TerrainDraw {
 	}
 
 	/**
-	 * Opens the end-of-frame shadow stage: makes the map exist, empties it, and settles that its
-	 * three programs will really be served, once and before any group is drawn into it. Must run
-	 * outside any render pass, which the end of the frame is.
+	 * Opens the shadow stage: makes the map exist, empties it, and settles that its three programs
+	 * will really be served, once and before any group is drawn into it. It stands at the head of the
+	 * level frame, ahead of every pass that samples the map, and it has to run outside any render
+	 * pass, which is what the graph being built rather than executed leaves.
 	 * <p>
-	 * The map is cleared here and not with the colour targets, and that is the point of the stage
-	 * running where it does. The stage draws at the very end of a frame, for the next one, so the
-	 * map has to survive the frame boundary: the gbuffers read all frame long what the previous
-	 * stage drew, and a clear where the frame opens would hand them an empty map every time.
+	 * The emptying is decided here rather than with the colour targets at the head of the frame,
+	 * because it is not unconditional: a frame that puts a kept map back must not empty it first, and
+	 * that is the arm below that skips {@code defer}. The emptying is deferred rather than encoded, so
+	 * skipping it is the whole of the refusal and the load op the first pass carries is what would
+	 * otherwise wipe the restore. A clear alongside the colour targets would wipe a map
+	 * {@link ShadowAmortisation} kept on every frame it kept one.
 	 * <p>
 	 * Nothing here opens the frame itself. By this point the terrain or the chain has opened it,
 	 * and calling {@code beginFrame} again would advance the value store a second time, which turns
@@ -612,10 +615,10 @@ public final class TerrainDraw {
 			// touching any of its targets, so there both halves keep the last frame.
 			//
 			// A pack that serves no shadow program gets no shadow pass, which is Iris's rule, and
-			// at the end of a frame it is also the only safe answer: with nothing of ours to hand
-			// the renderer, the pass it opens for itself is the game's own target, and the stage
-			// would paint the world over the finished image. The map is emptied rather than left
-			// standing, so a program broken mid-session reads as no shadow and not as the last
+			// here it is also the only safe answer: with nothing of ours to hand the renderer, the
+			// pass it opens for itself is the game's own target, and the stage would paint the light's
+			// view of the world over the picture the camera is drawing. The map is emptied rather than
+			// left standing, so a program broken mid-session reads as no shadow and not as the last
 			// map it ever drew, frozen.
 			//
 			// The stage switched off by the engine option does not come through here, whatever the

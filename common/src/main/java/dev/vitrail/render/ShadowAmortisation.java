@@ -25,12 +25,12 @@ import java.nio.file.Path;
  * map once the camera has walked far enough for its box to have moved.
  * <p>
  * <strong>What makes the reuse sound is that the pack is told which map it has.</strong> The engine
- * already publishes a pair of shadow matrices distinct from the fresh ones, because the map is
- * drawn at the end of a frame and sampled through the next: {@code mapShadowModelView} is the drawn
- * matrix moved onto the current camera. Reusing a map for several frames is the same mechanism with
- * a longer arm, the anchor moving only on the frames the map is really drawn. A pass sampling the
- * map therefore transforms with the matrix that map was built with, whatever its age, and the
- * lookup lands where it did.
+ * already publishes a pair of shadow matrices distinct from the fresh ones, because a map can be
+ * sampled on a frame that did not draw it: {@code mapShadowModelView} is the matrix the map on hand
+ * was drawn with, moved onto the current camera. Reusing a map for several frames is the same
+ * mechanism with a longer arm, the anchor moving only on the frames the map is really drawn. A pass
+ * sampling the map therefore transforms with the matrix that map was built with, whatever its age,
+ * and the lookup lands where it did.
  *
  * <h2>What it does not cover, and what that looks like</h2>
  *
@@ -122,9 +122,10 @@ public final class ShadowAmortisation {
 
 	/**
 	 * What this frame would anchor on if it draws. Taken at the head of the frame rather than at the
-	 * draw, because the map is drawn with the matrices built at the head of the frame: an anchor
-	 * read at the end of the frame would be the camera after everything in between had moved it,
-	 * and the published pair would then be measured from a place the map was not drawn around.
+	 * draw, because the map is drawn with the matrices built at the head of the frame: an anchor read
+	 * where the draw happens would be the camera as it stood after the rest of the head of the frame
+	 * had moved it, and the published pair would then be measured from a place the map was not drawn
+	 * around.
 	 */
 	private static final Vector3d pendingCamera = new Vector3d();
 

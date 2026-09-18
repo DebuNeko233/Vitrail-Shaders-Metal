@@ -2174,9 +2174,11 @@ final class GeometryProgram {
 	 * ({@code mixin/MixinLevelRenderer.java:269-274},
 	 * {@code pipeline/IrisRenderingPipeline.java:1051-1063}), so every gbuffers program drawn ahead
 	 * of that step reads the frame before's copy under that name
-	 * ({@code samplers/IrisSamplers.java:223}). The shadow pass, drawn at the end of the frame here,
-	 * reads this frame's image under the same rule, which is the one Iris's shadow pass reads at the
-	 * head of the next. depthtex0 is the live depth there ({@code samplers/IrisSamplers.java:221}),
+	 * ({@code samplers/IrisSamplers.java:223}). The shadow pass, drawn at the head of the level frame
+	 * here, reads the frame before's image under the same rule, and that is the very image Iris's
+	 * shadow pass reads at the head of that same frame: the copy is taken later in the frame, after
+	 * the game's solid chunks, so neither engine's head-of-frame shadow pass sees this frame's world.
+	 * depthtex0 is the live depth there ({@code samplers/IrisSamplers.java:221}),
 	 * which on the world passes is this pass's own attachment and cannot be sampled, so that one
 	 * stays the far plane: a divergence on the attachment alone, with nothing older than this frame
 	 * ever dressed as the live depth. The shadow pass is left on the far plane with it rather than

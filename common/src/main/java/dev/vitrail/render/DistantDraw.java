@@ -445,8 +445,9 @@ public final class DistantDraw extends FamilyDraw {
 		}
 
 		// Kept before anything can refuse the draw, and kept whether or not the pack ends up drawing
-		// it: what the light wants is the geometry DH handed over, and its own stage stands at the
-		// far end of the frame from here.
+		// it: what the light wants is the geometry DH handed over, and the light's stage stands at the
+		// head of the frame, ahead of this hand-over rather than behind it, so what it draws is what
+		// DH handed over on the frame before. rotate is what carries the two lists across.
 		if (opaque) {
 			draw.opaqueSections = sections;
 		} else {

@@ -16,13 +16,15 @@ import org.joml.Matrix4f;
  * naming a shadow. Handed the camera pair instead it would draw the map from the player's eye, which
  * is a shadow map of exactly the wrong thing and looks like a shadow map all the same.
  * <p>
- * Everything here reads the DRAWN pair, this frame's, where the published {@code shadowModelView}
- * is the previous frame's: the map is drawn at the end of a frame for the next one, so the pair a
- * sampling pass needs is one frame older than the pair this stage draws with. The four explicit
- * names are overridden below for the same reason, and it is not optional: {@code shadow.vsh}
- * multiplies {@code shadowModelViewInverse * shadowProjectionInverse * ftransform()} and counts on
- * the product collapsing, which it only does when the inverses and the pair under
- * {@code ftransform} are the same frame's.
+ * Everything here reads the DRAWN pair, which is the pair the map on hand was drawn with.
+ * {@link ShadowMatrixValues} publishes the four pack-facing names from the same accessor, so the two
+ * layers answer the same matrices on every frame and the override below no longer carries a
+ * difference between them. It stays because this layer is also where a shadow pass's model view
+ * projection and normal basis are published off that pair, and because the four are read here for the
+ * same reason they are read anywhere else: {@code shadow.vsh} multiplies
+ * {@code shadowModelViewInverse * shadowProjectionInverse * ftransform()} and counts on the product
+ * collapsing, which it only does when the inverses and the pair under {@code ftransform} are the same
+ * frame's.
  */
 public final class ShadowGeometryValues {
 

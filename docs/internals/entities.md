@@ -392,8 +392,9 @@ picture that stays a picture and reads its texture coordinates out of the light 
 
 The map is filled from a **second walk of the world**, not from a second reading of the frame's own.
 That is forced twice over. The game clears the two lists this would have read on the line after it
-submits them, and the shadow stage stands at the very end of the frame, so both are empty by the time
-it runs. And the camera's lists were culled against the **camera's** frustum, where what has to be in
+submits them, so what is on hand at the head of the next frame is already empty, and this frame's own
+submissions do not happen until the main pass, which the shadow stage stands ahead of. And the
+camera's lists were culled against the **camera's** frustum, where what has to be in
 a shadow map is what the light can see, which is mostly what the camera cannot. The reference walks
 twice for the same reasons, with a state, a storage and a dispatcher of its own; a dispatcher holds
 one prepared frame and reuses it, so borrowing the game's would re-enter the frame it is in the

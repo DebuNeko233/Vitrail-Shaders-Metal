@@ -1614,9 +1614,11 @@ public final class EntityDraw extends FamilyDraw {
 	 * of the game's submissions are drawn into it in one go, blending and writing alike, so a test
 	 * that asked which half was open would refuse one of them.
 	 * <p>
-	 * It cannot overlap either of the others. The stage stands at the very end of the frame, after
-	 * the level render has finished and both feature windows have been closed at their own events,
-	 * which is also why the pass this opens can be a pass of ours: nothing of the game's is open.
+	 * It cannot overlap either of the others: this window opens at the head of the level frame, and
+	 * the game's two do not open until much later in that frame's main pass, so they are not yet open
+	 * rather than already closed. That is also why the pass this opens can be a pass of ours, and for
+	 * the reason the stage gives rather than a coincidence of timing: the frame graph is being built
+	 * here and not executed, so this is the first point of a level frame where no render pass is open.
 	 */
 	public static void shadowFeatures(boolean drawing) {
 		shadowFeatures = drawing;

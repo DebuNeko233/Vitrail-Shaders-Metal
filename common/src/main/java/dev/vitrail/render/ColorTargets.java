@@ -557,9 +557,10 @@ final class ColorTargets {
 	 * both halves of every target, emptied outright so that a half no pass attaches while the
 	 * programs are still compiling does not wait on a record that can be dropped.
 	 * <p>
-	 * The shadow map is deliberately not in this list. It is drawn at the end of a frame for the
-	 * next one, so what it holds when the frame opens is exactly what the gbuffers are about to
-	 * read, and the shadow stage empties it itself right before drawing.
+	 * The shadow map is deliberately not in this list. The shadow stage empties it itself, right
+	 * before the world is drawn into it, and that emptying is conditional rather than owed every
+	 * frame: a frame that puts a map {@link ShadowAmortisation} kept back must not empty it first. A
+	 * clear here would wipe a restored map on every frame one is restored.
 	 *
 	 * @param fog what colortex0 starts this frame at, unless the pack named a colour of its own for
 	 *            it: the fog the game computed, with an alpha of one. The alpha is not a detail and

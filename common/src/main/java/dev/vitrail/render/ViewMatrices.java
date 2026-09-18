@@ -82,23 +82,35 @@ public final class ViewMatrices implements ViewSource {
 	private final Matrix4f shadowProjectionInverse = new Matrix4f();
 
 	/**
-	 * The pair the shadow map on hand was drawn with, which is the previous frame's, because the map
-	 * is drawn at the end of a frame for the next one. It is what every sampling pass is told as
-	 * {@code shadowModelView}, and it is the drawn pair moved onto this frame's camera.
+	 * The pair the map on hand was drawn with, moved onto this frame's camera: the anchor below plus
+	 * however far the camera has travelled since the frame that filled it.
 	 * <p>
-	 * <strong>That move is not a refinement, it is the difference between a lookup that lands and
-	 * one that does not.</strong> These matrices act on player space, and player space is the world
-	 * measured from wherever the camera of the frame doing the measuring stands. The map was drawn
-	 * around where the camera stood a frame ago, so the drawn matrix handed over as it is asks about
-	 * the point one frame of camera motion away from the one being shaded, and every shadow in the
-	 * picture sits that far out of place for as long as the player is moving. Adding the motion back
-	 * costs one translation and makes this pair say exactly what the map holds.
+	 * <strong>Which of the two pairs a reader gets is the whole of the shadow-matrix trap, and it is
+	 * why the publish path asks for {@link #drawnShadowModelView} rather than this pair directly.</strong>
+	 * That accessor answers this one on a frame that keeps a map and the fresh pair below on a frame
+	 * that fills it, and a pack's {@code shadowModelView} and its three siblings are published from it.
+	 * Handing a sampling pass this pair unconditionally is what made every shadow lookup land where
+	 * the caster stood one draw earlier.
+	 * <p>
+	 * <strong>The move is the difference between a lookup that lands and one that does not, on a frame
+	 * that samples a map it did not fill.</strong> These matrices act on player space, and player space
+	 * is the world measured from wherever the camera of the frame doing the measuring stands. A map
+	 * filled at the head of this frame was drawn around where that camera stands, so the anchor has
+	 * been moved onto this frame and the translation is nought, which is why the two pairs are one
+	 * there. A map {@link ShadowAmortisation} kept from an earlier frame was drawn around where the
+	 * camera stood then, and the pair handed over as it stands asks about the point the camera has
+	 * moved to since, which puts every shadow in the picture that far out of place for as long as the
+	 * player is moving. Adding the motion back costs one translation and makes this pair say exactly
+	 * what the map holds.
 	 * <p>
 	 * Publishing the fresh pair instead does not do it either, and that is worth saying because it
 	 * looks like it should: the grid snap the pair carries is a function of the camera, so it lands
 	 * on the same place while the camera stays inside a cell and jumps a whole cell the frame it
-	 * leaves one, which is a map read a hundred texels out for that frame. What is left a frame late
-	 * here is the sun angle alone.
+	 * leaves one, which is a map read a hundred texels out for that frame.
+	 * <p>
+	 * The sun angle is the one thing this pair cannot bring forward, and it is behind only on a frame
+	 * that keeps a map: the map on hand was lit by the sun of the frame that drew it, which is the
+	 * angle the anchor carries. A frame that fills the map has nothing behind it at all.
 	 */
 	private final Matrix4f mapShadowModelView = new Matrix4f();
 	private final Matrix4f mapShadowModelViewInverse = new Matrix4f();

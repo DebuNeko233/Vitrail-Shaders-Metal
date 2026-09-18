@@ -10,13 +10,14 @@ import org.joml.Vector3f;
  * against, gathered in one reading of the frame.
  * <p>
  * One record rather than five calls, and that is not tidiness: the light vector, the camera's volume
- * and the pack's distances all have to come from the SAME frame. Read one at a time across the
- * boundary the shadow stage sits on, the camera's volume would be this frame's and the light's
- * direction the next one's, and a volume swept along a light the map is not drawn from keeps and
- * drops the wrong sections without a line on screen saying so.
+ * and the pack's distances all have to come from the SAME frame. The stage reads the first two in one
+ * call, off one frame's values and with the frame's own value advance already behind it, and spreading
+ * them over separate calls is how the camera's volume would come out of one frame and the light's
+ * direction out of another; a volume swept along a light the map is not drawn from keeps and drops the
+ * wrong sections without a line on screen saying so.
  * <p>
  * The two matrices are the caller's own scratch, written into and handed back, because this is built
- * once a frame at the end of the frame and nothing here is worth an allocation.
+ * once a frame at the head of the frame and nothing here is worth an allocation.
  *
  * @param state     which of the four shapes the pack asked for
  * @param voxelised whether the shadow program voxelises, a geometry stage present or an image

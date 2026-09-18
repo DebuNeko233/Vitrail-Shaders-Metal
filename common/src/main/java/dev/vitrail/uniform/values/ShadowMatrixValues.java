@@ -25,8 +25,8 @@ import dev.vitrail.uniform.UniformShape;
  * matrix one draw old, so every lookup lands where the caster was a frame ago: invisible while the
  * camera is still, a displaced shadow the moment it moves, and worst on the fine shadow content a
  * pack reads for leaf and grass self-shadowing. {@link ShadowGeometryValues} already overrides
- * these four for the shadow programs, which is the same answer on either kind of frame; after this
- * change the two agree everywhere, and the override is kept because it also carries names these do
+ * these four for the shadow programs, which is the same answer on either kind of frame; the two
+ * layers now agree everywhere, and that override is kept because it also carries names these do
  * not.
  */
 public final class ShadowMatrixValues {
