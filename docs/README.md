@@ -1,6 +1,6 @@
 # Vitrail, explained
 
-Vitrail loads OptiFine-format shader packs on Minecraft's native Vulkan renderer. This
+Vitrail loads OptiFine-format shader packs on Minecraft's native Vulkan and Metal renderers. This
 directory is the long-form documentation: what a pack actually is, what the engine does with
 it, why some things work and others do not, and how to develop against it.
 
@@ -20,6 +20,7 @@ The short version lives in the [README](../README.md) and the install steps in
 | Work out what to turn down when a pack runs slowly, and what turning it down misses | [The render scale](render-scale.md) |
 | Change a pack's own settings, and know where they are kept | [The settings screen](settings-screen.md) |
 | Follow the Minecraft 26.2 Metallum / Metal port | [Metallum port status](metallum-port.md) |
+| Know what a compatibility claim needs, and what has been recorded | [PHASE 17 compatibility](phase17-compatibility.md) |
 | See the plan that port is tracked against, and where the implementation left it | [The migration roadmap](roadmap.md) |
 | Make the Metal path faster, adopt Metal 4, or work out what MetalFX may touch | [Performance and Metal 4](performance.md) |
 | Work on the engine | [Developing](developing.md) |

@@ -75,7 +75,7 @@ it.
 
 ## Switching the graphics backend to Vulkan
 
-Vitrail targets the Vulkan renderer. With the game closed, edit `options.txt` at
+Vitrail runs on Metal and on Vulkan, and Metal is the path that is maintained. With the game closed, edit `options.txt` at
 the root of the instance:
 
 ```

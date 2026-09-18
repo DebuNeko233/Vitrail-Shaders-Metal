@@ -5,7 +5,7 @@
 <h1 align="center">Vitrail Shaders</h1>
 
 <p align="center">
-  OptiFine-format shader packs, on Minecraft's native Vulkan renderer.
+  OptiFine-format shader packs, on Minecraft's native Vulkan and Metal renderers.
 </p>
 
 <p align="center">
