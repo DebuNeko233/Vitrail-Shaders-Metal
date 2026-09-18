@@ -24,7 +24,7 @@ The synthetic/runtime capability phases are closed; current work is evidence-bac
 - [ ] Do not promote Photon, Bliss or any other pack from runtime logs alone. Collect/review the screenshot/reference evidence required by `docs/phase17-compatibility.md` before changing a public compatibility status.
 - [ ] Continue the matrix through the remaining required pack families, including BSL-family and Sildur-family coverage, with the same evidence discipline.
 
-The latest hardware baseline pairs Vitrail `3d951772` (code parent `ac33fed3`) with Metallum `82a0c75e` on Apple M5 Pro / macOS 27 / Metal. The multi-pack run keeps the repaired sky structure working and gives an informal simple visual observation that Bliss v2.1.2 shows no obvious issue, but that is not formal PHASE 17 acceptance. It also exposes a Photon view-centred coloured-light drift and a deterministic Sundial Lite v1.1.0 final-fragment compile blocker.
+The latest hardware baseline pairs Vitrail `97dcf76d` with Metallum `82a0c75e` on Apple M5 Pro / macOS 27 / Metal. Sundial Lite v1.1.0 now compiles through the former trinary min/max blocker and reaches a first full frame. Photon v1.3b still exhibits view-dependent coloured-light displacement with slight flicker even though its 128³ storage volumes and `shadowcomp` compute compile and dispatch normally; the remaining defect is source-classified to Vitrail's one-frame view-centred voxel identity timing.
 
 ## P1 - Close remaining source-classified rendering gaps
 
@@ -94,7 +94,7 @@ The latest hardware baseline pairs Vitrail `3d951772` (code parent `ac33fed3`) w
   - Its `root/final/fragment` declares pack-local `min3` and `max3` helpers and shaderc reports a parameter-precision overload mismatch before the final pass can compile.
   - Vitrail already renames a pack-defined function when the compiler target reserves the same function name; the trinary min/max family was missing from that set.
   - The generic shadowable-builtin set now includes `min3`, `max3` and `mid3`, and only fires when the unit declares the function itself.
-- [ ] Hardware-rerun Sundial Lite v1.1.0 and continue from the next owning failure, if any.
+- [x] Hardware-rerun Sundial Lite v1.1.0 at `97dcf76d`: leftover pipelines compile, the chain can draw and a first full frame completes, so the former `root/final/fragment` trinary min/max blocker is closed. Continue from a new owning failure only if one is observed.
 
 ### View-centred voxel identity timing
 
@@ -102,12 +102,17 @@ The latest hardware baseline pairs Vitrail `3d951772` (code parent `ac33fed3`) w
   - Photon can center its voxel volume ahead of the player from `gbufferModelViewInverse[2]`, so rotating the view changes the integer voxel-center offset even when camera position is fixed.
   - Vitrail's shadow terrain writes the identity volume at the end of the previous frame while shadow compute runs at the head of the current one. The current storage-image reanchor compensates whole-block camera translation only.
   - The current compute therefore may read identities centered for the previous view while propagating/sampling light under the current view center, matching the observed emissive-source drift on view rotation.
-- [ ] Implement a generic scheduling/anchor correction for view-centred voxel identity volumes without Photon names, shader-option forcing or Metallum pack policy, then hardware-rerun a stationary emissive source while rotating the view.
+- [x] Hardware-reconfirm at `97dcf76d + 82a0c75e` that Photon still shifts and slightly flickers around a stationary emissive Nether portal while its storage-image and `shadowcomp` execution remain healthy.
+  - `voxel_img` is allocated as a cleared 128³ identity volume and physically camera-block reanchored; `light_img_a/b` are persistent 128³ floodfill volumes.
+  - `world0/shadowcomp` compiles and dispatches as groups `(4, 128, 128)` / local `(32, 1, 1)`, and the pack reaches full frames and clean exit.
+  - Iris's matrix-bobbing path matches Vitrail's placement of bob/nausea/portal effects in `gbufferModelView`, so that matrix split is not the remaining divergence.
+- [ ] If practical, A/B Photon with `Voxel Volume Center = Player` while standing still and only rotating. Use the result only to discriminate the missing view-center term; do not auto-force the option in production.
+- [ ] Implement a generic scheduling/anchor correction for view-centred voxel identity volumes without Photon names, Photon center arithmetic, shader-option forcing or Metallum pack policy, then hardware-rerun a stationary emissive source while rotating the view.
 
 ## P2 - Keep acceptance and documentation synchronized
 
 - [ ] Keep both PRs Draft/open/unmerged while PHASE 17 real-pack acceptance is incomplete.
-- [x] Keep `.context/STATE.md` and `.context/TASKS.md` synchronized with the current source findings and the latest `3d951772 + 82a0c75e` multi-pack hardware baseline; preserve the distinction between informal Bliss visual evidence, the open Photon LPV timing defect and Sundial's deterministic compile blocker.
+- [x] Keep `.context/STATE.md` and `.context/TASKS.md` synchronized with the current source findings and the latest `97dcf76d + 82a0c75e` hardware baseline; record Sundial's blocker as hardware-closed and Photon LPV view-centre drift/flicker as still open.
 - [ ] Bring `docs/metallum-port.md` forward from its older hardware-head wording in a dedicated documentation synchronization pass; do not silently treat its stale SHA as current evidence.
 - [ ] Keep Vitrail/Metallum ownership boundaries strict in every follow-up: pack semantics/defaults/diagnostics in Vitrail; generic Metal execution in Metallum.
 - [ ] Do not relax startup guards or claim general Metal shader-pack support from one runtime session, CI alone, or the absence of log-level errors.
