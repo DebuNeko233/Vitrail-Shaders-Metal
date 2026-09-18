@@ -284,12 +284,6 @@ record Emitter(ProgramStage stage, VertexInputs inputs, List<String> bound, Alph
 						+ " " + shape + " ofT = clamp((ofX - ofEdge0) / (ofEdge1 - ofEdge0), 0.0, 1.0);"
 						+ " return ofT * ofT * (3.0 - 2.0 * ofT); }");
 			}
-			for (String shape : new String[] {"double", "dvec2", "dvec3", "dvec4"}) {
-				lines.add(shape + " " + GlslTranslator.REVERSED_SMOOTHSTEP
-						+ "(double ofEdge0, double ofEdge1, " + shape + " ofX) {"
-						+ " " + shape + " ofT = clamp((ofX - ofEdge0) / (ofEdge1 - ofEdge0), 0.0, 1.0);"
-						+ " return ofT * ofT * (3.0 - 2.0 * ofT); }");
-			}
 		}
 
 		// One overload per vector the idiom hashes. The bits are hashed rather than the sine of a
