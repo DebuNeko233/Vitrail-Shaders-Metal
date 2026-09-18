@@ -50,6 +50,7 @@ import java.util.Comparator;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.EnumMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -2534,6 +2535,16 @@ public final class PackChain {
 		List<PackPass> built = new ArrayList<>();
 		int offset = 0;
 
+		// Which of each pass's targets something still reads after it wrote them, by identity: the
+		// chain answers by position, and two passes of one chain may compare equal while standing at
+		// different points of the frame. A pass the chain does not know answers "everything", which
+		// is the direction that only ever keeps a store.
+		IdentityHashMap<ChainPlan.Pass, Integer> slots = new IdentityHashMap<>();
+		List<ChainPlan.Pass> planned = plan.passes();
+		for (int slot = 0; slot < planned.size(); slot++) {
+			slots.putIfAbsent(planned.get(slot), slot);
+		}
+
 		for (ChainPlan.Pass pass : ordered(plan)) {
 			PackProgram.Loaded loaded = this.chain.programs().get(pass.program());
 			if (loaded == null) {
@@ -2543,8 +2554,12 @@ public final class PackChain {
 						+ this.chain.packName() + " and was never translated");
 			}
 
+			Integer slot = slots.get(pass);
+			Set<ChainPlan.Attachment> stillRead = slot == null
+					? Set.copyOf(pass.attachments())
+					: plan.neededAfterWrite(slot);
 			built.add(new PackPass(this.chain.place(), pass.program(), loaded, pass, this.targets,
-					this.values, this.load, offset));
+					this.values, this.load, offset, stillRead));
 			offset += Mth.roundToward(PackPass.uniformSizeOf(loaded), alignment);
 		}
 

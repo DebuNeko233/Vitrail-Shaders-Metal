@@ -17,8 +17,10 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 PASS = ROOT / 'common/src/main/java/dev/vitrail/render/PackPass.java'
+PACK_CHAIN = ROOT / 'common/src/main/java/dev/vitrail/render/PackChain.java'
 TARGETS = ROOT / 'common/src/main/java/dev/vitrail/render/ColorTargets.java'
 GEOMETRY = ROOT / 'common/src/main/java/dev/vitrail/render/GeometryProgram.java'
+CHAIN = ROOT / 'common/src/main/java/dev/vitrail/pack/target/ChainPlan.java'
 BUILD = ROOT / '.github/workflows/build.yml'
 
 
@@ -106,6 +108,30 @@ class PassWritesEveryPixel(unittest.TestCase):
         geometry = GEOMETRY.read_text(encoding='utf-8')
         self.assertIn('descriptor.withColorAttachment(view, this.targets.takeClear(view));', geometry)
         self.assertNotIn('takeClearOrEmpty', geometry)
+
+    def test_the_chain_answers_whether_anything_still_reads_a_write(self):
+        # The store half needs a fact no single pass owns: whether something reads what a pass leaves
+        # before it is written again or before the frame ends. It is answered where the frame's real
+        # order is known - the fullscreen passes and the geometry drawn between them - and every
+        # uncertain direction is "yes", because a wrong store answer is a wrong image.
+        chain = CHAIN.read_text(encoding='utf-8')
+        self.assertIn('List<Set<Attachment>> neededAfterWrite =', chain)
+        self.assertIn('public Set<Attachment> neededAfterWrite(int pass) {', chain)
+        self.assertIn('if (plan.persistent().contains(attachment.target())) {', chain)
+        self.assertIn('if (position < first) {', chain)
+        self.assertIn('private static List<Integer> positions(List<Integer> written) {', chain)
+        # A pass the chain cannot place answers "everything", never "nothing".
+        self.assertIn('? Set.copyOf(pass.attachments())', PACK_CHAIN.read_text(encoding='utf-8'))
+
+    def test_the_answer_is_reported_and_not_yet_acted_on(self):
+        # Carried and said, not spent: the store action waits until the answer has been measured
+        # against a session that does not have it.
+        self.assertIn('private final Set<ChainPlan.Attachment> stillRead;', self.text)
+        self.assertIn('and nothing reads what it leaves in ', self.text)
+        # Nothing hands it to the backend yet: the store action waits until the answer has been
+        # measured against a session that does not have it.
+        handover = self.text.split('private boolean tellTheBackend', 1)[1].split('\n\t}', 1)[0]
+        self.assertNotIn('stillRead', handover)
 
     def test_the_contract_is_named_by_a_workflow(self):
         self.assertIn('tests/test_pack_pass_writes_every_pixel.py',

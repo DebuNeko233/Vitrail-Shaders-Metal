@@ -273,6 +273,18 @@ public final class ChainPlan {
 	}
 
 	private final List<Pass> passes;
+
+	/**
+	 * For each pass of {@link #passes()}, in the same order, the attachments whose contents are read
+	 * again after that pass has written them - by a later pass of this frame, by the frame after this
+	 * one, or because the target is one the pack keeps between frames.
+	 * <p>
+	 * Empty means the pass is the last thing that will touch them, which is the one fact a store
+	 * action may be dropped on. It is published from {@code verdicts} because that walk is the only
+	 * place that knows the order the frame really runs in: the fullscreen passes and the geometry
+	 * drawn between them, which reads colortex targets exactly as a fullscreen pass does.
+	 */
+	private final List<Set<Attachment>> neededAfterWrite;
 	private final int beginEnd;
 	private final int prepareEnd;
 	private final int deferredEnd;
@@ -339,9 +351,10 @@ public final class ChainPlan {
 	private ChainPlan(String place, List<Pass> passes, Pass last, Attachment present, Seed seed,
 			Map<Key, Pass> attachments, Map<TerrainPass, Key> terrainKeys, Map<String, Key> skyKeys,
 			List<Integer> swapBack, List<String> refusals, List<String> notes,
-			List<String> history) {
+			List<String> history, List<Set<Attachment>> neededAfterWrite) {
 		this.place = place;
 		this.passes = List.copyOf(passes);
+		this.neededAfterWrite = List.copyOf(neededAfterWrite);
 		this.beginEnd = pastRank(this.passes, BEGIN_RANK);
 		this.prepareEnd = pastRank(this.passes, PREPARE_RANK);
 		this.deferredEnd = pastDeferred(this.passes);
@@ -641,7 +654,8 @@ public final class ChainPlan {
 			}
 		}
 
-		verdicts(plan, painted, world, passes, last, notes, history);
+		List<Set<Attachment>> neededAfterWrite =
+				verdicts(plan, painted, world, passes, last, notes, history);
 
 		Set<Integer> back = new TreeSet<>(plan.schedule().flippedAtEnd());
 		back.retainAll(plan.persistent());
@@ -658,7 +672,7 @@ public final class ChainPlan {
 		});
 
 		return new ChainPlan(plan.place(), passes, last, present, seed, answered, terrainKeys, skyKeys,
-				List.copyOf(back), refusals, notes, history);
+				List.copyOf(back), refusals, notes, history, neededAfterWrite);
 	}
 
 	/**
@@ -933,7 +947,7 @@ public final class ChainPlan {
 	 * @param history the reads that land on what the frame before wrote, which is the pack's own
 	 *                doing rather than a fault of this engine. See {@link #history()}
 	 */
-	private static void verdicts(TargetPlan plan, Seed seed, Map<Key, Pass> world,
+	private static List<Set<Attachment>> verdicts(TargetPlan plan, Seed seed, Map<Key, Pass> world,
 			List<Pass> passes, Pass last, List<String> notes, List<String> history) {
 		List<Pass> ordered = new ArrayList<>(passes);
 		if (last != null) {
@@ -999,6 +1013,112 @@ public final class ChainPlan {
 			}
 
 			filled.addAll(pass.attachments());
+		}
+
+		// What each write leaves behind that something still reads, one entry per pass and in the same
+		// order. Conservative in every direction that is not certain: a target kept between frames is
+		// read by the frame after this one, a read that lands before anything writes in this frame
+		// reads what the frame before left and so needs the frame before's last write stored, and a
+		// write nothing is known to read keeps its contents. Only a write this walk can see is
+		// finished with is ever called finished with, which is the one direction a store action cannot
+		// get wrong - a wrong answer is a wrong image and not a slower frame.
+		Map<Attachment, List<Integer>> writes = new LinkedHashMap<>();
+		Map<Attachment, List<Integer>> reads = new LinkedHashMap<>();
+		for (int at = 0; at < ordered.size(); at++) {
+			if (seed != null && at == seed.at()) {
+				written(writes, new Attachment(seed.target(), seed.side()), at);
+			}
+
+			Pass pass = ordered.get(at);
+			read(plan, reads, pass.program(), at);
+			for (Attachment attachment : pass.attachments()) {
+				written(writes, attachment, at);
+			}
+
+			for (Pass drawing : drawn.getOrDefault(at, Set.of())) {
+				read(plan, reads, drawing.program(), at);
+				for (Attachment attachment : drawing.attachments()) {
+					written(writes, attachment, at);
+				}
+			}
+		}
+
+		List<Set<Attachment>> needed = new ArrayList<>();
+		for (int at = 0; at < ordered.size(); at++) {
+			Set<Attachment> after = new LinkedHashSet<>();
+			for (Attachment attachment : ordered.get(at).attachments()) {
+				if (readAfter(plan, writes, reads, attachment, at)) {
+					after.add(attachment);
+				}
+			}
+
+			needed.add(Set.copyOf(after));
+		}
+
+		return needed;
+	}
+
+	/**
+	 * Whether anything reads one attachment after the write at {@code at}, before that write is
+	 * overwritten or before the frame ends. See the walk above for why every uncertain answer is yes.
+	 */
+	private static boolean readAfter(TargetPlan plan, Map<Attachment, List<Integer>> writes,
+			Map<Attachment, List<Integer>> reads, Attachment attachment, int at) {
+		List<Integer> written = positions(writes.get(attachment));
+		List<Integer> read = reads.getOrDefault(attachment, List.of());
+		int index = written.indexOf(at);
+		Integer next = index >= 0 && index + 1 < written.size() ? written.get(index + 1) : null;
+
+		for (int position : read) {
+			if (position > at && (next == null || position < next)) {
+				return true;
+			}
+		}
+
+		if (next != null) {
+			// Overwritten before anything read it, so what this write left is nobody's.
+			return false;
+		}
+
+		if (plan.persistent().contains(attachment.target())) {
+			// The pack keeps it, so the frame after this one reads it.
+			return true;
+		}
+
+		int first = written.isEmpty() ? Integer.MAX_VALUE : written.get(0);
+		for (int position : read) {
+			if (position < first) {
+				// A read this frame that lands before anything writes reads the frame before, so the
+				// last write of this frame is what the frame after this one is handed.
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/** The positions one attachment was written at, in order and without a repeat. */
+	private static List<Integer> positions(List<Integer> written) {
+		if (written == null) {
+			return List.of();
+		}
+
+		return written.stream().distinct().sorted().toList();
+	}
+
+	private static void written(Map<Attachment, List<Integer>> writes, Attachment attachment, int at) {
+		writes.computeIfAbsent(attachment, key -> new ArrayList<>()).add(at);
+	}
+
+	/** One program's reads, on the half the schedule gives it, recorded at the point it runs. */
+	private static void read(TargetPlan plan, Map<Attachment, List<Integer>> reads, String program,
+			int at) {
+		Optional<TargetSchedule.Bound> bound = plan.schedule().step(program);
+		for (int index : plan.samples(program)) {
+			Attachment half = new Attachment(index, bound
+					.map(step -> step.read(index))
+					.orElse(TargetSchedule.Side.MAIN));
+			reads.computeIfAbsent(half, key -> new ArrayList<>()).add(at);
 		}
 	}
 
@@ -1155,6 +1275,19 @@ public final class ChainPlan {
 	/** Full screen, frame order, the final EXCLUDED. */
 	public List<Pass> passes() {
 		return this.passes;
+	}
+
+	/**
+	 * The attachments of one pass of {@link #passes()} that something still reads after it wrote
+	 * them, or an empty set where nothing does.
+	 * <p>
+	 * A store may only be dropped on an attachment that is not here, and every uncertain answer is
+	 * here: the cost of being wrong is a wrong image rather than a slower frame.
+	 *
+	 * @param pass the index into {@link #passes()}
+	 */
+	public Set<Attachment> neededAfterWrite(int pass) {
+		return this.neededAfterWrite.get(pass);
 	}
 
 	/**

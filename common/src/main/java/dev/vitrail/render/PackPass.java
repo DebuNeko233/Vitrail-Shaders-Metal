@@ -113,6 +113,17 @@ final class PackPass {
 
 	private final PackProgram.Loaded loaded;
 	private final ChainPlan.Pass pass;
+
+	/**
+	 * The attachments of this pass's own writes that something reads after it: a later pass of this
+	 * frame, the frame after this one, or because the pack keeps the target between frames.
+	 * <p>
+	 * Reported and not yet acted on. The store of an attachment that is not here need not happen at
+	 * all - nothing will read what this pass leaves in it - and that is the largest single lever
+	 * left in a frame, but it is a fact about the whole frame's schedule rather than about this
+	 * pass, so it is the chain that answers it and this class only carries the answer.
+	 */
+	private final Set<ChainPlan.Attachment> stillRead;
 	private final List<ChainPlan.Attachment> attachments;
 	private final PackValues values;
 	private final PackUniforms uniforms;
@@ -233,11 +244,13 @@ final class PackPass {
 	 *                rounded to the device's minimum uniform offset alignment
 	 */
 	PackPass(String place, String program, PackProgram.Loaded loaded, ChainPlan.Pass pass,
-			ColorTargets targets, PackValues values, int load, int offset) {
+			ColorTargets targets, PackValues values, int load, int offset,
+			Set<ChainPlan.Attachment> stillRead) {
 		this.path = place.isEmpty() ? program : place + "/" + program;
 		this.textureStage = TextureStage.of(program).orElse(null);
 		this.loaded = loaded;
 		this.pass = pass;
+		this.stillRead = Set.copyOf(stillRead);
 		this.attachments = List.copyOf(pass.attachments());
 		this.offset = offset;
 		this.last = this.attachments.isEmpty();
@@ -527,6 +540,12 @@ final class PackPass {
 						: "a fragment stage that writes every pixel");
 		if (this.readsWhatItWrites) {
 			line.append(", reading a target this same pass writes, so that target is loaded");
+		}
+
+		int unread = this.attachments.size() - this.stillRead.size();
+		if (unread > 0) {
+			line.append(", and nothing reads what it leaves in ").append(unread).append(" of its ")
+					.append(this.attachments.size()).append(" targets");
 		}
 
 		// Said for the program rather than for the frame, because the third answer - whether the draw
