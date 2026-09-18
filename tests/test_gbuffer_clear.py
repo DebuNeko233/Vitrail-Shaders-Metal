@@ -163,7 +163,9 @@ class GbufferClearTest(unittest.TestCase):
         self.assertIn('Vector4fc colour = this.pendingClears.remove(view.texture());', targets)
         self.assertIn('descriptor.withColorAttachment(one.view(), Optional.of(one.colour()));', targets)
 
-        load_clear = pack.index('descriptor.withColorAttachment(view, targets.takeClear(view));')
+        # The debt is taken as the attachment is handed in, and every clear the frame still owes is
+        # flushed before the pass opens - whichever of the two actions the pass asked for beside it.
+        load_clear = pack.index('descriptor.withColorAttachment(view, emptyInsteadOfLoad')
         flush_check = pack.index('if (targets.hasPendingClears()) {', load_clear)
         flush = pack.index('targets.flushPending(encoder);', flush_check)
         open_pass = pack.index('encoder.createRenderPass(descriptor)', flush)

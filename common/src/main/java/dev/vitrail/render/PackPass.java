@@ -160,6 +160,28 @@ final class PackPass {
 	 */
 	private final boolean mayLeavePixelsUnwritten;
 
+	/**
+	 * Whether the property asked for a target this pass writes every pixel of to be emptied rather
+	 * than loaded.
+	 * <p>
+	 * Off unless asked for, because the load action is part of what the image is: a wrong answer here
+	 * is a wrong picture rather than a slower frame. {@code -Dvitrail.elideTargetLoads=true} turns it
+	 * on, so that a session that has it can be measured against one that does not before either
+	 * becomes the default.
+	 */
+	private static final boolean ELIDE_TARGET_LOADS = Boolean.getBoolean("vitrail.elideTargetLoads");
+
+	/**
+	 * Whether any sampler of this program names a target this pass also writes, on the same half.
+	 * <p>
+	 * The other half of the load-action question, and the half the pass's own text cannot answer: a
+	 * pass drawn over the whole screen that writes every pixel of its targets still has to load one
+	 * it also reads, because what it draws is read out of what it is writing. Sampled is read off the
+	 * text with every {@code #if} standing, as the geometry path reads it, so a read on a branch the
+	 * compiler drops still asks.
+	 */
+	private final boolean readsWhatItWrites;
+
 	/** The one spelling GLSL has for dropping a fragment, which is the whole of the question. */
 	private static final String DISCARD = "discard";
 	private final List<LodRead> lodReads;
@@ -262,6 +284,7 @@ final class PackPass {
 		String vertex = loaded.program().stages().get(ProgramStage.VERTEX).text();
 		String fragment = loaded.program().stages().get(ProgramStage.FRAGMENT).text();
 		this.mayLeavePixelsUnwritten = fragment.contains(DISCARD);
+		this.readsWhatItWrites = readsWhatItWrites();
 		String stem = "pack/" + load + "/" + (place.isEmpty() ? "root" : place) + "/" + program;
 		Identifier vertexId = Identifier.fromNamespaceAndPath(Vitrail.MOD_ID, stem + "/vertex");
 		Identifier fragmentId = Identifier.fromNamespaceAndPath(Vitrail.MOD_ID, stem + "/fragment");
@@ -501,6 +524,9 @@ final class PackPass {
 				.append(this.mayLeavePixelsUnwritten
 						? "a fragment stage that can leave a pixel unwritten"
 						: "a fragment stage that writes every pixel");
+		if (this.readsWhatItWrites) {
+			line.append(", reading a target this same pass writes, so that target is loaded");
+		}
 
 		// Said here and nowhere else, because this is the one binding the pack's own text cannot be
 		// read for: the pack never wrote colortex0 beside these names, and whether they read the
@@ -563,8 +589,16 @@ final class PackPass {
 		}
 
 		RenderPassDescriptor descriptor = RenderPassDescriptor.create(this.label);
+		// Emptying a target this draw is about to write every pixel of, rather than loading what stood
+		// there: a tile fill against the target's own bytes read back off the device. A clear the
+		// frame already owes is taken as it stands and is never replaced, because it is owed for a
+		// reason this pass cannot see.
+		boolean emptyInsteadOfLoad = ELIDE_TARGET_LOADS
+				&& writesEveryPixelOfTheArea(screenWidth, screenHeight);
 		for (GpuTextureView view : this.attachedViews) {
-			descriptor.withColorAttachment(view, targets.takeClear(view));
+			descriptor.withColorAttachment(view, emptyInsteadOfLoad
+					? targets.takeClearOrEmpty(view)
+					: targets.takeClear(view));
 		}
 
 		// Always at the tail. The encoder asserts that attachment zero is there, and a pipeline
@@ -597,6 +631,47 @@ final class PackPass {
 		}
 
 		return this.area;
+	}
+
+	/**
+	 * Whether this draw is about to write every pixel of the area it is drawn over.
+	 * <p>
+	 * Three answers, and all three have to hold. The fragment stage cannot leave a pixel as it was
+	 * ({@link #mayLeavePixelsUnwritten}); no sampler of the program reads a target this pass writes
+	 * on the same half ({@link #readsWhatItWrites}); and the draw is the whole screen, which is what
+	 * keeps the other two honest - a pass drawn over part of a target writes every pixel of that part
+	 * and leaves every pixel outside it as it stood.
+	 */
+	private boolean writesEveryPixelOfTheArea(int screenWidth, int screenHeight) {
+		return !this.mayLeavePixelsUnwritten
+				&& !this.readsWhatItWrites
+				&& this.pass.size().width(screenWidth) == screenWidth
+				&& this.pass.size().height(screenHeight) == screenHeight;
+	}
+
+	/**
+	 * Whether a sampler of this program names a target this pass writes, on the same half.
+	 * <p>
+	 * The question {@code GeometryProgram} answers for its own attachments, asked of this family: a
+	 * name the pack declares and never reads does not make its target's contents matter, and two
+	 * names can answer one target, so a read of either counts.
+	 */
+	private boolean readsWhatItWrites() {
+		Set<String> sampled = this.loaded.program().sampled();
+		for (ChainPlan.Attachment attachment : this.attachments) {
+			for (int at = 0; at < this.samplers.size(); at++) {
+				SamplerPlan.Binding binding = this.samplerBindings.get(at);
+				if (binding != null
+						&& binding.kind() == SamplerPlan.Kind.COLORTEX
+						&& binding.index() == attachment.target()
+						&& binding.side() == attachment.side()
+						&& sampled.contains(this.samplers.get(at))) {
+					return true;
+				}
+			}
+		}
+
+		return false;
 	}
 
 	/**
