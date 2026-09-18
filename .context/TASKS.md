@@ -3,9 +3,9 @@
 Updated: 2026-09-18
 Scope: `feat/backend-neutral-sodium-terrain-hook`
 
-## P0 - Complete PHASE 17 real shader-pack compatibility
+## P0 - PHASE 17 real shader-pack compatibility (closed by owner judgement, evidence unrecorded)
 
-The synthetic/runtime capability phases are closed; current work is evidence-backed real-pack compatibility on Apple Silicon.
+The synthetic/runtime capability phases are closed, and PHASE 17 was closed on 2026-09-18 by the project owner's judgement on the Photon device sessions rather than by the reviewed per-row evidence its own policy defines. No compatibility status is recorded for any row, and none can be: `catalog.json` rows are contractually limited to `id` and `label` (`test_phase17_compatibility_contract.py`), and the classifier refuses an unreviewed or unclean session, so a status has exactly one road and nothing travelled it. `docs/phase17-compatibility.md` records the outcome. The items below are a record of what was checked and what was left unverified, not a gate that still blocks.
 
 - [x] Define the exact five public statuses: `Supported`, `Partially Supported`, `Fallback`, `Unsupported`, `Broken`.
 - [x] Refuse incomplete/unreviewed evidence instead of inferring compatibility from CI, warnings or a plausible image.
@@ -35,9 +35,9 @@ The synthetic/runtime capability phases are closed; current work is evidence-bac
 - [ ] Decide whether Bliss, Solas and Sundial Lite belong in the PHASE 17 catalog.
   - `tests/fixtures/phase17/catalog.json` carries five rows (`photon`, `complementary`, `bsl`, `sildur`, `makeup`) and `test_phase17_compatibility_contract.py` asserts that list exactly, so the three packs the recent hardware runs actually exercised cannot have observations recorded against the matrix.
   - A new row is a catalog change plus a contract change. The roadmap's PHASE 17 wording covers "other large OptiFine/Iris packs", so the decision is about which packs are worth a standing row rather than whether they are eligible.
-- [ ] Continue the matrix through the remaining required pack families, including BSL-family and Sildur-family coverage, with the same evidence discipline.
+- [ ] The matrix rows other than Photon remain unexercised: Complementary, BSL-family, Sildur-family and MakeUp have never run under Vitrail on Metal. PHASE 17 closed before they did, so this is unverified coverage rather than a blocking item, and any future session still has to go through the same evidence discipline.
 
-The latest hardware run pairs Vitrail `60ff5610` with Metallum `82a0c75e` on Apple M5 Pro / macOS 27 / native Metal. It starts Photon normally, then deterministically hits Sodium `Render list is full` from `ShadowTerrain.restoreCameraWalk`, after which Vitrail stops drawing the shadow map and the tester observes the shader effects fall back visually. The last hardware-successful Ahead-mode LPV observation remains ancestor `c296caec`. Code-bearing `faed8e` fixes the restore-list token collision and is CI-green in build #290; hardware rerun is required.
+The latest hardware run pairs Vitrail `5ab260ab` (behaviour-neutral over code-bearing `484fdd2d`) with Metallum `82a0c75e` on Apple M5 Pro / macOS 27 / native Metal, over eight pack opens and eight first full frames. It closes the cutout-vegetation ghosting: the four shadow matrices a pack reads are now the pair the shadow stage actually drew with, and the tester reports the ghosting gone at that head. The earlier `60ff5610` Sodium `Render list is full` overflow is closed on hardware as well, across the five `16b051c1` sessions that each reach the 600-frame shadow census with 598 to 600 draws and no failure of any kind. Still open at this head: the view-centre gap behind the stationary Nether-portal emissive light, ordinary shadow terrain and a non-view-centred voxel pack after the scheduling move, and the 256-block terrain/sky boundary transition.
 
 ## P1 - Close remaining source-classified rendering gaps
 
@@ -146,9 +146,21 @@ The latest hardware run pairs Vitrail `60ff5610` with Metallum `82a0c75e` on App
   - The failing run uses 16 chunks, hence `far = 256` blocks, and Vitrail's Iris-shaped horizon cone is also drawn at 256 blocks. The shared boundary makes terrain depth/reconstruction, border fog and sky/scene-seed handoff the owning area to inspect next.
 - [ ] After the shadow-list regression is hardware-closed, inspect the same horizon with Photon `BORDER_FOG` default-on. A/B it off only as a diagnostic: if the edge barely changes, trace why the intended terrain border fade is not affecting the final image; if it changes materially, compare the border-fog colour/terrain-to-sky handoff rather than cloud raymarching.
 
+## P1 - Make the pack load and switch wait legible
+
+A pack compile holds the world back, so the screen used to be the frame from before the pack was replaced with only a small corner mark on it. The wait is 2.5 to 3.7 s per switch in the latest session.
+
+- [x] Give the held-world wait a loading page instead of a bare black screen, drawn in the shape the game's own terrain loading screen uses.
+  - `LoadPage` stands exactly while `PackChain.warming()` holds the level back and leaves when the world returns, fading over the corner card's own 300 ms ramp with the corner already drawn underneath it, so the handoff is one mark moving rather than two marks taking turns.
+  - The bar is `LevelLoadingScreen.drawProgressBar`'s, carried to the pixel: 200 by 2 at `centreX - 100`, black track, green fill, and the bar's top at the sentence's top plus the font's line height plus three. The page's flat black background is `LoadingOverlay.LOGO_BACKGROUND_COLOR_DARK` rather than an invented dim, because the buffer underneath holds the pre-switch frame and a veil would show the wrong world.
+  - The sentence and the bar are one reading of the chain (`PackChain.compilingState()`), so the count in the words and the fill of the bar cannot be a program apart.
+  - The corner is unchanged for the background compiles that follow the world's return, where a page over a world being played would be in the way. `tests/test_load_page_contract.py` pins the geometry, the colours, the single read, the shared mark clock and the draw order, and `build.yml` names it.
+  - Adversarial review of the first cut confirmed three state defects and one geometry error, all fixed and each now pinned by a test that fails without the fix. **The page is gated on `warming()` alone, not behind the corner's own guard**: the two answer different questions, and `compilingState()` is empty on frames where the warm-up workers have finished while `drawable()` is still false, so sharing the corner's answer left the held world covered by nothing. **The lift is timed from the last frame the world was seen held, not from the first frame that notices it is back**: the page is not drawn at all under F3, F1 or where the corner has gone quiet, so that frame can be arbitrarily late and the page would then paint itself opaque over a world already being played. **The fraction follows the count instead of latching its high-water mark**: the total grows as each family's translation lands, so a pinned bar sits full while the sentence above it reads otherwise, and a `Math.max` also carried a previous load's fill into a load whose count was not known yet. **The words and the fraction are reset with the rest of the per-load state**, which the first cut missed. The geometry error was the reviewer's sharpest catch: the terrain loading screen's `12` is its line height *plus* three, and applying it as an extra gap drew the bar a whole line lower than the screen the file claims to copy, which the original test could not see because it asserted the constant rather than the expression.
+- [ ] Have the page itself reviewed on device. It is source and CI evidence: no screenshot of it has been judged, and the durations above come from the `5ab260ab` log rather than from a measured page.
+
 ## P2 - Keep acceptance and documentation synchronized
 
-- [ ] Keep both PRs Draft/open/unmerged while PHASE 17 real-pack acceptance is incomplete.
+- [ ] Both PRs remain Draft/open/unmerged. PHASE 17's closure did not make them ready: it closed without compatibility statuses, so readiness is a separate owner decision that has not been recorded, and this item stays open until it is.
 - [x] Keep `.context/STATE.md` and `.context/TASKS.md` synchronized with the `60ff5610 + 82a0c75e` list-overflow hardware evidence, the CI-green `faed8e` repair, the reverted smoothstep false lead and the open terrain/border-fog boundary investigation.
 - [x] Bring `docs/metallum-port.md` forward from its older hardware-head wording in a dedicated documentation synchronization pass; do not silently treat its stale SHA as current evidence.
   - The page named `bc5e180a` as the latest broad baseline and described the `0caa74ba` sky-ownership failures as current. It now records the `ac33fed3` structural validation, the `97dcf76d` Sundial Lite closure, the `c296caec` Ahead-mode LPV closure, the `60ff5610` Sodium list overflow and the CI-green `faed8e` repair awaiting hardware, plus the current head pair.
