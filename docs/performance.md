@@ -336,9 +336,26 @@ asks it again while the probe is off, at most once a second, and opens a window 
 return rather than on its presence (`metallum#5`), so a session can be told to count once the pack it
 is meant to measure is the one in force. The marker has to be **absent before a launch** and created
 once the world is up, which is the one part of arming it that no contract can enforce and the part
-three supplied logs got wrong in turn. **A pack window has still not been counted**: every window so
-far landed on frames that were not the pack's. The GPU trace is taken, and the reproduction is taken.
-What is still owed is the light pack's numbers, and those need a window that lands on a pack.
+three supplied logs got wrong in turn. **A pack window has been counted**, and no longer by hand:
+`metallum/tools/run-vitrail-performance.sh` stages a pack and the options file beside it, writes the
+pack selection and the Metal preference the settings UI would have written, launches the dev client
+straight into a world with `--quickPlaySingleplayer`, waits for the pack's own first full frame, arms
+the probe only then, waits out its window, collects the log and a picture, and stops the client. Two
+runs under two sets of switches are the comparison it exists for, and
+`metallum/tools/vitrail-performance-compare.py` prints them side by side out of the probe's own line;
+`metallum/tools/ci-vitrail-performance.py` pins the order that makes a window worth counting.
+
+The harness's own first launch is also what found the reason the earlier windows could not land on a
+pack: the pack was coming up on its **own defaults**, because the options its owner had chosen live
+in a file beside the archive and only the archive was being staged. At those defaults one of the
+pack's programs needs a sampler slot Metal does not have, which is a fault in the backend's
+direct-resource decision rather than in the pack, and it is fixed in `metallum` by counting the slot
+the last sampled image lands in instead of counting the sampled images.
+
+What is still owed is the light pack's numbers, a picture on both sides of a comparison - macOS
+refuses screen capture to the process the harness runs under until it is granted in System Settings -
+and a **frame time**: the probe counts bytes and bindings, and the only rate in the log belongs to the
+first full frame, which is a warming window and not a measurement.
 
 ---
 
@@ -410,13 +427,44 @@ a narrow capability: `AttachmentContents` carries two booleans per attachment sl
 the answer nobody gives is the one that changes nothing, and both directions are pinned by
 `tools/ci-frame-probe.py` on that side and `tests/test_pack_pass_writes_every_pixel.py` on this one.
 The two doors differ on purpose - a load is only elidable for a draw that covers the whole target,
-while a store needs only the absence of a reader - and the chain publishes both per pass. What is
-owed is one session with the switch on against one with it off, image for image, with `loadedMiB`
-and `storedMiB` from the probe.
+while a store needs only the absence of a reader - and the chain publishes both per pass.
 
-**Exit criterion.** Stored bytes per frame fall on the P0 capture, the bindings and encoder counts
+**Measured.** One build, one scene, two runs: photon v1.3b with the options its owner chose, the same
+world, an 1800x1019 window (a 3600x2038 drawable), 600 frames a run, the first run without the switch
+and the second with it. The scenes are the same to within a per cent on every binding count.
+
+| counter | off | on | change |
+| --- | --- | --- | --- |
+| loadedMiB | 938906 | 633286 | -32.6% |
+| storedMiB | 1126032 | 1122679 | -0.3% |
+| encoders | 19691 | 19752 | +0.3% |
+| passChanged | 19091 | 19152 | +0.3% |
+
+The load half is the win it was supposed to be: 509 MiB a frame less read, 1565 to 1056, and about a
+sixth of the frame's attachment traffic across the two counters together (3441 MiB a frame to 2927).
+
+**The store half measured nothing, and the chain says why.** It fires only where nothing reads what a
+pass leaves, and in this pack almost everything a pass leaves is read: the frame is a sequence of
+full-screen programs handing one target to the next, and twelve of the pack's fifteen colour targets
+are kept between frames, so the last write to each of them is read by the next frame before it is
+written again. The one unread target the chain did find - one of `composite4`'s two - is one target
+of one pass in a frame of thirty-three. The mechanism is correct, off by default, and free when
+nothing is unread, which is why it stays: a pack whose last write to a target is genuinely dead is
+what P4's reachability work is for, and this is the door it will come through.
+
+`-Dvitrail.narrowStorageBoundary=true` was on in the same run and moved no encoder boundary either
+(19691 to 19752 is noise, in the other direction). That is the expected reading rather than a fault:
+the frame already opens about one encoder per pass, so a rule that would force an extra boundary has
+none left to force. The pack does read storage images - it declares four and reads two of them as
+samplers - so the mechanism has something to narrow in principle and nothing to narrow here.
+
+What is still owed is the picture on both sides, and a frame time to go with the bytes.
+
+**Exit criterion.** Attachment bytes per frame fall on the P0 capture, the bindings and encoder counts
 do not regress, and the regression set in "Regression, not just frame rate" is unchanged, image for
-image. The counter alone does not close this phase.
+image. The counter alone does not close this phase. On the pack measured above the whole of that fall
+is the load half, and the store half is worth what the chain is asked for: a phase that only ever
+claims the load half has to say so, and this one does.
 
 **Risk.** The failure mode is silent and looks like a pack defect, which is why the phase is
 entry-gated on P0 and exit-gated on the comparison rather than on the number.
