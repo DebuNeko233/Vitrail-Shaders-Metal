@@ -16,7 +16,7 @@ The two Sodium strings are intentionally different because the repositories reso
 
 ## Metallum foundation
 
-The companion backend work lives in `DebuNeko233/metallum`, branch `feat/mc26.2-mrt-foundation`, Draft PR #1.
+The companion backend work lives in `DebuNeko233/metallum`; its pull request is merged into `master`, and the branch it came from no longer exists.
 
 The current backend foundation includes:
 
