@@ -22,8 +22,15 @@ class SkyClaimCoverageTest(unittest.TestCase):
         self.assertIn('Identifier vertexId = owner.getVertexShader();', ownership)
         self.assertIn('.withVertexShader(vertexId)', ownership)
         self.assertIn('.withFragmentShader(fragmentId)', ownership)
+        self.assertIn('ColorTargetState state = states[slot];', ownership)
         self.assertIn('builder.withUnusedColorTargetState(slot);', ownership)
+        self.assertIn(
+            'state.blendFunction(), state.format(), ColorTargetState.WRITE_NONE',
+            ownership,
+        )
         self.assertIn('builder.withColorTargetState(coverage, states[coverage]);', ownership)
+        self.assertIn('BufferBlending.building(true);', ownership)
+        self.assertIn('BufferBlending.building(false);', ownership)
         self.assertIn('ofCoverage = gl_FragCoord.z;', ownership)
         self.assertIn('vertexId.equals(id) ? vertex : null', ownership)
         self.assertNotIn('owner.getFragmentShader().equals(id)', ownership)
@@ -68,8 +75,13 @@ class SkyClaimCoverageTest(unittest.TestCase):
         plan = translator.split('private void planCoverage()', 1)[1].split(
             'private boolean wrapsFragment()', 1
         )[0]
+        order = translator.split('private void orderFragmentOutputs()', 1)[1].split(
+            'private void planAlphaEpilogue()', 1
+        )[0]
         self.assertNotIn('this.maxFragmentOutput < 0', plan)
         self.assertIn('this.maxFragmentOutput + 1 >= MAX_FRAGMENT_OUTPUTS', plan)
+        self.assertIn('(this.maxFragmentOutput < 0 && !this.covers)', order)
+        self.assertIn('this.ordered = true;', order)
         self.assertIn(
             '(notes.fragmentOutputs() == 0 || attachments <= notes.fragmentOutputs())',
             geometry,

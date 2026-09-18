@@ -208,11 +208,31 @@ public final class SkyOwnership {
 			}
 
 			for (int slot = 0; slot < coverage; slot++) {
-				builder.withUnusedColorTargetState(slot);
+				ColorTargetState state = states[slot];
+				if (state == null) {
+					builder.withUnusedColorTargetState(slot);
+					continue;
+				}
+
+				// The replay runs inside the render pass the ordinary sky program already opened.
+				// Blaze3D therefore requires every non-empty attachment to keep a non-null target
+				// state of exactly the same format. Preserve that shape and its blend declaration,
+				// but turn every colour write off so only the coverage slot can change.
+				builder.withColorTargetState(slot, new ColorTargetState(
+						state.blendFunction(), state.format(), ColorTargetState.WRITE_NONE));
 			}
 			builder.withColorTargetState(coverage, states[coverage]);
 
-			RenderPipeline pipeline = builder.build();
+			// GeometryProgram raises the same mark around its MRT builds. Copying its per-target
+			// blend declarations here can otherwise make Minecraft's builder reject this sibling
+			// before the backend sees it, even though the active device supports independent blend.
+			RenderPipeline pipeline;
+			BufferBlending.building(true);
+			try {
+				pipeline = builder.build();
+			} finally {
+				BufferBlending.building(false);
+			}
 			// A Vulkan device that can run a pack geometry stage has to run the same one here too:
 			// it is part of the mesh's position. On Metal the only geometry stages admitted here are
 			// pass-through stages already folded away, so there is no filed stage to copy.

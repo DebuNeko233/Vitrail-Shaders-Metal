@@ -28,7 +28,12 @@ what the next one holds.
   both forms instead of requiring all seven to be direct draws.
 - **A sky shader that deliberately writes no colour can still own the sky it covers.** Such a
   fragment now reserves the first colour rank for the coverage mask instead of being refused for
-  having no pack output, which lets the ownership replay suppress the vanilla scene seed.
+  having no pack output. The output-order helper is emitted for that coverage-only shape too, so
+  the generated shader compiles instead of calling a helper that was never declared.
+- **Replaying sky ownership no longer changes the render pass attachment formats.** The replay keeps
+  every pack colour slot in the already-open pass under the same format and blend state with writes
+  disabled, and writes only the coverage slot. This avoids the Minecraft 26.2 pipeline-validation
+  crash while keeping the pack's colour targets untouched.
 
 ## 0.11.0-beta
 

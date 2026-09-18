@@ -75,6 +75,12 @@ The latest hardware baseline pairs Vitrail `bc5e180a` with Metallum `82a0c75e` o
   - `GlslTranslator.planCoverage` no longer rejects `maxFragmentOutput == -1`; `Emitter` already places coverage at `maxFragmentOutput + 1`, which is 0 in that case.
   - `GeometryProgram` treats zero pack outputs as a coverage-only pass and omits the inert default colortex attachment, so rank 0 is not occupied by an image the shader never writes.
   - Other families keep fragment-survival coverage: without the sky sibling, a fragment `discard` still prevents the ordinary coverage epilogue from writing.
+- [x] Fix the zero-output coverage wrapper exposed by the `0caa74ba` hardware run.
+  - `gbuffers_skybasic` correctly receives `ofCoverage` at rank 0, but the generated wrapper called `ofOrderOutputs()` without emitting the helper because `orderFragmentOutputs` still treated `maxFragmentOutput == -1` as "no output".
+  - Coverage now counts as the one output for ordering, so the helper is emitted and names `ofCoverage` before the pack body.
+- [x] Make the sky ownership sibling attachment-compatible with the render pass it reuses.
+  - Minecraft 26.2 validates every non-null render-pass colour attachment against a non-null pipeline target state of the same format at `RenderPass.setPipeline`.
+  - The sibling now preserves each ordinary pack slot's format and blend state with `WRITE_NONE`, and writes only the existing coverage slot; genuinely unused/null slots remain unused.
 - [ ] Hardware-validate the ownership replay with Bliss `gbuffers_skybasic`: the claimed sky region should no longer be replaced by vanilla scene-seed fallback when the pack fragment discards.
 - [ ] Exercise the End sky branch if practical, because it is the other `covers=true` branch besides the two overworld discs.
 

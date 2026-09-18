@@ -3986,7 +3986,12 @@ public final class GlslTranslator {
 	 * it and this runs once the rest of the rewrite has settled.
 	 */
 	private void orderFragmentOutputs() {
-		if (this.stage != ProgramStage.FRAGMENT || this.maxFragmentOutput < 0) {
+		// Coverage is an output too. A zero-colour-output fragment has maxFragmentOutput == -1,
+		// but when coverage was planned it still owns rank zero and the wrapper still calls the
+		// ordering helper. Let that one-output shape create the helper rather than leaving the call
+		// dangling in generated GLSL.
+		if (this.stage != ProgramStage.FRAGMENT
+				|| (this.maxFragmentOutput < 0 && !this.covers)) {
 			return;
 		}
 

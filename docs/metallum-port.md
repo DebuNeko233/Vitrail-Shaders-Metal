@@ -36,11 +36,11 @@ The current backend foundation includes:
 
 This remains backend GPU behaviour. Shader-pack target selection, ping-pong/history, custom-image policy, camera reanchor policy, program scheduling and resource naming remain Vitrail responsibilities.
 
-At this status update the companion Metallum branch head is `54ff6f0e22b153ea206cc726f68bccaee6ce4e70`. The Metal foundation and baseline PHASE 5-16 acceptance already have Apple-Silicon real-device evidence; PHASE 17 real-pack compatibility remains active and may still expose generic defects that must be fixed in their owning subsystem.
+At this status update the companion Metallum branch head is `82a0c75e53e28390472b3c26b569cdc2335d90b4`. The Metal foundation and baseline PHASE 5-16 acceptance already have Apple-Silicon real-device evidence; PHASE 17 real-pack compatibility remains active and may still expose generic defects that must be fixed in their owning subsystem.
 
 ## Vitrail backend-neutralization
 
-The backend-neutralization baseline is implemented on branch `feat/backend-neutral-sodium-terrain-hook` and Draft PR #1, targeting `dev` as required by repository policy. The latest real-device evidence baseline on that branch is `37d06c12890ade6c940a07939ca49d1cc03b0cbd`; later diagnostic-only source classifications are described below and require their own rerun before becoming hardware evidence.
+The backend-neutralization baseline is implemented on branch `feat/backend-neutral-sodium-terrain-hook` and Draft PR #1, targeting `dev` as required by repository policy. The latest successful broad runtime baseline remains `bc5e180a8580757bf8863abb2d7c130ca1476913`; the later `0caa74ba6f91f97584cfad0d8d9172a30181986a` hardware attempt exercises the new sky-ownership path but exposes the two Vitrail defects described under current validation status.
 
 PHASE 17 real shader-pack compatibility is active. The earlier phases remain acceptance baselines rather than a claim that those subsystems can no longer receive fixes.
 
@@ -152,10 +152,7 @@ A reference-unbacked classification is narrower than value parity. Iris can read
 
 Both repositories remain Draft, open and unmerged. The Metal shader-pack route remains developer-validation-only.
 
-The latest hardware evidence pair is:
-
-- Vitrail `37d06c12890ade6c940a07939ca49d1cc03b0cbd`;
-- Metallum feature branch `feat/mc26.2-mrt-foundation`, currently `54ff6f0e22b153ea206cc726f68bccaee6ce4e70`.
+The latest broad successful hardware baseline is Vitrail `bc5e180a8580757bf8863abb2d7c130ca1476913` with Metallum `82a0c75e53e28390472b3c26b569cdc2335d90b4`. A later Vitrail `0caa74ba6f91f97584cfad0d8d9172a30181986a` attempt on the same Metal branch reaches the new claimed-sky path but is not an acceptance pass: Photon exposes a generated-GLSL ordering-helper omission for coverage-only fragments, and Solas exposes an attachment-format mismatch when the ownership sibling is bound into the already-open sky render pass.
 
 At these baselines:
 
@@ -168,7 +165,7 @@ At these baselines:
 
 ### 2026-09-18 runtime evidence
 
-The Apple M5 Pro / macOS 27.0 / Metal sessions exercise Bliss v2.1.2, Complementary Reimagined r5.9.1, MakeUp Ultra Fast 9.5e, Photon v1.3b and Solas Shader V3.7b. The latest supplied log records Vitrail module-cache build `37d06c12`; the mod list records Metallum 0.0.24, and the user confirms the launcher builds continue to come from the two project feature branches named above.
+The Apple M5 Pro / macOS 27.0 / Metal sessions exercise Bliss v2.1.2, Complementary Reimagined r5.9.1, MakeUp Ultra Fast 9.5e, Photon v1.3b and Solas Shader V3.7b. The latest supplied log records Vitrail module-cache build `0caa74ba`; the mod list records Metallum 0.0.24, and the launcher builds continue to come from the two project feature branches named above. In that run Photon reaches a first full frame, but the new sky ownership work is not accepted: coverage-only `gbuffers_skybasic` fails compilation on a missing `ofOrderOutputs` helper during warm-up/sky preparation, and a later Solas disc reaches the replay then crashes because the sibling pipeline's colour-target states do not match the formats of the attachments in the already-open pass.
 
 Across the recorded sessions:
 
@@ -202,7 +199,7 @@ A green Gradle build, successful client launch, full warm-up count or successful
 
 ## Next work
 
-Immediate work is the hardware rerun for the source-classified sky/line diagnostics. On the new build, Solas sky/line and Photon sky/line should keep drawing while the five sky and two line missing-real-attribute WARNs from `37d06c12` disappear. This does not assert exact numeric parity for OpenGL generic-attribute state.
+Immediate work is a hardware rerun of the corrected claimed-sky path. A coverage-only `gbuffers_skybasic` must compile with its ordering helper present, and the ownership sibling must bind inside an ordinary sky render pass without changing any attachment count or format. Only after that should the visual Bliss scene-seed case be judged. The earlier sky/line reference-unbacked diagnostic classification remains in force and does not assert exact numeric parity for OpenGL generic-attribute state.
 
 After that, comparison/ordinary shadow sampler conflicts and first-frame empty-resource diagnostics remain explicit until reference behavior or visual evidence identifies a concrete contract to change. In parallel, collect the PHASE 17 screenshot/reference evidence needed to assign compatibility statuses to packs that reach full frames. Do not promote support from runtime logs alone.
 
