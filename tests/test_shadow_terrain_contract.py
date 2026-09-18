@@ -142,7 +142,10 @@ class ShadowTerrainContractTest(unittest.TestCase):
         self.assertIn('"sodium.MixinSodiumWorldRendererSetup"', config)
         self.assertIn("int shadowFrame = cameraFrame ^ Integer.MIN_VALUE;", terrain)
         self.assertNotIn("prepareChunkRendering(", terrain)
-        self.assertIn("manager.finalizeRenderLists(camera, viewport, fog, true);", terrain)
+        self.assertIn(
+            "manager.finalizeRenderLists(minecraft.gameRenderer.mainCamera(), viewport, FogParameters.NONE, true);",
+            terrain,
+        )
         self.assertIn(
             "manager.finalizeRenderLists(camera, viewport, fog, updateChunksImmediately);",
             terrain,

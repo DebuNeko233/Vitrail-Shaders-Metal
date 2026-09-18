@@ -145,9 +145,10 @@ public final class EngineStages {
 	 * While the level's frame graph is being built, which is the one moment the model view and the
 	 * camera position of this frame are both to hand and neither has been pushed anywhere yet.
 	 * <p>
-	 * The frame graph carries no pass of ours. Sodium has already culled the terrain for the
-	 * camera when this method runs, and its camera chunk batches have not been prepared yet; that
-	 * gap is where the shadow stage can make a scoped light walk and restore the camera lists.
+	 * The frame graph carries no pass of ours. On Minecraft 26.2 Sodium has already culled the
+	 * terrain during LevelExtractor before this method runs; the camera's chunk draws themselves
+	 * are still ahead, which is the gap where the shadow stage can make a scoped light walk and
+	 * restore the camera lists.
 	 * <p>
 	 * It is also the top of the level frame, which is a second thing entirely and is why the first
 	 * and the last lines below have nothing to do with the two arguments.

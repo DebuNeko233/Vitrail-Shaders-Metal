@@ -60,8 +60,8 @@ import org.joml.Vector3f;
  * that grid jump when the view-centred origin crosses an integer cell. Keeping writer and compute
  * in the same frame fixes the semantic mismatch without knowing how any pack computes its centre.
  * <p>
- * Nothing of the terrain draw itself is reimplemented here. {@code drawChunkLayer} and
- * {@code prepareChunkRendering} are Sodium's public entries; Vitrail only supplies the light's
+ * Nothing of the terrain draw itself is reimplemented here. {@code drawChunkLayer} is Sodium's
+ * own public entry in the Minecraft 26.2 / Sodium 0.9.2 line; Vitrail only supplies the light's
  * render lists and changes its own shadow routing while the draw runs.
  * <p>
  * The matrices handed to Sodium remain the camera's deliberately. They feed Sodium's own
@@ -129,7 +129,7 @@ public final class ShadowTerrain {
 	}
 
 	/**
-	 * Takes the camera traversal Sodium has just completed. The three references are consumed by
+	 * Takes the camera traversal Sodium has just completed. The captured state is consumed by
 	 * the next shadow stage so a frame that never ran terrain setup cannot accidentally reuse an
 	 * older camera viewport.
 	 */
