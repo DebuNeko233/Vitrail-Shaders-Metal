@@ -635,9 +635,15 @@ final class GeometryProgram {
 		// nothing needs to: no pass drawn from the light carries a blend of its own, whatever a
 		// pack's own directive later puts on its attachments.
 		this.demoted = owns && !this.ownsFirst && pass.blended() && !pass.afterDeferred();
-		this.extra = this.ownsFirst
-				? List.copyOf(writes)
-				: writes.size() < 2 ? List.of() : List.copyOf(writes.subList(1, writes.size()));
+		// A zero-output program has no pack colour write to attach. Iris still gives such a program
+		// the default draw buffer, but there is no fragment output that can reach it; when coverage is
+		// the only output, rank zero belongs to the mask instead. Dropping the inert colour attachment
+		// keeps the pipeline and descriptor aligned with that rank without changing any pack colour.
+		this.extra = this.covers && outputs == 0
+				? List.of()
+				: this.ownsFirst
+						? List.copyOf(writes)
+						: writes.size() < 2 ? List.of() : List.copyOf(writes.subList(1, writes.size()));
 		this.slots = pass.shadow() ? List.of() : attachments(targets, outputs);
 		// Never fewer than one, whatever the fragment stage declares. Mellow's shadow program writes
 		// no output at all - its whole body is one discard test, so the count is nought - and a pass
@@ -1676,7 +1682,7 @@ final class GeometryProgram {
 	 */
 	static boolean covers(TranslatedUnit.Notes notes, int attachments, boolean chainRuns) {
 		return chainRuns && attachments > 0 && notes.coverage() == 1
-				&& attachments <= notes.fragmentOutputs()
+				&& (notes.fragmentOutputs() == 0 || attachments <= notes.fragmentOutputs())
 				&& notes.fragmentOutputs() < ColorTargetState.MAX_COLOR_TARGETS;
 	}
 
@@ -2656,14 +2662,19 @@ final class GeometryProgram {
 						this.shadowColours.size());
 			}
 		} else if (this.ownsFirst) {
-			// Nought included, and the log says the sides because they are the whole fix: a write on
-			// the half the composites do not read is geometry that vanishes without a word from
-			// anyone.
-			Vitrail.logger().info("Its draw buffers all reach the pack's own targets, nought "
-					+ "included: {}",
-					this.extra.stream()
-							.map(one -> TargetName.canonical(one.target()) + " " + one.side())
-							.toList());
+			if (outputs == 0 && this.covers) {
+				Vitrail.logger().info("It declares no pack colour output, so the pass carries only "
+						+ "the coverage mask at colour rank nought");
+			} else {
+				// Nought included, and the log says the sides because they are the whole fix: a write on
+				// the half the composites do not read is geometry that vanishes without a word from
+				// anyone.
+				Vitrail.logger().info("Its draw buffers all reach the pack's own targets, nought "
+						+ "included: {}",
+						this.extra.stream()
+								.map(one -> TargetName.canonical(one.target()) + " " + one.side())
+								.toList());
+			}
 			if (this.covers) {
 				// The pair to read this against is the seed's own line: this one says the mask is
 				// written, that one says it is honoured.

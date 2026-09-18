@@ -4,6 +4,9 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 OWNERSHIP = ROOT / 'common/src/main/java/dev/vitrail/render/SkyOwnership.java'
+TRANSLATOR = ROOT / 'common/src/main/java/dev/vitrail/glsl/GlslTranslator.java'
+GEOMETRY = ROOT / 'common/src/main/java/dev/vitrail/render/GeometryProgram.java'
+EMITTER = ROOT / 'common/src/main/java/dev/vitrail/glsl/Emitter.java'
 SKY_PROGRAM = ROOT / 'common/src/main/java/dev/vitrail/render/SkyProgram.java'
 HORIZON = ROOT / 'common/src/main/java/dev/vitrail/render/HorizonCone.java'
 MIXIN = ROOT / 'common/src/main/java/dev/vitrail/mixin/SkyRendererMixin.java'
@@ -56,6 +59,27 @@ class SkyClaimCoverageTest(unittest.TestCase):
             horizon.index('pass.draw(VERTICES, 1, 0, 0);'),
             horizon.index('SkyOwnership.claimCurrent(pass, VERTICES, 1, 0, 0);'),
         )
+
+    def test_zero_output_fragment_can_reserve_rank_zero_for_coverage(self):
+        translator = TRANSLATOR.read_text(encoding='utf-8')
+        geometry = GEOMETRY.read_text(encoding='utf-8')
+        emitter = EMITTER.read_text(encoding='utf-8')
+
+        plan = translator.split('private void planCoverage()', 1)[1].split(
+            'private boolean wrapsFragment()', 1
+        )[0]
+        self.assertNotIn('this.maxFragmentOutput < 0', plan)
+        self.assertIn('this.maxFragmentOutput + 1 >= MAX_FRAGMENT_OUTPUTS', plan)
+        self.assertIn(
+            '(notes.fragmentOutputs() == 0 || attachments <= notes.fragmentOutputs())',
+            geometry,
+        )
+        self.assertIn('this.extra = this.covers && outputs == 0', geometry)
+        self.assertIn(
+            'layout(location = " + (this.maxFragmentOutput + 1) + ") out float',
+            emitter,
+        )
+
 
     def test_geometry_stage_and_comparison_metadata_follow_claim_pipeline(self):
         ownership = OWNERSHIP.read_text(encoding='utf-8')

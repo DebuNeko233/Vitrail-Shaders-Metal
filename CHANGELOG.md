@@ -26,6 +26,9 @@ what the next one holds.
 - **The sky renderer no longer fails to load while that ownership is recorded.** Minecraft draws
   two of those sky pieces directly and five through an index buffer; the ownership hook now follows
   both forms instead of requiring all seven to be direct draws.
+- **A sky shader that deliberately writes no colour can still own the sky it covers.** Such a
+  fragment now reserves the first colour rank for the coverage mask instead of being refused for
+  having no pack output, which lets the ownership replay suppress the vanilla scene seed.
 
 ## 0.11.0-beta
 

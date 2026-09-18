@@ -4078,15 +4078,17 @@ public final class GlslTranslator {
 	 * The mask is one more output, and where it lands is not where it is declared: the game asks the
 	 * SPIR-V reflection for the outputs and writes each one's rank over its own location, so the
 	 * mask has to be named after every output the pack declared, dead branches included. It is
-	 * refused where there is no room for one more, which is the eight colour targets a pipeline
-	 * carries, and where the stage declares no output at all, since then rank nought would be the
-	 * mask and the pack's colour would have nowhere to go.
+	 * refused only where there is no room for one more, which is the eight colour targets a pipeline
+	 * carries. A stage that declares no colour output is the useful edge case rather than a refusal:
+	 * the mask is then the first and only output, at rank zero. A claimed sky program that discards
+	 * every fragment uses exactly that shape; its ordinary body never reaches the mask epilogue, and
+	 * the sky ownership replay fills the same attachment afterwards.
 	 * <p>
 	 * A refusal costs the picture nothing by itself. The pass then draws exactly as it did before
 	 * the mask existed, and it is whoever reads the mask that has to notice it was never written.
 	 */
 	private void planCoverage() {
-		if (this.stage != ProgramStage.FRAGMENT || !this.coverage || this.maxFragmentOutput < 0
+		if (this.stage != ProgramStage.FRAGMENT || !this.coverage
 				|| this.maxFragmentOutput + 1 >= MAX_FRAGMENT_OUTPUTS) {
 			return;
 		}
