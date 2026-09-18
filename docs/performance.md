@@ -71,6 +71,17 @@ number is judged against a re-run of it rather than against this paragraph.
 - **Pipeline state creation: 440 over the session, 32 milliseconds in total.** This one changed the
   plan, and the phase it changes is P3.
 
+**What that window was, and what it was not.** Not one of its 600 frames is a frame of a drawn pack.
+The session's only `first full frame` arrives at `01:03:51`, eleven seconds after the window closed,
+because two loads in a row were replaced before either of them finished. So every figure above
+describes **warming** frames - the ones this engine spends with the level skipped - and not the frames
+P1 is about. The first window that does contain a drawn pack was taken later, on the same machine, the
+same pack and the same 3600x2038 window: **1689 MiB loaded and 2066 MiB stored per frame, 34 encoder
+boundaries of which 33 are a pass configuration change**, over 600 frames of Photon at 35 frames a
+second. Eight and a half times the load traffic and seven times the boundaries, which is the
+difference between a frame with no level in it and a frame with one. That is the number P1's target
+should have been, and the correction moves the phase's prize up rather than down.
+
 **What a byte figure here is and is not.** It is what the engine asked Metal to load and store, from
 the actions it chose and the sizes of the attachments it chose them for. It is not a measurement of
 what the hardware moved: a driver is free to elide a store whose contents nothing reads, and part of

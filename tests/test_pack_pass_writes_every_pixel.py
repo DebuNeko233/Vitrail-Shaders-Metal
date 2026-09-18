@@ -64,6 +64,12 @@ class PassWritesEveryPixel(unittest.TestCase):
         self.assertIn('Boolean.getBoolean("vitrail.elideTargetLoads")', self.text)
         self.assertIn('boolean emptyInsteadOfLoad = ELIDE_TARGET_LOADS', self.text)
 
+    def test_a_session_with_it_on_says_so_in_its_own_log(self):
+        # Otherwise a run with the property on cannot be told from one with it off except by its
+        # numbers, and the numbers are the thing being measured.
+        self.assertIn('elideTargetLoads is on', self.text)
+        self.assertIn('ELIDE_TARGET_LOADS && !this.mayLeavePixelsUnwritten', self.text)
+
     def test_a_clear_the_frame_owes_is_never_replaced(self):
         # A clear is owed for a reason this pass cannot see, and its colour is the pack's. The
         # emptying goes through ColorTargets rather than being built at the call site.
