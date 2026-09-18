@@ -55,7 +55,7 @@ side = "CLIENT"
 [[dependencies.${mod_id}]]
 modId = "sodium"
 type = "required"
-reason = "Vitrail renders through Sodium, which owns the Vulkan command submission."
+reason = "Vitrail renders through Sodium, which owns the command submission."
 versionRange = "[0.9,0.10)"
 ordering = "AFTER"
 side = "CLIENT"
