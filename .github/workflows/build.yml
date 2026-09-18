@@ -90,6 +90,19 @@ jobs:
           python3 tests/test_terrain_alpha_contract.py
           python3 tests/test_terrain_smoke_fixture.py
           python3 tests/test_vulkan_recording_contract.py
+          # Named here rather than left to be run by hand: a contract that no workflow runs asserts
+          # nothing, and `test_workflow_contract.py` fails when a script in tests/ drops out of every
+          # workflow again.
+          python3 tests/test_compute_storage_contract.py
+          python3 tests/test_graphics_storage_image_contract.py
+          python3 tests/test_wide_resources_contract.py
+          python3 tests/test_background_pipeline_warmup.py
+          python3 tests/test_entity_reference_default.py
+          python3 tests/test_glsl_builtin_shadowing.py
+          python3 tests/test_native_shared_compute_contract.py
+          python3 tests/test_preprocessor_macro_redefinition.py
+          python3 tests/test_setup_compute_contract.py
+          python3 tests/test_sky_claim_coverage.py
           python3 tests/test_workflow_contract.py
           java tests/VerifyMrtScreenshot.java --self-test
           java tests/VerifyTerrainScreenshot.java --self-test
