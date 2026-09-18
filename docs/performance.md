@@ -125,6 +125,21 @@ it: the reopen served 304 modules and still built 73, from one pack, in one sess
 set, with the translation store answering 30 of 30 at its own door. What those 73 differ by in the
 module key is worth an answer before any cache is widened.
 
+**How long the wait is.** Both logs also record what the player waits, because every load that is not
+interrupted prints one line for its first full frame:
+
+| load | pack opened | first full frame | waited |
+|---|---|---|---|
+| Photon, reopened in the same session | 01:03:45 | 01:03:51 | 6 s |
+| Photon, cold on a new build | 01:38:31 | 01:38:40 | 9 s |
+
+That is what the loading page has to cover, and it is more than the compile work the earlier
+sessions put at 2.5 to 3.7 s. The rest is visible in the same seconds: the world's chunk sections are
+all built again because the mesh has to start carrying what the pack reads, 826 MiB of colour
+targets are allocated at 3600x2260, and the chain's leftover pipelines are compiled ahead of their
+first draw. Two of the first log's three opens never reach a line at all, because the next switch
+arrived first, so six seconds is the shortest wait recorded here rather than the longest.
+
 **The cold row is what a development build always sees, not a worst case.** Both disk stores name
 their directory after `Vitrail.cacheEdition()`, which is the version and the game for a release and
 adds the commit for a development build (`Vitrail.java:99-112`). A tester who rebuilds reads an
@@ -343,7 +358,9 @@ pack-visible value changes, and the uniform question is answered in writing eith
 The stall is real - a pack switch costs 2.5 to 3.7 seconds, and one load's background work alone is
 3146 ms - but it is **not** pipeline state creation, which the same run measured at 440 creations
 costing **32 milliseconds in total**. A persistent cache keyed on the Metal pipeline state would
-therefore buy about thirty milliseconds and nothing else.
+therefore buy about thirty milliseconds and nothing else. What a player waits is longer than that
+compile work: six seconds from a reopen to its first full frame, nine on a cold build, in the two
+loads that were left alone long enough to reach one.
 
 What the run shows instead is where the seconds are: **translation** at 1591 ms over 71 translator
 calls with **nothing served from the translation cache**, chain unit flattening at 620 ms over 160
