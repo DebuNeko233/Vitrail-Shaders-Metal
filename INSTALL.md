@@ -23,6 +23,12 @@ is. Building it yourself gives the same thing for whatever commit you are on, an
 | Sodium | 0.9.x, the build for whichever loader is in front |
 | Java | 25, to build (the game brings its own runtime) |
 
+Those ranges are what the jar's own metadata declares, so the loader enforces
+them whether or not this page is current: `fabric/src/main/resources/fabric.mod.json`
+on Fabric and `neoforge/src/main/resources/META-INF/neoforge.mods.toml` on
+NeoForge. [README.md](README.md#requirements) carries the same table for
+anyone deciding whether to install at all, and the two move together.
+
 One jar for both loaders: each loader reads its own metadata out of it and
 ignores the rest. On Fabric, two modules of Fabric API are declared as
 required, and they are the whole of what this mod takes from it: the key
