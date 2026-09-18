@@ -11,6 +11,18 @@ publishing a jar named after one thing and built from another.
 Everything is a pre-release while the version stays under `1.0.0`. Nothing here is a promise about
 what the next one holds.
 
+## Unreleased
+
+### Changed
+
+- **The Metal backend no longer needs a launch argument.** Vitrail used to draw a shader pack on
+  Metal only when the session was started with `-Dvitrail.experimentalMetal=true`, which meant a
+  working Metal setup still looked like a black screen unless whoever installed it knew the flag.
+  That switch is gone: on a session that is really running Metal, with a compatible Metallum
+  installed and Metal selected as its preference, the pack is read and drawn. A session where one of
+  those is missing says which one it is missing instead of asking for a flag, and a session already
+  on Metal is never told to switch its graphics API.
+
 ## 0.12.0-metal-beta
 
 ### Added

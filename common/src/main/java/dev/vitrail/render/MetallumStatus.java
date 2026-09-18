@@ -7,17 +7,15 @@ import java.lang.reflect.Method;
  * classpath.
  * <p>
  * A preference is deliberately not treated as proof that Metal works. The runtime path is opened
- * only for developer smoke testing, after a compatible API reports "Prefer Metal" and Vitrail's
- * Metal capability provider has run after successful device creation. The explicit system property
- * stays off by default until the Apple-Silicon runtime matrix has been completed.
+ * once a compatible API reports "Prefer Metal" and Vitrail's Metal capability provider has run
+ * after successful device creation, which is the same three-part answer it has always required;
+ * what is gone is the fourth, a system property a developer had to pass to be allowed in at all.
+ * Metal is the maintained path, so it turns on where it works and the property is no longer read.
  */
 public final class MetallumStatus {
 
 	/** The Metallum integration contract this Vitrail build understands. */
 	public static final int SUPPORTED_API_VERSION = 1;
-
-	/** Developer-only opt-in for the unvalidated Metal shader-pack path. */
-	public static final String SMOKE_PROPERTY = "vitrail.experimentalMetal";
 
 	private static final String API_CLASS = "com.metallum.api.MetallumApi";
 	private static final Status MISSING = new Status(false, -1, false, false);
@@ -64,21 +62,19 @@ public final class MetallumStatus {
 	}
 
 	/**
-	 * Whether the Metal backend has reached Vitrail's current validation-only rendering gate.
+	 * Whether the Metal backend is ready to draw a pack, which is the whole of the question now that
+	 * the developer opt-in is gone.
 	 * <p>
 	 * {@link BufferBlending#served()} is published by the Metal backend mixin only after
 	 * {@code MetalBackend#createDevice} returns successfully, so it keeps a preference from being
-	 * mistaken for a live device. The system property is intentionally the final condition.
+	 * mistaken for a live device. A Metallum that is missing, that answers a different API version,
+	 * or whose owner has not selected Prefer Metal fails on the first condition, and a session whose
+	 * device never came up fails on the second; there is no longer a property that can open this on
+	 * a session the other three answers refuse, and none that can close it on a session they allow.
 	 */
 	public static boolean renderingEnabled() {
 		return compatibleAndPreferred()
-				&& BufferBlending.served()
-				&& Boolean.getBoolean(SMOKE_PROPERTY);
-	}
-
-	/** Whether the explicit developer smoke-test switch is on for this JVM. */
-	public static boolean smokeEnabled() {
-		return Boolean.getBoolean(SMOKE_PROPERTY);
+				&& BufferBlending.served();
 	}
 
 	/** Snapshot of the optional API contract. Preference changes require restart, so caching is safe. */
