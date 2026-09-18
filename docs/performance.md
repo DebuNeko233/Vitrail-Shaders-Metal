@@ -171,6 +171,64 @@ and it has one consequence for this phase: a run-for-run comparison across a reb
 store, not the engine. A warm number has to be taken twice on one build, or across two loads inside
 one session.
 
+## The GPU trace
+
+P0 asked for one capture of a frame, kept beside the numbers. Three `Metal System Trace` recordings
+have now been taken on the tester's Apple M5 Pro - 28 s over two pack switches, 14 s of steady play,
+and 14 s over a third switch - and the counts they yield are in `MetalFrameProbe`'s terms because the
+trace is read through `xctrace export` rather than by eye.
+
+**Steady play is GPU-bound, without a gap.** Over the 14 s window that contains no load and no
+switch, the GPU's shader cores are busy for 13.65 s of 14.04 - **97.3 per cent**, with every single
+second of the window between 0.99 and 1.03 s of activity. The split is `Fragment 12.63 s`,
+`Vertex 2.02 s` and `Compute 2.03 s`, so roughly three quarters of the work is fragment work. That
+settles P1's premise on hardware rather than on reasoning: the frame is limited by GPU work, so GPU
+work removed is frame time returned, and the attachment loads and stores P1 is aimed at are fragment
+work.
+
+**A pack switch is four seconds in which no frame is submitted at all.** In the switch recording the
+client submits nothing - not one command buffer - for three whole seconds, and the GPU sits at six to
+seven per cent, with six Metal allocations across those seconds. Around it, one second of half rate
+before and a burst of 75 submissions after. So the wait is not a slow frame; it is no frame.
+
+**What fills it is the world being rebuilt, not the shaders being compiled.** The log for the same
+session says `The block ids moved, from 23877 states to 32194. The sections carry them, so they are
+all built again` in the same second the switch starts, and the next thing the log says is a chunk
+pass. Three independent readings agree that compilation is not the cost: the switch's own report
+gives 672 ms of archive, 178 ms of translation over 66 calls with 58 programs served from the store,
+246 ms of flattening and 222 ms over 332 modules with **none built**; the driver's shader compiler is
+**idle** for the whole stall, having done its 3.69 s of work in the four seconds *before* the switch
+while the game was still playing; and the client is otherwise silent.
+
+**The same switch took one second in another session.** `Photon` to `ComplementaryReimagined` on the
+same machine, the same 3600x2038 window, with the same block-table move and the same "sections are
+all built again" announcement, reached its first full frame **one second** after the pack opened in
+the 02:23 session and **five seconds** after it in the 02:41 one, losing one frame in the first and
+three seconds of frames in the second. The compile figures are the same to within noise in both. So
+the variable is the rebuild, and the number of sections it has to rebuild, and not the engine's own
+translation or module work.
+
+**The loading page covers it, and only because nothing is drawn.** The tester reports the page
+standing through the stall. The code does not hold it there: `warming()` is `!drawable()`
+(`PackChain.java:816`, `:2934`) and `drawable()` becomes true at the moment the log says the chain
+can draw (`:2771-2775`), which is roughly four seconds before the first full frame. What keeps the
+page on screen is that the client presents no frame in between, so the page is the last thing
+presented and the screen holds it. That is worth knowing before anyone changes the predicate: the
+page is not standing where it was designed to stand, and a frame that arrives a second earlier would
+replace it with the empty world.
+
+**What a Metal trace cannot say, and what that costs.** There is no per-pass attribution in it. The
+GPU activity intervals are keyed by driver objects (`0xcb0a...`, 63 of them in one recording) that
+intersect none of the 80986 labelled objects and none of the encoders; the encoder table carries only
+`Encoding` events, which are CPU-side; there is one command buffer a frame, so per-command-buffer
+granularity is per-frame; and joining GPU intervals to encoders by time overlap leaves 100983 of
+117988 unattributed, because GPU execution trails encoding. Instruments' own Encoder Hierarchy shows
+the passes - `MetalCommandEncoder.java:435` already pushes a debug group named by
+`descriptor.label()`, the same label `PassTimings` reads - but `xctrace export` does not carry debug
+groups. So the pass names are in the trace and the per-pass GPU times are not reachable from it.
+P1 does not need them: `MetalFrameProbe`'s `loadedMiB` and `storedMiB` are exactly the quantity P1
+moves, and with the GPU saturated a fall in them is a rise in frame rate.
+
 ## What is genuinely absent
 
 1. **Store actions are always Store for pack passes, and load actions are never `dontCare`.**
@@ -188,9 +246,11 @@ one session.
    `TargetPlan.java`, `render/ColorTargets.java` (clears, flips, keep directives),
    `render/TargetCopies.java` and `render/ShadowAmortisation.java`. No single place states first
    use, last use, full overwrite, or survives-the-frame, and the backend is told none of it.
-4. **Compilation is paid twice for the same shaders.** A pack switch costs a measured 2.5 to 3.7
-   seconds and one load compiles 155 leftover pipelines (`.context/STATE.md`, the `5ab260ab`
-   session). There is no persistent pipeline cache and no binary archive in the tree.
+4. **Compilation is paid twice for the same shaders.** One load compiles 155 leftover pipelines, and
+   there is no persistent pipeline cache and no binary archive in the tree (`.context/STATE.md`, the
+   `5ab260ab` session). What this is *not* is the pack switch's stall: the trace above puts four
+   seconds of that on the world's rebuild, with both stores answering, the module store building
+   nothing, and the driver's own shader compiler idle for the whole of it.
 5. **Dead-resource elimination runs on declaration text, not reachability.** The repository has
    already recorded the resulting over-count: on Photon, `deferred` appears to read `colortex6` and
    `colortex7` because those are the pack's own three-dimensional worley overrides, not
@@ -249,9 +309,13 @@ re-measured in a normal session; the trace is what says which pass is expensive 
 
 **Exit criterion.** The three numbers exist for both baseline packs, a second run reproduces them
 within noise, the probe is off unless asked for, and a GPU trace of one frame has been taken and
-kept with the numbers. "Within noise" is a claim about one build: a development build reads a cache
-edition of its own, so two runs either side of a rebuild are two cold starts and comparing them
-compares that, not the engine.
+kept with the numbers. The trace is taken - three recordings, in the section above - and so is the
+reproduction: two sessions of one build report **the same 829 encoders, 230 pass changes and 599
+submissions** over their 600-frame windows, attachment bytes within one per cent of each other, and
+the same 1317 modules served with none built. What is still owed is the light pack's numbers.
+"Within noise" is a claim about one build: a development build reads a cache edition of its own, so
+two runs either side of a rebuild are two cold starts and comparing them compares that, not the
+engine.
 
 **Where it stands.** The probe is built and in the companion backend: `MetalFrameProbe` counts all
 four, off unless armed by `-Dmetallum.probeFrames=true` or a `metallum/probe-frames` marker in the
@@ -259,9 +323,11 @@ game directory, and `tools/ci-frame-probe.py` pins it. Its first shape asked the
 the first frame, so a window could only cover frames a launch reached by itself; the backend now
 asks it again while the probe is off, at most once a second, and opens a window on the marker's
 return rather than on its presence (`metallum#5`), so a session can be told to count once the pack it
-is meant to measure is the one in force. One real run has been taken and is recorded above; a second
-was taken and is not one, for the reason in the section that follows. What is still owed is the
-second run (a light pack, for the comparison) and a GPU trace of one frame kept beside the numbers.
+is meant to measure is the one in force. The marker has to be **absent before a launch** and created
+once the world is up, which is the one part of arming it that no contract can enforce and the part
+three supplied logs got wrong in turn. **A pack window has still not been counted**: every window so
+far landed on frames that were not the pack's. The GPU trace is taken, and the reproduction is taken.
+What is still owed is the light pack's numbers, and those need a window that lands on a pack.
 
 ---
 
@@ -376,13 +442,16 @@ pack-visible value changes, and the uniform question is answered in writing eith
 
 # Phase P3 - Compilation: stop paying twice
 
-**For.** This is the phase a player feels most, and the baseline has moved where it should aim.
-The stall is real - a pack switch costs 2.5 to 3.7 seconds, and one load's background work alone is
-3146 ms - but it is **not** pipeline state creation, which the same run measured at 440 creations
-costing **32 milliseconds in total**. A persistent cache keyed on the Metal pipeline state would
-therefore buy about thirty milliseconds and nothing else. What a player waits is longer than that
-compile work: six seconds from a reopen to its first full frame, nine on a cold build, in the two
-loads that were left alone long enough to reach one.
+**For.** This is the phase a player feels most, and what a player feels has now been measured rather
+than inferred. The stall is real: a pack switch is **four seconds in which the client submits no
+frame at all**, and the GPU sits idle through it. But the trace above takes that stall away from this
+phase. It is **not** pipeline state creation, which one run measured at 440 creations costing **32
+milliseconds in total**; it is **not** translation or module building, which the switch's own report
+puts at 178 ms and 222 ms with the module store building nothing; and it is **not** the driver's
+compiler, which is idle for the whole of it. It is the world: the block-id table moved from 23877
+states to 32194, every section had to be rebuilt, and the seconds are that rebuild. So the case for
+a compilation cache is now the *load*, where the numbers below stand, and not the switch, where the
+same switch took one second in one session and five in another with identical compile figures.
 
 What the run shows instead is where the seconds are: **translation** at 1591 ms over 71 translator
 calls with **nothing served from the translation cache**, chain unit flattening at 620 ms over 160
