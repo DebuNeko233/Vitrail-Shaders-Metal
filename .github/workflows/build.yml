@@ -97,6 +97,7 @@ jobs:
           python3 tests/test_graphics_storage_image_contract.py
           python3 tests/test_wide_resources_contract.py
           python3 tests/test_background_pipeline_warmup.py
+          python3 tests/test_load_page_contract.py
           python3 tests/test_entity_reference_default.py
           python3 tests/test_glsl_builtin_shadowing.py
           python3 tests/test_native_shared_compute_contract.py

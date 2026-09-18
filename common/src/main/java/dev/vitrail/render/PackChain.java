@@ -844,33 +844,49 @@ public final class PackChain {
 	}
 
 	/**
-	 * The overlay's compiling sentence, the walked-out-of-total count riding along once the
-	 * tasks have a plate. Empty when nothing is in flight. F3 prepends the same prefix its
-	 * other lines already wear.
+	 * What the compile card says and how far along it is, off one reading of the chain.
+	 *
+	 * @param words    the sentence, the walked-out-of-total count riding along once the tasks
+	 *                 have a plate: bare words rather than a "0 of 0" that reads as stuck
+	 * @param progress the same count as a fraction, nought to one, or a negative number wherever
+	 *                 the words are bare and the plate is not yet known
 	 */
-	public static Optional<Component> compilingWords() {
+	public record CompilingState(Component words, float progress) {
+	}
+
+	/**
+	 * The compiling sentence and the fraction the loading page's bar fills by, read together and
+	 * handed out as one; empty when nothing is in flight.
+	 * <p>
+	 * One reading rather than two because the two answers are one count: asked separately, a
+	 * worker could finish its program between them and the bar would sit a step away from the
+	 * number in the sentence above it, on the one frame where the page is watched closely. The
+	 * sentence and the F3 line share the count for the same reason.
+	 */
+	public static Optional<CompilingState> compilingState() {
 		PackChain chain = active;
 		if (!compiling() || chain == null) {
 			return Optional.empty();
 		}
 
-		return Optional.of(compilingLabel(chain));
+		Component words = Component.translatable(ScreenText.COMPILING);
+		int total = chain.warmup.total();
+		float progress = -1.0F;
+		if (total > 0) {
+			int walked = Math.min(chain.warmup.walked(), total);
+			words = words.copy().append(" " + walked + "/" + total);
+			progress = walked / (float) total;
+		}
+
+		return Optional.of(new CompilingState(words, progress));
 	}
 
 	/**
-	 * The overlay's compiling sentence and the F3 line share this so a count cannot drift
-	 * between the two. Bare words until the tasks have a plate, rather than a "0 of 0"
-	 * that reads as stuck.
+	 * The overlay's compiling sentence alone, for the F3 line, which has no bar to keep in step
+	 * with it. Prepending the same prefix its other lines already wear is the caller's.
 	 */
-	private static Component compilingLabel(PackChain chain) {
-		Component words = Component.translatable(ScreenText.COMPILING);
-		int total = chain.warmup.total();
-		if (total > 0) {
-			words = words.copy()
-					.append(" " + Math.min(chain.warmup.walked(), total) + "/" + total);
-		}
-
-		return words;
+	public static Optional<Component> compilingWords() {
+		return compilingState().map(CompilingState::words);
 	}
 
 	/**

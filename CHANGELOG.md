@@ -13,8 +13,22 @@ what the next one holds.
 
 ## Unreleased
 
+### Added
+
+- **A pack that is still compiling now says so on a loading page instead of leaving the screen
+  black.** While Vitrail holds the world back to translate and compile a pack, the screen shows the
+  mod's mark over "Compiling shaders..." with the count of programs compiled so far, drawn in the
+  same shape the game uses while it loads terrain, with a bar that fills as that count climbs. The
+  mark then goes back to its usual top-left corner for the families that compile in the background,
+  which is what it did there before.
+
 ### Fixed
 
+- **Shadows on leaves, grass and the other cutout plants no longer trail behind what casts them
+  when the camera moves.** The four shadow matrices a pack reads had been published from the pair
+  the shadow map was not drawn with, so every shadow lookup landed where the caster stood one draw
+  earlier: invisible while standing still, a displaced shadow the moment the camera moved, and
+  clearest on the fine shadow detail a pack reads for leaf and grass self-shadowing.
 - **Photon-style same-frame shadow walks no longer exhaust Sodium's region lists after a few frames.**
   The camera repair traversal now uses its own temporary frame token, so every camera-visible
   region resets before it is rebuilt instead of appending duplicate sections to the list the real
