@@ -27,8 +27,12 @@ subject_re="^($types)(\([a-z0-9-]+\))?!?: [a-z].*[^.]$"
 # `release` is a branch prefix and not a commit type: what lands from such a branch is the version
 # bump, which is a `build`, that line of gradle.properties being the build's own. The version itself
 # is the name, so this is one of the two branches carrying dots.
-# Three numbers, then either `-alpha`, or `-beta`, or nothing: a counted pre-release is refused here
-# rather than at the tag, where the repair costs a branch already pushed under the wrong name.
+# Three numbers, then optionally a pre-release of lower case words joined by dashes, which is the
+# same shape `release.yml` asks of a tag. The words are not enumerated, because the history already
+# carries `-alpha`, `-beta` and `-beta.1` and a port shipping under its own name needs a marker of
+# its own; the SHAPE is what both ends agree on, and `release.yml` carries the reasoning. A counted
+# pre-release with a dot is still refused here rather than at the tag, where the repair costs a
+# branch already pushed under the wrong name.
 #
 # `build/open-<version>-dev` is the other, and it is the same branch read backwards: `release/` takes
 # the `-dev` suffix off the version for the tag, and this one puts the next version and its suffix
@@ -36,7 +40,8 @@ subject_re="^($types)(\([a-z0-9-]+\))?!?: [a-z].*[^.]$"
 # the shape is written out here rather than left to the general rule because the general rule would
 # have to admit a dot everywhere to admit it here.
 semver='[0-9]+\.[0-9]+\.[0-9]+'
-branch_re="^(($types)/[a-z0-9]+(-[a-z0-9]+)*|release/$semver(-(alpha|beta))?|build/open-$semver-dev)$"
+prerelease='-[a-z]+(-[a-z]+)*'
+branch_re="^(($types)/[a-z0-9]+(-[a-z0-9]+)*|release/$semver($prerelease)?|build/open-$semver-dev)$"
 
 die() {
 	echo "commit-msg: $1" >&2

@@ -24,9 +24,17 @@ the shape of a commit message, and shares it with the hook a contributor install
 
 It also holds the other half of that claim: a contract script that no workflow names asserts nothing
 while still looking like coverage, which is the state seven scripts in `tests/` were in.
+
+The released-version shape is here for the reason the permission matcher is: it is one rule written
+in two files, `.githooks/commit-msg` and `release.yml`, and a shape widened in one of them would
+refuse the tag after the branch had already been pushed and reviewed. So the two are run against the
+same cases rather than trusted to agree, and the gate is asked through `grep` rather than through a
+Python copy of its pattern.
 """
 from pathlib import Path
 import re
+import subprocess
+import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -269,6 +277,68 @@ class WorkflowContract(unittest.TestCase):
         # defines. Treating it as harmless would be the one failure mode this check cannot have.
         with self.assertRaises(AssertionError):
             content_writers({"tmp.yml": step("      - run: echo hi\n", "permissions: write\n")})
+
+
+# What a released version may look like, and both ends that decide it. `release/<version>` is the
+# branch that carries the bump, so the hook refuses a name outside the shape; `release.yml` asks the
+# same question of a tag, where the repair costs a release already published. The two are one rule in
+# two files, which is why the cases below are fed to the hook AND to the gate rather than restated:
+# widening one and forgetting the other would refuse the tag after the branch had been pushed and
+# reviewed. The history already carries three markers (`-alpha`, `-beta`, `-beta.1`) and a port
+# shipping under its own name needs a fourth, so the words are not enumerated and the shape is.
+ACCEPTED_VERSIONS = ("0.12.0-metal-beta", "0.5.0-beta", "0.5.0", "1.0.0-alpha")
+REFUSED_VERSIONS = (
+    "0.12.0-Metal-Beta",   # capitals: not the lower case the shape asks for
+    "0.12.0-metal_beta",   # an underscore is not a dash
+    "0.4.0-beta.1",        # a counted pre-release: the shape has no dot after the first dash
+    "0.12.0-metal-",       # a trailing dash is an empty identifier
+    "0.12.0--metal",       # and so is a leading one
+)
+VALID_SUBJECT = "feat(screen): show a loading page while a pack compiles\n"
+
+
+class VersionShape(unittest.TestCase):
+    def hook_accepts(self, branch):
+        """Run the real hook, the same file `commits.yml` runs over a pull request's range."""
+        with tempfile.TemporaryDirectory() as tmp:
+            message = Path(tmp) / "message"
+            message.write_text(VALID_SUBJECT, encoding="utf-8")
+            return subprocess.run(
+                ["sh", str(ROOT / ".githooks" / "commit-msg"), str(message), branch],
+                capture_output=True, text=True,
+            ).returncode == 0
+
+    def tag_gate(self, version):
+        """Run `release.yml`'s own check, through the engine it uses rather than a Python copy.
+
+        The workflow asks `grep -E`, and ERE is not the same language the `re` module speaks: a
+        pattern that compiles here can be a different one there. So the pattern is read out of the
+        workflow and handed to grep, which is the only way this test can fail for the reason the
+        gate would.
+        """
+        text = (WORKFLOWS / "release.yml").read_text(encoding="utf-8")
+        match = re.search(r"""grep -Eq '([^']+)'""", text)
+        self.assertIsNotNone(match, "release.yml no longer carries a tag shape to check")
+        return subprocess.run(
+            ["grep", "-Eq", match.group(1)], input=version, text=True,
+        ).returncode == 0
+
+    def test_both_ends_accept_a_named_prerelease(self):
+        for version in ACCEPTED_VERSIONS:
+            with self.subTest(version=version):
+                self.assertTrue(self.hook_accepts(f"release/{version}"), version)
+                self.assertTrue(self.tag_gate(version), version)
+
+    def test_both_ends_refuse_the_shape_they_do_not_mean(self):
+        for version in REFUSED_VERSIONS:
+            with self.subTest(version=version):
+                self.assertFalse(self.hook_accepts(f"release/{version}"), version)
+                self.assertFalse(self.tag_gate(version), version)
+
+    def test_the_refused_set_is_not_refused_for_the_wrong_reason(self):
+        # The hook checks the branch AND the subject, so a case that fails for an unrelated reason
+        # would pin nothing. A well-named branch carrying the same message has to pass.
+        self.assertTrue(self.hook_accepts("release/0.12.0-metal-beta"))
 
 
 if __name__ == "__main__":

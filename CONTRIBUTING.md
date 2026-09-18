@@ -48,6 +48,15 @@ the branch, or when, or which issue it answers. That last one is a choice rather
 commit that does the work names the issue it closes, and a branch name carrying the number would
 say it in the one place nothing reads it back from.
 
+A released version is three numbers, then optionally a pre-release of lower case words joined by
+dashes: `0.5.0-beta`, `0.12.0-metal-beta`, or nothing at all. The words are not a fixed list, because
+the history already carries more than one and a port shipping under its own name needs another; the
+shape is what is fixed. A counted pre-release with a dot in it, which the earlier history uses, is
+not. `.githooks/commit-msg` refuses a branch named outside that shape, and `release.yml` asks the
+same question of a tag, because the string reaches Fabric's semantic-version parser, where a jar it
+refuses does not load at all. A tag already published is exempt from that check, so resending a
+release named under an older rule still works.
+
 **The history is linear and carries no merge commit anywhere, which is not a preference.** A tree
 that forks is a tree nobody reads once it is public, and this one is public. A topic branch is
 rebased onto `dev` and enters by a pull request, merged by rebase and by nothing else, which is

@@ -99,13 +99,19 @@ jobs:
             exit 1
           fi
 
-          # Three numbers, then either -alpha, or -beta, or nothing, which is the shape CONTRIBUTING
-          # describes under Branches. Asked of a tag push alone: a release already out was named
-          # under whatever rule stood on its day, and this job is dispatched again on old tags to
-          # resend a corrected body, which refusing the shape would take away.
+          # Three numbers, then optionally a pre-release of lower case words joined by dashes, which
+          # is the shape CONTRIBUTING describes under Branches. The words are not enumerated: the
+          # history already carries -alpha, -beta and -beta.1, and a port that ships under its own
+          # name needs a marker of its own, so what is asked is the SHAPE of an identifier rather
+          # than a list of the ones that have been used. Anything above the pattern - capitals, an
+          # underscore, a leading or trailing dash - is still refused, which is what `build.gradle`
+          # needs: it hands the string to Fabric's semantic-version parser, where a jar it refuses
+          # does not load at all. Asked of a tag push alone: a release already out was named under
+          # whatever rule stood on its day, and this job is dispatched again on old tags to resend a
+          # corrected body, which refusing the shape would take away.
           if [ "$GITHUB_EVENT_NAME" = "push" ]; then
-            if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta))?$'; then
-              echo "::error::$version is not three numbers followed by -alpha, -beta or nothing"
+            if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[a-z]+(-[a-z]+)*)?$'; then
+              echo "::error::$version is not three numbers followed by a lower case pre-release of dashed words, or by nothing"
               exit 1
             fi
           fi
