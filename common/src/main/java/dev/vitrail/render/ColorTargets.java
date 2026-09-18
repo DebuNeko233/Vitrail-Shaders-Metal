@@ -128,6 +128,17 @@ final class ColorTargets {
 	private static final Vector4fc UNWRITTEN =
 			new Vector4f(COVERAGE_EMPTY, COVERAGE_EMPTY, COVERAGE_EMPTY, COVERAGE_EMPTY);
 
+	/**
+	 * The colour a target is emptied with when every pixel of it is about to be written anyway.
+	 * <p>
+	 * Nothing reads this value. It stands for the load action being replaced by a tile fill, and a
+	 * clear whose result is overwritten costs a fill where a load costs the target's own bytes read
+	 * back off the device. Held here rather than built per pass so that one value answers for every
+	 * pass that reaches for it, and zeroed rather than a colour so that a mistake is a value no pack
+	 * asked for.
+	 */
+	static final Vector4fc EMPTY_CLEAR = new Vector4f(0.0F, 0.0F, 0.0F, 0.0F);
+
 	/** Past this much the log says so once. Refusing to allocate would trade a stutter for a black screen. */
 	private static final long LOUD_BYTES = 512L * 1024L * 1024L;
 
@@ -648,6 +659,19 @@ final class ColorTargets {
 
 		Vector4fc colour = this.pendingClears.remove(view.texture());
 		return colour == null ? Optional.empty() : Optional.of(colour);
+	}
+
+	/**
+	 * The clear this frame owes the view, or the empty colour where it owes none.
+	 * <p>
+	 * For a pass that is about to write every pixel of the target: the load action becomes a tile
+	 * fill and the value is one nothing reads. A clear the frame does owe is handed back as it
+	 * stands, never replaced, because it is owed for a reason the pass cannot see and the colour is
+	 * the pack's.
+	 */
+	Optional<Vector4fc> takeClearOrEmpty(GpuTextureView view) {
+		Optional<Vector4fc> owed = takeClear(view);
+		return owed.isPresent() ? owed : Optional.of(EMPTY_CLEAR);
 	}
 
 	/** True while a colour texture is still owed a clear this frame. */
