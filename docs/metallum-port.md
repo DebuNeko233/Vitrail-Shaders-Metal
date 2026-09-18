@@ -24,7 +24,7 @@ The current backend foundation includes:
 - complete indexed `RenderPipeline.getColorTargetStates()` handling;
 - per-target Metal format, write mask, blend state and clear value;
 - attachment-set identity and depth-only render-pass sizing;
-- backend-native colour mipmap generation;
+- backend-native colour mipmap generation, and a generic D32 progressive-nearest depth path for the mip chains that command cannot reduce;
 - selective compiled-pipeline eviction with deferred native release;
 - backend-owned zero-initialized shader-storage buffers;
 - backend-owned writable 1D, 2D and true-3D textures;
@@ -36,11 +36,11 @@ The current backend foundation includes:
 
 This remains backend GPU behaviour. Shader-pack target selection, ping-pong/history, custom-image policy, camera reanchor policy, program scheduling and resource naming remain Vitrail responsibilities.
 
-At this status update the companion Metallum branch head is `82a0c75e53e28390472b3c26b569cdc2335d90b4`. The Metal foundation and baseline PHASE 5-16 acceptance already have Apple-Silicon real-device evidence; PHASE 17 real-pack compatibility remains active and may still expose generic defects that must be fixed in their owning subsystem.
+At this status update the companion Metallum branch head is `283bf389dda9f7c84b92f57ab06b99395a0daf92`, whose code-bearing Metal head is `82a0c75e53e28390472b3c26b569cdc2335d90b4`; the commit after it changes CI only and no backend behaviour. The Metal foundation and baseline PHASE 5-16 acceptance already have Apple-Silicon real-device evidence; PHASE 17 real-pack compatibility remains active and may still expose generic defects that must be fixed in their owning subsystem.
 
 ## Vitrail backend-neutralization
 
-The backend-neutralization baseline is implemented on branch `feat/backend-neutral-sodium-terrain-hook` and Draft PR #1, targeting `dev` as required by repository policy. The latest successful broad runtime baseline remains `bc5e180a8580757bf8863abb2d7c130ca1476913`; the later `0caa74ba6f91f97584cfad0d8d9172a30181986a` hardware attempt exercises the new sky-ownership path but exposes the two Vitrail defects described under current validation status.
+The backend-neutralization baseline is implemented on branch `feat/backend-neutral-sodium-terrain-hook` and Draft PR #1, targeting `dev` as required by repository policy. Its committed tip is `840dc322e7cf994f337afe1fce34c76e1315a4b9`, of which the code-bearing head is `faed8edadf705440419bdfb7049f10127c3e607b`; the two commits after it change documentation and CI only. `faed8e` is green in build #290 and still needs a hardware rerun before the current scheduling is closed. The sky-ownership path that the earlier `0caa74ba6f91f97584cfad0d8d9172a30181986a` attempt broke was repaired and carries structural Apple-Silicon evidence at `ac33fed3fa3323784c24bc6c96db82d828c51393`, and the later `60ff5610cf3ce60f05fcd0bbe1566b32fa00adb4` run exposed the Sodium camera-list restoration overflow that `faed8e` repairs.
 
 PHASE 17 real shader-pack compatibility is active. The earlier phases remain acceptance baselines rather than a claim that those subsystems can no longer receive fixes.
 
@@ -152,7 +152,7 @@ A reference-unbacked classification is narrower than value parity. Iris can read
 
 Both repositories remain Draft, open and unmerged. The Metal shader-pack route remains developer-validation-only.
 
-The latest broad successful hardware baseline is Vitrail `bc5e180a8580757bf8863abb2d7c130ca1476913` with Metallum `82a0c75e53e28390472b3c26b569cdc2335d90b4`. A later Vitrail `0caa74ba6f91f97584cfad0d8d9172a30181986a` attempt on the same Metal branch reaches the new claimed-sky path but is not an acceptance pass: Photon exposes a generated-GLSL ordering-helper omission for coverage-only fragments, and Solas exposes an attachment-format mismatch when the ownership sibling is bound into the already-open sky render pass.
+The most recent reviewed hardware sessions pair Vitrail `60ff5610cf3ce60f05fcd0bbe1566b32fa00adb4` with Metallum `82a0c75e53e28390472b3c26b569cdc2335d90b4`, and earlier Vitrail `ac33fed3fa3323784c24bc6c96db82d828c51393` with the same Metallum head. The `0caa74ba6f91f97584cfad0d8d9172a30181986a` attempt that first reached the claimed-sky path was not an acceptance pass — Photon exposed a generated-GLSL ordering-helper omission for coverage-only fragments and Solas an attachment-format mismatch when the ownership sibling was bound into the already-open sky render pass — and both defects are repaired. The `60ff5610` session then exposed a separate Vitrail scheduling defect: after sustained Photon rendering, Sodium `ChunkRenderList.add` throws `Render list is full` through `RenderSectionManager.readRenderListFromTree` and `ShadowTerrain.restoreCameraWalk`, and Vitrail stops drawing the shadow map. Code-bearing `faed8e` repairs it and is CI-green, but no hardware run has confirmed that yet.
 
 At these baselines:
 
@@ -165,22 +165,25 @@ At these baselines:
 
 ### 2026-09-18 runtime evidence
 
-The Apple M5 Pro / macOS 27.0 / Metal sessions exercise Bliss v2.1.2, Complementary Reimagined r5.9.1, MakeUp Ultra Fast 9.5e, Photon v1.3b and Solas Shader V3.7b. The latest supplied log records Vitrail module-cache build `0caa74ba`; the mod list records Metallum 0.0.24, and the launcher builds continue to come from the two project feature branches named above. In that run Photon reaches a first full frame, but the new sky ownership work is not accepted: coverage-only `gbuffers_skybasic` fails compilation on a missing `ofOrderOutputs` helper during warm-up/sky preparation, and a later Solas disc reaches the replay then crashes because the sibling pipeline's colour-target states do not match the formats of the attachments in the already-open pass.
+The Apple M5 Pro / macOS 27.0 / Metal sessions exercise Bliss v2.1.2, Complementary Reimagined r5.9.1, MakeUp Ultra Fast 9.5e, Photon v1.3b, Solas Shader V3.7b and Sundial Lite v1.1.0. The launcher builds come from the two project feature branches named above.
 
-Across the recorded sessions:
+They read as a progression rather than one pass, and this page records the newest evidence for each subsystem rather than the oldest:
 
 - every tested pack reaches a first full frame and the client later reaches clean `Stopping!`;
-- no Vitrail/Metallum shader compile `ERROR` occurs in the latest `37d06c12` run;
+- the `bc5e180a8580757bf8863abb2d7c130ca1476913` log carries no Vitrail or Metallum log-level `ERROR` or `FATAL`, and its sky/line diagnostic classification is hardware-verified for every path that run exercised: no sky `mc_Entity` / `mc_midTexCoord` and no line `vaUV2` missing-real-attribute warning, while Photon sky/line and Solas sky still record their draws. That run did not trigger the Solas line draw, so the one observed `mc_Entity` line path stays source-classified rather than re-exercised;
 - Photon, MakeUp and Complementary no longer attempt unusable no-DH `distant*` programs during detached warm-up;
 - Bliss no longer hits the `diagonal3` macro-redefinition failure;
 - Photon compiles past the previously recorded `world0/prepare/vertex` blocker, reaches its chain, compiles and dispatches `world0/deferred4_a` on Metal;
 - Solas compiles and dispatches `shadowcomp` on Metal as groups `(24, 12, 24)` / local `(8, 8, 8)`;
-- entity `at_midBlock` is absent after its diagnostic correction while the shadow-entity path remains active;
-- the `37d06c12` run records particle and weather draws across Solas, Photon, MakeUp, Complementary and Bliss without the former particle/weather `mc_Entity`, `mc_midTexCoord` or `at_tangent` missing-real-attribute warnings.
+- entity `at_midBlock` is absent after its diagnostic correction while the shadow-entity path remains active, and the exercised particle and weather draw paths remain active with no `at_tangent` regression;
+- `97dcf76d` closes Sundial Lite's first deterministic blocker: its pack-local `min3` / `max3` helpers are no longer read as an overload against compiler built-ins, the leftover pipelines compile and the chain reaches a first full frame;
+- `c296caec3aca9d64b2030c424a33c898a827ba24` closes the observed Photon defect. With `Voxel Volume Center = Ahead`, a stationary Nether-portal emissive light no longer shifts or flickers under view-only rotation, because the voxel writer and `shadowcomp` now share the current camera and view uniforms in the same frame; the tester's A/B against `Player` isolated that as a view-centre term rather than a camera-position one;
+- `ac33fed3` structurally validates the repaired sky-ownership replay. Solas records its disc first draw and horizon cone with no Minecraft 26.2 attachment-format rejection, and Photon's outputless `world0/gbuffers_skybasic` reports coverage-only at colour rank zero, records its first draw and continues through compute and entity work to clean world exit, with no missing `ofOrderOutputs()` helper and no sky sibling build or compile warning;
+- `60ff5610` exposes the scheduling defect described under current validation status after sustained Photon rendering; it is repaired at code-bearing `faed8e`, which is CI-green and awaiting a hardware rerun.
 
-The `37d06c12` log leaves seven vertex-input warnings before the next source classification: Solas sky `mc_Entity` three times, Photon sky `mc_midTexCoord` twice, Solas lines `mc_Entity` once and Photon lines `vaUV2` once. Every affected path still records its first draw. Iris 26.1 source now classifies those four names/families as reference-unbacked rather than missing physical mesh fields, so the next hardware run is an acceptance test of the diagnostic change, not a reason to widen any vertex ABI.
+Two of those results are narrower than they look. The `ac33fed3` session does not load Bliss, so it does not close the primary visual acceptance question — whether a Bliss `gbuffers_skybasic` discard still lets the vanilla scene seed repaint a claimed sky — and it does not exercise the End sky, the other `covers=true` branch. The Sundial Lite result closes that pack's first fatal only and assigns no compatibility status.
 
-This materially advances the old blockers and verifies the prior diagnostic fixes on hardware. It does **not** by itself promote Photon or any other pack to a new PHASE 17 compatibility status: the status policy still requires reviewed screenshot/reference evidence, not only a clean runtime log.
+None of this promotes Photon or any other pack. A clean runtime log, CI, a plausible frame and a warning count are each insufficient under the PHASE 17 evidence policy, which still requires reviewed screenshot/reference material.
 
 Comparison-vs-ordinary shadow sampler declarations and first-frame `nothing fills them yet` resource diagnostics remain separate. They should stay explicit until reference behavior or persistent visual evidence identifies a concrete contract to change.
 
@@ -188,18 +191,21 @@ Comparison-vs-ordinary shadow sampler declarations and first-frame `nothing fill
 
 PHASE 17 remains the merge gate. Before either Draft PR becomes ready, real-pack evidence must be collected and reviewed under [`phase17-compatibility.md`](phase17-compatibility.md). In particular:
 
-1. re-run at least Solas and Photon after the sky/line diagnostic classification and verify those seven warnings disappear while the same draw paths remain active;
-2. turn runtime progress into reviewed pack evidence only where the required screenshot/reference material exists;
-3. preserve the real Photon compute-dispatch evidence and exact paired-head metadata in the formal evidence path;
-4. keep comparison/sampler/resource diagnostics separate from vertex-input classification and investigate them only against reference semantics or persistent visual evidence;
-5. continue the required real-pack matrix, including pack families not covered by the current five-pack sessions;
-6. keep Vulkan/shared-path regression coverage for every backend-neutral contract changed while fixing PHASE 17 findings.
+1. re-run the current code-bearing head with Photon `Voxel Volume Center = Ahead`, for long enough and with enough movement to cross the former Sodium list-overflow point, and require the shader chain and shadow map to stay active with no `Render list is full` and no shadow-stage shutdown;
+2. at that same head, reconfirm the stationary Nether-portal emissive light still does not shift or flicker under view-only rotation, and reconfirm ordinary shadow terrain plus one non-view-centred voxel pack after the same-frame scheduling move;
+3. turn runtime progress into reviewed pack evidence only where the required screenshot/reference material exists, beginning with the tester's simple Bliss visual check, and exercise the End sky, the other `covers=true` branch;
+4. preserve the real Photon compute-dispatch evidence and exact paired-head metadata in the formal evidence path;
+5. keep comparison/sampler/resource diagnostics separate from vertex-input classification, and investigate them only against reference semantics or persistent visual evidence;
+6. continue the required real-pack matrix, including the BSL-family and Sildur-family rows not covered by the current sessions;
+7. keep Vulkan/shared-path regression coverage for every backend-neutral contract changed while fixing PHASE 17 findings.
 
 A green Gradle build, successful client launch, full warm-up count or successful compute dispatch is useful evidence, but none alone proves rendering correctness or shader-pack compatibility.
 
 ## Next work
 
-Immediate work is a hardware rerun of the corrected claimed-sky path. A coverage-only `gbuffers_skybasic` must compile with its ordering helper present, and the ownership sibling must bind inside an ordinary sky render pass without changing any attachment count or format. Only after that should the visual Bliss scene-seed case be judged. The earlier sky/line reference-unbacked diagnostic classification remains in force and does not assert exact numeric parity for OpenGL generic-attribute state.
+Immediate work is a hardware rerun of code-bearing `faed8e` with Photon `Voxel Volume Center = Ahead`, long enough and with enough movement to cross the former Sodium list-overflow point. The shadow stage must stay alive, and the stationary Nether-portal emissive light must remain stable under view-only rotation. Only after that should the visual Bliss scene-seed case be judged from reviewed screenshots.
+
+The distant abrupt transition the tester reports is no longer treated as a cloud problem. The reversed-`smoothstep` candidate produced no visual improvement on hardware and was reverted in `c3a619e0429d683a19d5d80e1398ed899a158e22`, so no speculative cloud rewrite remains in production translation. Photon enables `BORDER_FOG` by default to hide the render-distance boundary, the failing run uses a 16-chunk view distance, and Vitrail's Iris-shaped horizon cone is also drawn at 256 blocks. The owning area to inspect is therefore terrain depth, reconstructed scene position, border fog and the terrain-to-sky/scene-seed handoff at that shared distance; `BORDER_FOG` is A/B'd only as a diagnostic, and cloud math is not patched from that symptom.
 
 After that, comparison/ordinary shadow sampler conflicts and first-frame empty-resource diagnostics remain explicit until reference behavior or visual evidence identifies a concrete contract to change. In parallel, collect the PHASE 17 screenshot/reference evidence needed to assign compatibility statuses to packs that reach full frames. Do not promote support from runtime logs alone.
 

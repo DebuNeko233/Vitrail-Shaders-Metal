@@ -137,6 +137,12 @@ The latest hardware run pairs Vitrail `60ff5610` with Metallum `82a0c75e` on App
 
 - [ ] Keep both PRs Draft/open/unmerged while PHASE 17 real-pack acceptance is incomplete.
 - [x] Keep `.context/STATE.md` and `.context/TASKS.md` synchronized with the `60ff5610 + 82a0c75e` list-overflow hardware evidence, the CI-green `faed8e` repair, the reverted smoothstep false lead and the open terrain/border-fog boundary investigation.
-- [ ] Bring `docs/metallum-port.md` forward from its older hardware-head wording in a dedicated documentation synchronization pass; do not silently treat its stale SHA as current evidence.
+- [x] Bring `docs/metallum-port.md` forward from its older hardware-head wording in a dedicated documentation synchronization pass; do not silently treat its stale SHA as current evidence.
+  - The page named `bc5e180a` as the latest broad baseline and described the `0caa74ba` sky-ownership failures as current. It now records the `ac33fed3` structural validation, the `97dcf76d` Sundial Lite closure, the `c296caec` Ahead-mode LPV closure, the `60ff5610` Sodium list overflow and the CI-green `faed8e` repair awaiting hardware, plus the current head pair.
+  - Metallum's `README.md` validation section was synced in the same pass: it cited heads `81295f04` / `4e160946` and workflow runs `34768563289` / `34771694544` and still called runtime validation outstanding, and it claimed the depth mip chain had no backend implementation while `MetalDepthMipmapBridge` exists and `MetalCommandEncoderMixin` reaches it by reflection.
+- [x] Delete the leftover self-pushing patch workflow and refuse the shape in CI.
+  - Metallum's `apply-graphics-storage-image-fix.yml` rewrote two source files, committed and pushed them back to the branch that triggered it; it is deleted, and the new push carries one check run (`ci`) instead of two.
+  - `tools/ci-contracts.py` and `tests/test_workflow_contract.py` both refuse a workflow that could author a commit, reserve `contents: write` for `release.yml`, and require explicit `permissions:`; both were verified against positive and negative cases, including that `prefix.yml`'s documented `git push` does not trip the guard.
+  - Any future CI change must pass that contract rather than be allowlisted around it.
 - [ ] Keep Vitrail/Metallum ownership boundaries strict in every follow-up: pack semantics/defaults/diagnostics in Vitrail; generic Metal execution in Metallum.
 - [ ] Do not relax startup guards or claim general Metal shader-pack support from one runtime session, CI alone, or the absence of log-level errors.
