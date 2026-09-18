@@ -36,3 +36,13 @@ Then load only the repository evidence relevant to the task. `docs/README.md` ro
 - Do not copy README pages, configuration, obvious directory structure, commit history, or routine debugging output into `.context/`.
 
 Before finishing substantive work, checkpoint only information that crossed a durability threshold, then audit memory for staleness, duplication, bloat, and unsupported claims.
+
+## Finishing a turn
+
+End every turn that changed state with these three things, in this order, so the owner never has to work out what to do next or what this session needs back.
+
+1. **What happened**, in a line or two, with the evidence that says it. The reasoning stays above this; this is the part that has to be readable on its own.
+2. **What the owner does next, in order.** Numbered steps that can be followed without re-reading the turn, and name the button where a click is the action.
+3. **What to hand back**, named exactly: which log, from which instance, with which marker or setting in force, and what was done by hand during the session. A run handed over without the state it was taken in cannot be read, and rebuilding a session to recover that state costs more than asking for it.
+
+A turn that only answered a question owes the same three, with the steps being whatever the answer implies.
