@@ -3128,9 +3128,15 @@ public final class PackChain {
 
 		List<Integer> back = unfolded.swapBack();
 		if (!back.isEmpty()) {
+			long unread = back.stream()
+					.filter(index -> !unfolded.readInFrame().contains(
+							new ChainPlan.Attachment(index, TargetSchedule.Side.MAIN)))
+					.count();
 			Vitrail.logger().info("{} targets are copied back from their far half at the end of every "
-					+ "frame, because the pack keeps them and the chain left them there: {}",
-					back.size(), back);
+					+ "frame, because the pack keeps them and the chain left them there: {}{}",
+					back.size(), back, unread == 0 ? ""
+							: ", and " + unread + " of those are read by nothing in the frame, so "
+									+ "moving them is work nothing asked for");
 		}
 
 		// Beside the copy above, which is the other half of the same subject: what this pack carries

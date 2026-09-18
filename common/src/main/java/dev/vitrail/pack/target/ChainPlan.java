@@ -285,6 +285,16 @@ public final class ChainPlan {
 	 * drawn between them, which reads colortex targets exactly as a fullscreen pass does.
 	 */
 	private final List<Set<Attachment>> neededAfterWrite;
+
+	/**
+	 * Every attachment of a colour target that something reads in a frame, on the half it is read.
+	 * <p>
+	 * Taken from the same walk, and for the other question that walk raises: a target the pack keeps
+	 * across frames is copied back from its far half at the end of every frame, so that this frame's
+	 * readers find it where they look. A target nothing reads on the half that copy fills is a copy
+	 * nothing wanted.
+	 */
+	private final Set<Attachment> readInFrame;
 	private final int beginEnd;
 	private final int prepareEnd;
 	private final int deferredEnd;
@@ -351,10 +361,12 @@ public final class ChainPlan {
 	private ChainPlan(String place, List<Pass> passes, Pass last, Attachment present, Seed seed,
 			Map<Key, Pass> attachments, Map<TerrainPass, Key> terrainKeys, Map<String, Key> skyKeys,
 			List<Integer> swapBack, List<String> refusals, List<String> notes,
-			List<String> history, List<Set<Attachment>> neededAfterWrite) {
+			List<String> history, List<Set<Attachment>> neededAfterWrite,
+			Set<Attachment> readInFrame) {
 		this.place = place;
 		this.passes = List.copyOf(passes);
 		this.neededAfterWrite = List.copyOf(neededAfterWrite);
+		this.readInFrame = Set.copyOf(readInFrame);
 		this.beginEnd = pastRank(this.passes, BEGIN_RANK);
 		this.prepareEnd = pastRank(this.passes, PREPARE_RANK);
 		this.deferredEnd = pastDeferred(this.passes);
@@ -654,8 +666,7 @@ public final class ChainPlan {
 			}
 		}
 
-		List<Set<Attachment>> neededAfterWrite =
-				verdicts(plan, painted, world, passes, last, notes, history);
+		Frame frame = verdicts(plan, painted, world, passes, last, notes, history);
 
 		Set<Integer> back = new TreeSet<>(plan.schedule().flippedAtEnd());
 		back.retainAll(plan.persistent());
@@ -672,7 +683,8 @@ public final class ChainPlan {
 		});
 
 		return new ChainPlan(plan.place(), passes, last, present, seed, answered, terrainKeys, skyKeys,
-				List.copyOf(back), refusals, notes, history, neededAfterWrite);
+				List.copyOf(back), refusals, notes, history, frame.neededAfterWrite(),
+				frame.readInFrame());
 	}
 
 	/**
@@ -947,7 +959,7 @@ public final class ChainPlan {
 	 * @param history the reads that land on what the frame before wrote, which is the pack's own
 	 *                doing rather than a fault of this engine. See {@link #history()}
 	 */
-	private static List<Set<Attachment>> verdicts(TargetPlan plan, Seed seed, Map<Key, Pass> world,
+	private static Frame verdicts(TargetPlan plan, Seed seed, Map<Key, Pass> world,
 			List<Pass> passes, Pass last, List<String> notes, List<String> history) {
 		List<Pass> ordered = new ArrayList<>(passes);
 		if (last != null) {
@@ -1055,7 +1067,17 @@ public final class ChainPlan {
 			needed.add(Set.copyOf(after));
 		}
 
-		return needed;
+		return new Frame(needed, Set.copyOf(reads.keySet()));
+	}
+
+	/**
+	 * What one walk of the frame answered.
+	 *
+	 * @param neededAfterWrite per pass, in the order {@code passes} hands them out, the attachments
+	 *                         whose contents something still reads after that pass wrote them
+	 * @param readInFrame      every attachment read at all, each on the half it is read
+	 */
+	private record Frame(List<Set<Attachment>> neededAfterWrite, Set<Attachment> readInFrame) {
 	}
 
 	/**
@@ -1288,6 +1310,15 @@ public final class ChainPlan {
 	 */
 	public Set<Attachment> neededAfterWrite(int pass) {
 		return this.neededAfterWrite.get(pass);
+	}
+
+	/**
+	 * The attachments something reads in a frame, each on the half it is read. Nothing outside the
+	 * frame's own walk can answer this, and it is what says whether a copy a pack asks for has a
+	 * reader at all.
+	 */
+	public Set<Attachment> readInFrame() {
+		return this.readInFrame;
 	}
 
 	/**

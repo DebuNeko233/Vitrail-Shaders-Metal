@@ -122,7 +122,7 @@ class PassWritesEveryPixel(unittest.TestCase):
         # order is known - the fullscreen passes and the geometry drawn between them - and every
         # uncertain direction is "yes", because a wrong store answer is a wrong image.
         chain = CHAIN.read_text(encoding='utf-8')
-        self.assertIn('List<Set<Attachment>> neededAfterWrite =', chain)
+        self.assertIn('Frame frame = verdicts(', chain)
         self.assertIn('public Set<Attachment> neededAfterWrite(int pass) {', chain)
         self.assertIn('if (plan.persistent().contains(attachment.target())) {', chain)
         self.assertIn('if (position < first) {', chain)
@@ -156,6 +156,20 @@ class PassWritesEveryPixel(unittest.TestCase):
         self.assertLess(said, built)
         chain = PACK_CHAIN.read_text(encoding='utf-8')
         self.assertIn('imageNames.addAll(PackStorageImages.names(each));', chain)
+
+    def test_a_copied_target_says_whether_anything_reads_it(self):
+        # A target the pack keeps across frames is copied back from its far half every frame so that
+        # this frame's readers find it where they look, and a target nothing reads on the half that
+        # copy fills is a copy nothing wanted. Said, not spent: the log names how many of them are
+        # read by nothing, which is what decides whether the copy may be dropped or the walk itself
+        # has to start from the other side.
+        chain = CHAIN.read_text(encoding='utf-8')
+        self.assertIn('private final Set<Attachment> readInFrame;', chain)
+        self.assertIn('public Set<Attachment> readInFrame() {', chain)
+        self.assertIn('private record Frame(List<Set<Attachment>> neededAfterWrite, Set<Attachment> readInFrame) {', chain)
+        self.assertIn('return new Frame(needed, Set.copyOf(reads.keySet()));', chain)
+        self.assertIn('unfolded.readInFrame().contains(', PACK_CHAIN.read_text(encoding='utf-8'))
+        self.assertIn('moving them is work nothing asked for', PACK_CHAIN.read_text(encoding='utf-8'))
 
     def test_the_contract_is_named_by_a_workflow(self):
         self.assertIn('tests/test_pack_pass_writes_every_pixel.py',
