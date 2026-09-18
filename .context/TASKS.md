@@ -126,13 +126,13 @@ The latest hardware baseline pairs Vitrail `c296caec` with Metallum `82a0c75e` o
   - The translator leaves normal-order calls, dynamic-edge calls and pack-defined `smoothstep` functions untouched.
   - The helper writes the Hermite expression explicitly and the active-backend fact is part of the translation-cache key.
   - Vulkan explicitly publishes native-Metal=false, preserving its established translation and cache-key spelling.
-- [ ] CI-verify the reversed-smoothstep translation change on the fixed Vitrail branch.
+- [x] CI-verify the reversed-smoothstep translation change: test-only head `07d1ba33` (code-bearing parent `bcf96268`) passes smoke/contracts and the full `./gradlew build` in macOS arm64 build #285.
 - [ ] Hardware-rerun Photon and verify the far main-cumulus layer fades gradually before its cutoff.
 
 ## P2 - Keep acceptance and documentation synchronized
 
 - [ ] Keep both PRs Draft/open/unmerged while PHASE 17 real-pack acceptance is incomplete.
-- [x] Keep `.context/STATE.md` and `.context/TASKS.md` synchronized with the latest `97dcf76d + 82a0c75e` hardware evidence and the CI-green `11e2569f` same-frame Vitrail correction awaiting hardware validation.
+- [x] Keep `.context/STATE.md` and `.context/TASKS.md` synchronized with the `c296caec + 82a0c75e` hardware baseline, the CI-green current same-frame path, and the CI-green native-Metal reversed-smoothstep cloud candidate awaiting hardware validation.
 - [ ] Bring `docs/metallum-port.md` forward from its older hardware-head wording in a dedicated documentation synchronization pass; do not silently treat its stale SHA as current evidence.
 - [ ] Keep Vitrail/Metallum ownership boundaries strict in every follow-up: pack semantics/defaults/diagnostics in Vitrail; generic Metal execution in Metallum.
 - [ ] Do not relax startup guards or claim general Metal shader-pack support from one runtime session, CI alone, or the absence of log-level errors.
