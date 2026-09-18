@@ -24,7 +24,7 @@ The synthetic/runtime capability phases are closed; current work is evidence-bac
 - [ ] Do not promote Photon, Bliss or any other pack from runtime logs alone. Collect/review the screenshot/reference evidence required by `docs/phase17-compatibility.md` before changing a public compatibility status.
 - [ ] Continue the matrix through the remaining required pack families, including BSL-family and Sildur-family coverage, with the same evidence discipline.
 
-The latest hardware baseline pairs Vitrail `c296caec` with Metallum `82a0c75e` on Apple M5 Pro / macOS 27 / native Metal. Photon v1.3b no longer exhibits the previously reproduced view-dependent coloured-light displacement/flicker in Ahead mode, hardware-validating the same-frame writer/compute direction at that ancestor. The same run exposes a separate missing far-cloud gradual fade; current Vitrail code is newer than the hardware baseline.
+The latest hardware run pairs Vitrail `60ff5610` with Metallum `82a0c75e` on Apple M5 Pro / macOS 27 / native Metal. It starts Photon normally, then deterministically hits Sodium `Render list is full` from `ShadowTerrain.restoreCameraWalk`, after which Vitrail stops drawing the shadow map and the tester observes the shader effects fall back visually. The last hardware-successful Ahead-mode LPV observation remains ancestor `c296caec`. Code-bearing `faed8e` fixes the restore-list token collision and is CI-green in build #290; hardware rerun is required.
 
 ## P1 - Close remaining source-classified rendering gaps
 
@@ -113,26 +113,30 @@ The latest hardware baseline pairs Vitrail `c296caec` with Metallum `82a0c75e` o
   - The existing whole-block storage-image reanchor remains as a conservative fallback; the normal same-frame path should now request a zero move.
 - [x] CI-verify the same-frame shadow scheduling/Mixin signatures at code-bearing head `11e2569f`: build #280 passes the smoke/contracts step and the full `./gradlew build` on the macOS arm64 runner.
 - [x] Hardware-rerun Photon in `Ahead` mode at Vitrail `c296caec`: the stationary Nether-portal emissive light no longer shifts or slightly flickers while the view rotates; `shadowcomp` and the shadow draw paths remain active through a full frame.
-- [ ] Re-run the current code-bearing Vitrail head after the later `11e2569f` Sodium-list isolation refinements; ancestor hardware evidence must not be silently promoted to the newer code.
+- [x] Hardware-run the later Sodium-list isolation at `60ff5610` and capture its first owning regression: after normal Photon startup, `ShadowTerrain.restoreCameraWalk` eventually causes Sodium `ChunkRenderList.add` to throw `Render list is full`, so Vitrail disables the shadow stage.
+- [x] Fix camera-list restoration generically at code-bearing `faed8e`.
+  - A full camera repair traversal must not reuse the real camera frame token: camera-only regions already have that token and an already-filled persistent list, so revisiting them appends duplicates instead of resetting.
+  - The restore walk now uses a third bit-30 token distinct from both the real camera token and sign-bit shadow token. Every camera-visible region therefore resets before the repair traversal; the original frame/list/tree/task references are restored afterwards.
+  - No pack name, voxel-center formula or Metallum behavior is involved.
+- [x] CI-verify `faed8e`: build #290 passes optional Metallum/smoke contracts and full `./gradlew build`; commit policy is green.
+- [ ] Hardware-rerun current Vitrail long enough to cross the former list-overflow point, require no `Render list is full` / shadow-stage shutdown, then reconfirm Photon Ahead-mode portal lighting remains stable.
 - [ ] Reconfirm ordinary shadow terrain and one non-view-centred voxel pack after the scheduling move.
 
-### Native-Metal reversed smoothstep / cloud cutoff fade
+### Distant terrain / sky boundary transition
 
-- [x] Source-classify the newly observed Photon far-cloud fade gap without using `clouds_offset` as a false lead.
-  - Photon disables vanilla clouds and renders its own volumetric chain; the log's unanswered `clouds_offset` is not used by the far-distance density cutoff in the audited cloud shaders.
-  - Main cumulus hides its 20 km raymarch cutoff with literal descending `smoothstep(1.0, 0.95, ...)`; altocumulus uses the defined ascending form and subtracts it from one.
-  - GLSL leaves `smoothstep` undefined when the first edge is not less than the second, so the OpenGL result cannot be assumed across SPIR-V/native Metal.
-- [x] Implement a generic native-Metal compatibility normalization for statically reversed scalar literal edges only.
-  - The translator leaves normal-order calls, dynamic-edge calls and pack-defined `smoothstep` functions untouched.
-  - The helper writes the Hermite expression explicitly and the active-backend fact is part of the translation-cache key.
-  - Vulkan explicitly publishes native-Metal=false, preserving its established translation and cache-key spelling.
-- [x] CI-verify the reversed-smoothstep translation change: test-only head `07d1ba33` (code-bearing parent `bcf96268`) passes smoke/contracts and the full `./gradlew build` in macOS arm64 build #285.
-- [ ] Hardware-rerun Photon and verify the far main-cumulus layer fades gradually before its cutoff.
+- [x] Reject the reversed-`smoothstep` cloud hypothesis for the observed abrupt distant transition.
+  - The `60ff5610` hardware run showed no visual improvement, and the tester now identifies the transition as likely where terrain stops loading rather than a cloud cutoff.
+  - The native-Metal reversed-smoothstep candidate was fully reverted in `c3a619e`; no speculative cloud compatibility rewrite remains in production.
+- [x] Source-classify the next diagnostic path without changing rendering.
+  - Photon enables `BORDER_FOG` by default and describes it as thick fog at the render-distance edge to hide chunk borders.
+  - Without a LoD mod, `border_fog` derives its fade from reconstructed terrain `scene_pos.xz / far`; Vitrail publishes Iris-compatible `far = effectiveRenderDistance * 16`.
+  - The failing run uses 16 chunks, hence `far = 256` blocks, and Vitrail's Iris-shaped horizon cone is also drawn at 256 blocks. The shared boundary makes terrain depth/reconstruction, border fog and sky/scene-seed handoff the owning area to inspect next.
+- [ ] After the shadow-list regression is hardware-closed, inspect the same horizon with Photon `BORDER_FOG` default-on. A/B it off only as a diagnostic: if the edge barely changes, trace why the intended terrain border fade is not affecting the final image; if it changes materially, compare the border-fog colour/terrain-to-sky handoff rather than cloud raymarching.
 
 ## P2 - Keep acceptance and documentation synchronized
 
 - [ ] Keep both PRs Draft/open/unmerged while PHASE 17 real-pack acceptance is incomplete.
-- [x] Keep `.context/STATE.md` and `.context/TASKS.md` synchronized with the `c296caec + 82a0c75e` hardware baseline, the CI-green current same-frame path, and the CI-green native-Metal reversed-smoothstep cloud candidate awaiting hardware validation.
+- [x] Keep `.context/STATE.md` and `.context/TASKS.md` synchronized with the `60ff5610 + 82a0c75e` list-overflow hardware evidence, the CI-green `faed8e` repair, the reverted smoothstep false lead and the open terrain/border-fog boundary investigation.
 - [ ] Bring `docs/metallum-port.md` forward from its older hardware-head wording in a dedicated documentation synchronization pass; do not silently treat its stale SHA as current evidence.
 - [ ] Keep Vitrail/Metallum ownership boundaries strict in every follow-up: pack semantics/defaults/diagnostics in Vitrail; generic Metal execution in Metallum.
 - [ ] Do not relax startup guards or claim general Metal shader-pack support from one runtime session, CI alone, or the absence of log-level errors.
