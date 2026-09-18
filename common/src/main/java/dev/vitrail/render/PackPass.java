@@ -139,6 +139,29 @@ final class PackPass {
 	private final List<ColorTargets.PackSource> packSources;
 
 	private final List<String> storage;
+
+	/**
+	 * Whether the fragment stage this pass draws can leave a pixel of its targets unwritten.
+	 * <p>
+	 * Asked of the SPELLING and not of the live branches, for the reason the alpha epilogue gives
+	 * about the same token: this translator leaves every {@code #if} standing so the game's compiler
+	 * re-evaluates the engine's symbols, so a branch the expander read as dead is one the compiler
+	 * may read as live. A mention in a comment or on a dead branch therefore counts, and that is the
+	 * direction that costs nothing: saying a stage may discard only keeps a target that could have
+	 * been emptied instead of read, while the other answer would have a pass rely on every pixel
+	 * being written by a stage that leaves some of them as they were.
+	 * <p>
+	 * <strong>What it is for is the load action of the attachments below.</strong> A pass drawn over
+	 * the whole area that writes every pixel of a target it does not also sample has no use for what
+	 * stood there: emptying it is a tile fill, where loading it is the target's bytes read back off
+	 * the device. That decision is not taken here yet - it needs the sampler side of the same
+	 * question, which is whether this pass reads a target it writes - and this field is the half
+	 * that the pass's own text answers.
+	 */
+	private final boolean mayLeavePixelsUnwritten;
+
+	/** The one spelling GLSL has for dropping a fragment, which is the whole of the question. */
+	private static final String DISCARD = "discard";
 	private final List<LodRead> lodReads;
 
 	/** The targets of {@link #lodReads}, for the binding to answer one name at a time. */
@@ -238,6 +261,7 @@ final class PackPass {
 
 		String vertex = loaded.program().stages().get(ProgramStage.VERTEX).text();
 		String fragment = loaded.program().stages().get(ProgramStage.FRAGMENT).text();
+		this.mayLeavePixelsUnwritten = fragment.contains(DISCARD);
 		String stem = "pack/" + load + "/" + (place.isEmpty() ? "root" : place) + "/" + program;
 		Identifier vertexId = Identifier.fromNamespaceAndPath(Vitrail.MOD_ID, stem + "/vertex");
 		Identifier fragmentId = Identifier.fromNamespaceAndPath(Vitrail.MOD_ID, stem + "/fragment");
@@ -473,7 +497,10 @@ final class PackPass {
 		line.append(", ")
 				.append(this.loaded.program().uniforms().size()).append(" uniforms and ")
 				.append(this.samplers.size()).append(" samplers, ")
-				.append(descriptors()).append(" descriptors");
+				.append(descriptors()).append(" descriptors, ")
+				.append(this.mayLeavePixelsUnwritten
+						? "a fragment stage that can leave a pixel unwritten"
+						: "a fragment stage that writes every pixel");
 
 		// Said here and nowhere else, because this is the one binding the pack's own text cannot be
 		// read for: the pack never wrote colortex0 beside these names, and whether they read the
