@@ -66,7 +66,7 @@ are where I answer.
 | or Fabric Loader | 0.19.3 or later, with Fabric API |
 | Sodium | 0.9.x, required, the build for whichever loader is in front |
 | Java | 25 |
-| Metallum | optional: the Metal backend, API v1, on Apple Silicon only |
+| [Metallum](https://github.com/DebuNeko233/metallum) | optional: the Metal backend, API v1, on Apple Silicon only |
 
 **Sodium is not optional.** It owns the command submission this engine draws through, so the game
 refuses to start without it rather than showing a picture that is missing quietly. On Fabric, two
