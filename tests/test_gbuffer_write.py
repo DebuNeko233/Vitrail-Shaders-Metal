@@ -50,7 +50,7 @@ class GbufferWriteTest(unittest.TestCase):
         build_views = pack.index('for (ChainPlan.Attachment attachment : this.attachments) {')
         resolve_view = pack.index('this.attachedViews.add(view(targets, attachment));', build_views)
         descriptor = pack.index('RenderPassDescriptor descriptor = RenderPassDescriptor.create(this.label);', resolve_view)
-        attach = pack.index('descriptor.withColorAttachment(view, !elide || told', descriptor)
+        attach = pack.index('descriptor.withColorAttachment(view,', descriptor)
         open_pass = pack.index('encoder.createRenderPass(descriptor)', attach)
         set_pipeline = pack.index('pass.setPipeline(this.pipeline);', open_pass)
         draw = pack.index('pass.draw(VERTICES, 1, 0, 0);', set_pipeline)

@@ -401,6 +401,19 @@ model directly:
    reference and what it costs; `TargetCopies.java` is the model to copy. If the load or store
    action ends up observable to a pack in any corner case, that belongs in `docs/` next to the code.
 
+**Where it stands.** Both halves are written and off behind one switch,
+`-Dvitrail.elideTargetTraffic`. The load half is the pass's own fact - a draw over the whole screen
+that writes every pixel of its targets has no use for what stood there - and it needs nothing across
+the seam, because the descriptor can already say clear-or-load. The store half is the frame's fact,
+whether anything reads what a pass leaves, and the descriptor cannot say it at all, so it crosses as
+a narrow capability: `AttachmentContents` carries two booleans per attachment slot and nothing else,
+the answer nobody gives is the one that changes nothing, and both directions are pinned by
+`tools/ci-frame-probe.py` on that side and `tests/test_pack_pass_writes_every_pixel.py` on this one.
+The two doors differ on purpose - a load is only elidable for a draw that covers the whole target,
+while a store needs only the absence of a reader - and the chain publishes both per pass. What is
+owed is one session with the switch on against one with it off, image for image, with `loadedMiB`
+and `storedMiB` from the probe.
+
 **Exit criterion.** Stored bytes per frame fall on the P0 capture, the bindings and encoder counts
 do not regress, and the regression set in "Regression, not just frame rate" is unchanged, image for
 image. The counter alone does not close this phase.

@@ -63,29 +63,33 @@ class PassWritesEveryPixel(unittest.TestCase):
         self.assertIn('!this.mayLeavePixelsUnwritten\n\t\t\t\t&& !this.readsWhatItWrites', self.text)
 
     def test_it_is_off_unless_the_property_asks_for_it(self):
-        self.assertIn('Boolean.getBoolean("vitrail.elideTargetLoads")', self.text)
-        self.assertIn('boolean elide = ELIDE_TARGET_LOADS && writesEveryPixel', self.text)
+        self.assertIn('Boolean.getBoolean("vitrail.elideTargetTraffic")', self.text)
+        # Two facts, two doors: a load needs a draw that covers the whole target, a store only needs
+        # the absence of a reader.
+        self.assertIn('boolean elide = ELIDE_TARGET_TRAFFIC && (writesEveryPixel || somethingUnread);', self.text)
+        self.assertIn('boolean somethingUnread = this.stillRead.size() < this.attachedViews.size();', self.text)
 
     def test_a_session_with_it_on_says_so_in_its_own_log(self):
         # Otherwise a run with the property on cannot be told from one with it off except by its
         # numbers, and the numbers are the thing being measured.
-        self.assertIn('elideTargetLoads is on', self.text)
-        self.assertIn('ELIDE_TARGET_LOADS && !this.mayLeavePixelsUnwritten', self.text)
+        self.assertIn('elideTargetTraffic is on', self.text)
+        self.assertIn('ELIDE_TARGET_TRAFFIC && !this.mayLeavePixelsUnwritten', self.text)
 
     def test_the_backend_is_told_the_fact_this_pass_owns_and_no_other(self):
         # One fact is handed over: this draw writes every pixel of the whole screen, so nothing it
         # is about to draw read what stood in its targets. "Nothing reads them afterwards" belongs
         # to the frame's schedule, so every slot is stated as still wanted - a wrong store answer is
         # a wrong image, which is the one mistake this shape cannot survive.
-        self.assertIn('boolean told = elide && tellTheBackend(encoder);', self.text)
+        self.assertIn('boolean told = elide && tellTheBackend(encoder, writesEveryPixel);', self.text)
         self.assertIn('if (!(encoder instanceof AttachmentCommands commands)) {', self.text)
-        self.assertIn('Arrays.fill(readAfterwards, true);', self.text)
+        self.assertIn('readAfterwards[slot] = this.stillRead.contains(this.attachments.get(slot));', self.text)
+        self.assertIn('overwritten[slot] = writesEveryPixel;', self.text)
         self.assertIn('commands.vitrail$setNextPassContents(readAfterwards, overwritten);', self.text)
 
     def test_a_backend_that_cannot_be_told_falls_back_to_a_clear(self):
         # The clear is the same traffic saved, paid for as a tile fill this engine asks for instead.
-        self.assertIn('descriptor.withColorAttachment(view, !elide || told', self.text)
-        self.assertIn(': targets.takeClearOrEmpty(view));', self.text)
+        self.assertIn('ELIDE_TARGET_TRAFFIC && writesEveryPixel && !told', self.text)
+        self.assertIn('? targets.takeClearOrEmpty(view)', self.text)
 
     def test_a_clear_the_frame_owes_is_never_replaced(self):
         # A clear is owed for a reason this pass cannot see, and its colour is the pack's. The
@@ -96,10 +100,13 @@ class PassWritesEveryPixel(unittest.TestCase):
         self.assertIn('return owed.isPresent() ? owed : Optional.of(EMPTY_CLEAR);', self.targets)
 
     def test_the_fallback_is_what_the_engine_did_before(self):
-        # Two branches at one call site: the property off, or a draw that has not answered all three,
-        # takes the owed clear and nothing else.
-        self.assertIn('? targets.takeClear(view)', self.text)
-        self.assertIn(': targets.takeClearOrEmpty(view));', self.text)
+        # Two branches at one call site: the property off, or a draw whose load half is not elidable,
+        # takes the owed clear and nothing else. The other branch is the clear this engine
+        # substitutes where the backend cannot be told, and it belongs to the load half alone - a
+        # store cannot be asked for through the descriptor at all.
+        self.assertIn(': targets.takeClear(view));', self.text)
+        self.assertIn('? targets.takeClearOrEmpty(view)', self.text)
+        self.assertIn('ELIDE_TARGET_TRAFFIC && writesEveryPixel && !told', self.text)
         self.assertEqual(self.text.count('withColorAttachment('), 1)
 
     def test_the_geometry_path_keeps_its_own_answer(self):
@@ -131,7 +138,7 @@ class PassWritesEveryPixel(unittest.TestCase):
         # Nothing hands it to the backend yet: the store action waits until the answer has been
         # measured against a session that does not have it.
         handover = self.text.split('private boolean tellTheBackend', 1)[1].split('\n\t}', 1)[0]
-        self.assertNotIn('stillRead', handover)
+        self.assertIn('readAfterwards[slot] = this.stillRead', handover)
 
     def test_the_contract_is_named_by_a_workflow(self):
         self.assertIn('tests/test_pack_pass_writes_every_pixel.py',

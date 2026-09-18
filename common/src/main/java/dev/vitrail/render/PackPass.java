@@ -173,15 +173,21 @@ final class PackPass {
 	private final boolean mayLeavePixelsUnwritten;
 
 	/**
-	 * Whether the property asked for a target this pass writes every pixel of to be emptied rather
-	 * than loaded.
+	 * Whether the property asked for the load and the store an attachment does not need.
 	 * <p>
-	 * Off unless asked for, because the load action is part of what the image is: a wrong answer here
-	 * is a wrong picture rather than a slower frame. {@code -Dvitrail.elideTargetLoads=true} turns it
-	 * on, so that a session that has it can be measured against one that does not before either
-	 * becomes the default.
+	 * Two facts, two answers, one switch, because they are one bill: a pass begins by loading each
+	 * attachment into tile memory and ends by storing it back, and on Apple silicon both are traffic
+	 * that exists only because an action said so. A target this draw writes every pixel of has no
+	 * use for what stood there, so its load becomes a fill this engine does not pay for; a target
+	 * nothing reads after this pass has no use for what it leaves, so its store does not happen at
+	 * all.
+	 * <p>
+	 * Off unless asked for, because either action is part of what the image is: a wrong answer is a
+	 * wrong picture that reads as a pack defect rather than a slower frame.
+	 * {@code -Dvitrail.elideTargetTraffic=true} turns both on, so that a session with it can be
+	 * measured against one without before either becomes the default.
 	 */
-	private static final boolean ELIDE_TARGET_LOADS = Boolean.getBoolean("vitrail.elideTargetLoads");
+	private static final boolean ELIDE_TARGET_TRAFFIC = Boolean.getBoolean("vitrail.elideTargetTraffic");
 
 	/**
 	 * Whether any sampler of this program names a target this pass also writes, on the same half.
@@ -552,9 +558,10 @@ final class PackPass {
 		// covers the whole screen - is only known when one is built. Without this the property's
 		// effect is invisible in a session's log, and a run that has it on cannot be told from one
 		// that does not except by its numbers.
-		if (ELIDE_TARGET_LOADS && !this.mayLeavePixelsUnwritten && !this.readsWhatItWrites) {
-			line.append(", and elideTargetLoads is on, so a draw of this program over the whole "
-					+ "screen tells the backend its targets need not be loaded");
+		if (ELIDE_TARGET_TRAFFIC && !this.mayLeavePixelsUnwritten && !this.readsWhatItWrites) {
+			line.append(", and elideTargetTraffic is on, so a draw of this program over the whole "
+					+ "screen tells the backend its targets need not be loaded, and the store of one "
+					+ "nothing reads afterwards does not happen");
 		}
 
 		// Said here and nowhere else, because this is the one binding the pack's own text cannot be
@@ -619,16 +626,20 @@ final class PackPass {
 
 		RenderPassDescriptor descriptor = RenderPassDescriptor.create(this.label);
 		boolean writesEveryPixel = writesEveryPixelOfTheArea(screenWidth, screenHeight);
-		// Where the backend can be told, it skips the load itself; where it cannot, a clear is the
-		// same traffic saved by a tile fill this engine pays for instead. A clear the frame already
-		// owes is taken as it stands and is never replaced, because it is owed for a reason this
-		// pass cannot see.
-		boolean elide = ELIDE_TARGET_LOADS && writesEveryPixel;
-		boolean told = elide && tellTheBackend(encoder);
+		// The two halves have different doors: a load is skipped only by a draw that covers the whole
+		// target, while a store is skipped wherever nothing reads what the pass leaves - which needs
+		// no overwrite at all, only the absence of a reader.
+		boolean somethingUnread = this.stillRead.size() < this.attachedViews.size();
+		boolean elide = ELIDE_TARGET_TRAFFIC && (writesEveryPixel || somethingUnread);
+		boolean told = elide && tellTheBackend(encoder, writesEveryPixel);
 		for (GpuTextureView view : this.attachedViews) {
-			descriptor.withColorAttachment(view, !elide || told
-					? targets.takeClear(view)
-					: targets.takeClearOrEmpty(view));
+			// The clear is the load half's fallback and only that: a store cannot be asked for
+			// through the descriptor at all, so a backend that cannot be told keeps its stores. A
+			// clear the frame already owes is taken as it stands and is never replaced.
+			descriptor.withColorAttachment(view,
+					ELIDE_TARGET_TRAFFIC && writesEveryPixel && !told
+							? targets.takeClearOrEmpty(view)
+							: targets.takeClear(view));
 		}
 
 		// Always at the tail. The encoder asserts that attachment zero is there, and a pipeline
@@ -680,26 +691,33 @@ final class PackPass {
 	}
 
 	/**
-	 * Tells the backend what this draw knows about its own targets, and answers whether it was told.
+	 * Tells the backend the two facts this draw can state about its own targets, and answers whether
+	 * it was told.
 	 * <p>
-	 * One fact is handed over and only one: this draw writes every pixel of the whole screen, so
-	 * nothing it is about to draw reads what stood in its targets. Whether anything reads them
-	 * <em>afterwards</em> belongs to the frame's schedule and not to one pass, and no pass may guess
-	 * at it - a wrong "nothing reads this" is a wrong image that reads as a pack defect, which is
-	 * the one mistake this shape cannot survive. So every slot is stated as still wanted, and the
-	 * store is left alone until the schedule can answer for it.
+	 * The first is the pass's own: a draw over the whole screen that writes every pixel of it has no
+	 * use for what stood in its targets, so their load is skipped. It is stated for every slot at
+	 * once, because it is a property of the draw and not of an attachment.
 	 * <p>
-	 * A backend that cannot be told answers false, and the caller falls back to a clear.
+	 * The second is the frame's and not this pass's: whether anything reads what the pass leaves in
+	 * an attachment. It comes from the chain, which is the only thing that knows the order the frame
+	 * runs in, and it is stated as "still wanted" wherever the chain did not name the attachment -
+	 * a wrong "nothing reads this" is a wrong image that reads as a pack defect, which is the one
+	 * mistake this shape cannot survive.
+	 * <p>
+	 * A backend that cannot be told answers false, and the caller falls back to a clear for the load
+	 * half and to storing everything for the other.
 	 */
-	private boolean tellTheBackend(CommandEncoder encoder) {
+	private boolean tellTheBackend(CommandEncoder encoder, boolean writesEveryPixel) {
 		if (!(encoder instanceof AttachmentCommands commands)) {
 			return false;
 		}
 
 		boolean[] readAfterwards = new boolean[this.attachedViews.size()];
 		boolean[] overwritten = new boolean[this.attachedViews.size()];
-		Arrays.fill(readAfterwards, true);
-		Arrays.fill(overwritten, true);
+		for (int slot = 0; slot < this.attachedViews.size(); slot++) {
+			readAfterwards[slot] = this.stillRead.contains(this.attachments.get(slot));
+			overwritten[slot] = writesEveryPixel;
+		}
 		commands.vitrail$setNextPassContents(readAfterwards, overwritten);
 		return true;
 	}

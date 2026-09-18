@@ -116,8 +116,8 @@ class GbufferAttachmentLocationTest(unittest.TestCase):
         self.assertIn('for (GpuTextureView view : this.attachedViews)', pack)
         # The location an attachment is handed in at is still the list's order, whatever action the
         # pass asks for beside it, so a pipeline slot and an attachment location stay aligned.
-        self.assertIn('descriptor.withColorAttachment(view, !elide || told', pack)
-        self.assertIn('? targets.takeClear(view)', pack)
+        self.assertIn('descriptor.withColorAttachment(view,', pack)
+        self.assertIn(': targets.takeClear(view));', pack)
 
 
 if __name__ == '__main__':
