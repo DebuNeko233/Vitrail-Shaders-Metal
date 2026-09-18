@@ -18,6 +18,8 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Stream;
 
 /**
@@ -205,7 +207,7 @@ final class KeptPack {
 		}
 
 		if (!wanted.equals(standing.key())) {
-			return "the pack, its settings or the machine's defines have moved";
+			return standing.key().difference(wanted);
 		}
 
 		if (!atTheAskedScale(standing)) {
@@ -314,6 +316,63 @@ final class KeptPack {
 	 *                 flattened unit was branched on
 	 */
 	private record Key(Path packPath, String settings, String profile, Map<String, String> defines) {
+
+		/**
+		 * Which of the four answers moved, for the line that has to say why an opening could not
+		 * serve.
+		 * <p>
+		 * The record compares as a whole, which is right for the decision and useless for whoever
+		 * reads the line: "the pack, its settings or the machine's defines have moved" sends them to
+		 * three places, and it is usually the third. The defines are compared by name so that the
+		 * one that moved can be named rather than described, and at most three are printed so a
+		 * table that moved wholesale cannot turn the line into a paragraph. Values are printed
+		 * beside their names because a define is a word or a number in every case worth chasing,
+		 * and a pair saying what changed is what makes the next run answerable without a rebuild.
+		 *
+		 * @param other the key of the opening that is to be made, so the printed direction reads
+		 *              from what was held to what is wanted
+		 */
+		String difference(Key other) {
+			if (!Objects.equals(packPath, other.packPath)) {
+				return "the pack path has moved";
+			}
+
+			if (!Objects.equals(settings, other.settings)) {
+				return "the settings the player chose have moved";
+			}
+
+			if (!Objects.equals(profile, other.profile)) {
+				return "the profile has moved";
+			}
+
+			Set<String> names = new TreeSet<>(defines.keySet());
+			names.addAll(other.defines.keySet());
+			List<String> moved = new ArrayList<>();
+			int more = 0;
+			for (String name : names) {
+				String was = defines.get(name);
+				String now = other.defines.get(name);
+				if (Objects.equals(was, now)) {
+					continue;
+				}
+
+				if (moved.size() < 3) {
+					moved.add(name + " " + was + " -> " + now);
+				} else {
+					more++;
+				}
+			}
+
+			if (moved.isEmpty()) {
+				// The four fields are compared as a whole above, so a difference has to be in one of
+				// them; nothing reaching here is a state the decision cannot produce, and saying so is
+				// better than printing an empty reason.
+				return "the opening's key has moved, and no field of it differs";
+			}
+
+			return "the machine's defines have moved: " + String.join(", ", moved)
+					+ (more == 0 ? "" : " and " + more + " more");
+		}
 
 		static Key of(Path packPath, Map<String, OptionValue> chosen, String profile) {
 			List<String> written = new ArrayList<>(chosen.size());
