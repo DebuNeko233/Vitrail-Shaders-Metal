@@ -20,6 +20,7 @@ The short version lives in the [README](../README.md) and the install steps in
 | Work out what to turn down when a pack runs slowly, and what turning it down misses | [The render scale](render-scale.md) |
 | Change a pack's own settings, and know where they are kept | [The settings screen](settings-screen.md) |
 | Follow the Minecraft 26.2 Metallum / Metal port | [Metallum port status](metallum-port.md) |
+| See the plan that port is tracked against, and where the implementation left it | [The migration roadmap](roadmap.md) |
 | Work on the engine | [Developing](developing.md) |
 
 ### Going deeper

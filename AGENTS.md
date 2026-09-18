@@ -9,6 +9,7 @@ Read, in order:
 1. `.context/STATE.md`
 2. `.context/TASKS.md`
 3. `.context/architecture/metallum-port.md` when working on the Metal/Metallum migration
+4. `.context/architecture/roadmap.md` and its condensed English form `docs/roadmap.md` when the work is about migration scope, phase ordering, or whether a change belongs to Vitrail or to the backend
 
 Then load only the repository evidence relevant to the task. `docs/README.md` routes the long-form project documentation, and `CONTRIBUTING.md` defines the repository workflow and build/commit rules.
 
@@ -27,6 +28,7 @@ Then load only the repository evidence relevant to the task. `docs/README.md` ro
 - `.context/STATE.md` owns current facts.
 - `.context/TASKS.md` owns active intent and acceptance criteria.
 - `.context/architecture/` owns compressed mental models that are expensive to reconstruct.
+- `.context/architecture/roadmap.md` is the one file there that is not compressed: it is the imported migration plan, kept verbatim because it is the source of record for the phase numbering everything else uses. `docs/roadmap.md` is its condensed English form.
 - Add a decision record only for an important non-obvious choice whose rationale needs to survive.
 - Create `.context/HANDOFF.md` only when unfinished execution state cannot be reconstructed safely from memory plus repository evidence; delete it when that condition ends.
 - Do not copy README pages, configuration, obvious directory structure, commit history, or routine debugging output into `.context/`.
