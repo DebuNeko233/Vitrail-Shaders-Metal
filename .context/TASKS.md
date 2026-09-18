@@ -24,7 +24,7 @@ The synthetic/runtime capability phases are closed; current work is evidence-bac
 - [ ] Do not promote Photon, Bliss or any other pack from runtime logs alone. Collect/review the screenshot/reference evidence required by `docs/phase17-compatibility.md` before changing a public compatibility status.
 - [ ] Continue the matrix through the remaining required pack families, including BSL-family and Sildur-family coverage, with the same evidence discipline.
 
-The latest hardware baseline pairs Vitrail `bc5e180a` with Metallum `82a0c75e` on Apple M5 Pro / macOS 27 / Metal. The session keeps the earlier entity and particle/weather corrections clean, verifies the exercised sky/line diagnostic paths after `bc5e180a`, and verifies the Metallum fixed-array/wide-resource correction. Bliss still has a persistent visual failure, which is why the claimed-sky ownership work below remains an active acceptance item rather than a compatibility promotion.
+The latest hardware baseline pairs Vitrail `ac33fed3` with Metallum `82a0c75e` on Apple M5 Pro / macOS 27 / Metal. The session structurally verifies the latest claimed-sky ownership work on Solas and Photon: Solas no longer trips the Minecraft 26.2 attachment-format check, and Photon's outputless `world0/gbuffers_skybasic` compiles/draws with coverage as the only colour output. It reaches clean world exit. Bliss was not loaded in this run, so the Bliss visual acceptance item remains open and no compatibility status is promoted.
 
 ## P1 - Close remaining source-classified rendering gaps
 
@@ -81,13 +81,17 @@ The latest hardware baseline pairs Vitrail `bc5e180a` with Metallum `82a0c75e` o
 - [x] Make the sky ownership sibling attachment-compatible with the render pass it reuses.
   - Minecraft 26.2 validates every non-null render-pass colour attachment against a non-null pipeline target state of the same format at `RenderPass.setPipeline`.
   - The sibling now preserves each ordinary pack slot's format and blend state with `WRITE_NONE`, and writes only the existing coverage slot; genuinely unused/null slots remain unused.
+- [x] Real-device verify the repaired ownership replay structure at `ac33fed3 + 82a0c75e`.
+  - Solas `gbuffers_basic` disc records its draw and horizon cone and continues without the former `RenderPass.setPipeline` attachment-format rejection.
+  - Photon outputless `world0/gbuffers_skybasic` reports coverage-only rank 0, records its first draw and horizon cone, and continues without a missing `ofOrderOutputs()` compile failure or sky sibling warning.
+  - This is structural runtime evidence only; the run did not load Bliss and did not exercise End sky.
 - [ ] Hardware-validate the ownership replay with Bliss `gbuffers_skybasic`: the claimed sky region should no longer be replaced by vanilla scene-seed fallback when the pack fragment discards.
 - [ ] Exercise the End sky branch if practical, because it is the other `covers=true` branch besides the two overworld discs.
 
 ## P2 - Keep acceptance and documentation synchronized
 
 - [ ] Keep both PRs Draft/open/unmerged while PHASE 17 real-pack acceptance is incomplete.
-- [x] Keep `.context/STATE.md` and `.context/TASKS.md` synchronized with the current source findings and the latest `bc5e180a + 82a0c75e` hardware baseline; keep the new ownership replay explicitly unverified until its device run.
+- [x] Keep `.context/STATE.md` and `.context/TASKS.md` synchronized with the current source findings and the latest `ac33fed3 + 82a0c75e` hardware baseline; distinguish the now-verified Solas/Photon structural replay from still-open Bliss visual and End-sky acceptance.
 - [ ] Bring `docs/metallum-port.md` forward from its older hardware-head wording in a dedicated documentation synchronization pass; do not silently treat its stale SHA as current evidence.
 - [ ] Keep Vitrail/Metallum ownership boundaries strict in every follow-up: pack semantics/defaults/diagnostics in Vitrail; generic Metal execution in Metallum.
 - [ ] Do not relax startup guards or claim general Metal shader-pack support from one runtime session, CI alone, or the absence of log-level errors.
