@@ -10,6 +10,7 @@ Read, in order:
 2. `.context/TASKS.md`
 3. `.context/architecture/metallum-port.md` when working on the Metal/Metallum migration
 4. `.context/architecture/roadmap.md` and its condensed English form `docs/roadmap.md` when the work is about migration scope, phase ordering, or whether a change belongs to Vitrail or to the backend
+5. `docs/performance.md` when the work is about performance, Metal 4, MetalFX, or removing the Vulkan path
 
 Then load only the repository evidence relevant to the task. `docs/README.md` routes the long-form project documentation, and `CONTRIBUTING.md` defines the repository workflow and build/commit rules.
 
@@ -18,8 +19,9 @@ Then load only the repository evidence relevant to the task. `docs/README.md` ro
 - Do not depend on previous conversation history. Discover repository structure instead of assuming paths.
 - Treat volatile memory as something to verify. Prefer current implementation, configuration, checks, documentation, and version history over stale memory.
 - For Minecraft, Sodium, Mixin, Metallum, SPIRV-Cross, Metal, or any other version-sensitive external API, read the exact active versions from repository evidence and verify the matching documentation or source before using or changing the API. Do not guess from memory.
-- Keep the Vitrail/Metallum boundary strict: Vitrail owns shader-pack policy, semantics, and scheduling; a backend owns native GPU execution. Prefer Minecraft's public GPU types across the seam. Add narrow semantic capabilities only where the public API cannot express the required operation; do not expose native Metal/Vulkan handles through backend-neutral code.
-- During the Metal port, preserve the Vulkan baseline unless a behavior change is intentional and separately justified. Unsupported or unvalidated behavior must be explicit and should use a safe fallback where one exists. A plausible image is not proof of correct shader-pack semantics.
+- Keep the Vitrail/Metallum boundary strict: Vitrail owns shader-pack policy, semantics, and scheduling; a backend owns native GPU execution. Prefer Minecraft's public GPU types across the seam. Add narrow semantic capabilities only where the public API cannot express the required operation; do not expose native Metal handles through backend-neutral code.
+- **Vulkan is no longer a preservation target.** Metal is the only path that is maintained, and Vulkan-specific behaviour, code, CI contracts and documentation may be changed or removed as the work requires; nothing has to keep working beside it. Read that carefully, because it is narrower than it sounds in both directions: the Vulkan path is *still in the tree*, and its removal is scheduled work recorded in `docs/performance.md` rather than something already done, so a change that happens to delete some of it owes the same explanation any other change does. And what the rule does not lift: unsupported or unvalidated behaviour must still be explicit, a plausible image is still not proof of correct shader-pack semantics, and shader-pack semantics are still Vitrail's alone.
+  - The consequence to know before relying on it: the game's own renderer is not something Vitrail controls, so a build with no Vulkan path has no working path on any platform whose renderer is not Metal. That narrowing was accepted deliberately rather than discovered later, and it is the reason `HostReport.otherBackend` and the validation-only stance on Metal are expected to change: `HostReport` still calls Vulkan the production path and accepts Metal only behind the developer smoke switch, which is the state this rule is meant to end.
 - After code changes, check the repository documentation whose claims may have changed. `docs/metallum-port.md` is the current evidence for Metal-port implementation/validation status.
 - Follow `CONTRIBUTING.md` rather than duplicating its branch, commit, changelog, and build rules here.
 
