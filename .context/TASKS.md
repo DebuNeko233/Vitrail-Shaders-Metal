@@ -170,6 +170,14 @@ The roadmap is a page rather than this list: it records what is already implemen
 - [ ] P5 - Remove the Vulkan path, last, in reviewable batches. The Metal smoke switch and the `HostReport` production-path stance are already gone, so what remains is: the rest of the page's Vulkan guidance (which still sends a non-Metal session to a graphics API this removes), the Vulkan-only mixins and their accessors, the contract test `tests/test_vulkan_recording_contract.py` with its `build.yml` line in one commit, and the prose last. The seam stays: one backend, not no boundary.
 - [ ] MetalFX is a decision before it is code: where it sits relative to a pack's `final`, what happens to the existing `vitrail_scale_upscale_*` modules, and whether the resolution is pack-visible at all. Default off.
 
+## P0 - Measure before optimising (baseline taken)
+
+- [x] P0 - The frame probe exists and is armed by `-Dmetallum.probeFrames=true` or `metallum/probe-frames`, and one real 600-frame run is recorded in `docs/performance.md`. Four counters: encoder boundaries with reason, attachment bytes loaded and stored, bindings by kind, pipeline creations with cost.
+- [ ] P0 - Still owed: the second (light) pack run for the comparison, and a GPU trace of one frame kept beside the numbers. Until those exist, P1 is judged against a single session.
+- [ ] P1 - Attachment lifetime and precise load/store. The baseline puts the target at 313 MiB of stores per frame, which is about five and a half 56 MiB targets, all of it asked for by a store action that is unconditional today.
+- [ ] P3 - Re-aimed at translation and unit flattening rather than at pipeline state creation, which the baseline measured at 32 ms for the whole session. The question to answer first is why a cold-ish load served nothing from the translation cache while other moments in the same session served 48 and 63 programs.
+- [ ] P4 - Narrowed. Sampler reachability already runs at bind time (194 dropped in one load), so what is left is the part of the plan still reading declaration text, `TargetCopies` first.
+
 ## P2 - Keep acceptance and documentation synchronized
 
 - [x] Both requests are merged and a version is out. Companion `metallum#1` landed on `master` first, then this repository's `#1`, and `v0.12.0-metal-beta` was released from `main` at `55d6d6a8` with the merged jar attached; `dev` has opened `0.13.0-dev`. Nothing was promoted by it: PHASE 17's closure recorded no status for any row and the release changes none.
