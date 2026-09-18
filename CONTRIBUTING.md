@@ -87,8 +87,10 @@ it is written, and one question no command can answer: whether the range about t
 carries a batch that changed the picture and left no changelog line.
 
 No repository setting can refuse the wrong press, so `prefix.yml` checks after the fact, on every
-push to `main`, that `main` is still contained in `dev`. Recovering is a reset of `main` back onto
-`dev`, cheap for exactly as long as nothing has been built on top.
+push to `main`, that `main` is still contained in `dev`. Recovering is carrying the stray commit
+into `dev` and then resetting `main` back to the commit the last tag points at, which is cheap while
+nothing has been built on top: resetting `main` to `dev` instead would put every unpublished commit
+on it and break the sentence above, which is the rule this one exists to restore.
 
 ## Pull requests
 
