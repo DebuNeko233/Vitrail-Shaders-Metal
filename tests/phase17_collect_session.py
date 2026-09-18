@@ -20,8 +20,15 @@ SCHEMA = "vitrail.phase17.compatibility.v1"
 # These patterns intentionally key off the message text rather than a logger-name
 # decoration. Production Fabric logs do not necessarily print a literal "(Vitrail)"
 # prefix even though isolated fixtures historically did.
+#
+# Every "the frame stopped drawing <something>" is this engine giving up on part of a frame after a
+# runtime error, and each one leaves the image unlike the one the pack asked for. A dead shadow
+# stage is the plainest case: every shadowtex lookup answers with the far plane for the rest of the
+# session, so the whole scene loses its shadows and reads as the pack having fallen back. Matching
+# only the pack-wide form missed exactly that, and the `60ff5610` run, whose shadow stage died on a
+# Sodium render-list overflow, was collected as a session with no fatal failure in it.
 HIGH_CONFIDENCE_FATAL = (
-    re.compile(r"Vitrail stopped drawing this pack after an error", re.IGNORECASE),
+    re.compile(r"Vitrail stopped drawing .+? after an error", re.IGNORECASE),
     re.compile(r"Failed to compile shader vitrail:pack/", re.IGNORECASE),
     re.compile(r"A fatal error has been detected by the Java Runtime Environment", re.IGNORECASE),
 )

@@ -37,6 +37,20 @@ Caused by: com.mojang.blaze3d.vulkan.glsl.ShaderCompileException: Couldn't parse
 [10:00:03] [Render thread/INFO]: Stopping!
 """
 
+# One stage giving up while the pack itself keeps drawing, loaded and shutting down cleanly. This is
+# the shape the `60ff5610` real-device run had, and the message is that run's own.
+STAGE_FAILURE_LOG = """\
+[10:00:00] [Render thread/INFO]: Vitrail 0.12.0-dev starting on Fabric 0.19.3, Minecraft 26.2
+[10:00:00] [Render thread/INFO]: Metal device: Apple Fixture GPU
+[10:00:00] [Render thread/INFO]: Using graphics backend Metal, using drivers: fixture
+[10:00:01] [Worker-Main-1/INFO]: [pack] StageFixture 100 0 0 0
+[10:00:02] [Render thread/INFO]: Drawing the solid chunk pass with gbuffers_terrain of StageFixture at render stage TERRAIN_SOLID, 2 uniforms and 1 samplers
+[10:00:03] [Render thread/INFO]: Drawing StageFixture from the root for minecraft:overworld, at 1280x720, 1 full screen passes before the final
+[10:00:04] [Render thread/ERROR]: Vitrail stopped drawing the shadow map after an error in the stage, so every shadowtex lookup of the pack reads the far plane
+java.lang.ArrayIndexOutOfBoundsException: Render list is full
+[10:00:05] [Render thread/INFO]: Stopping!
+"""
+
 with tempfile.TemporaryDirectory() as tmp:
     root = Path(tmp)
     pack = root / "pack.zip"
@@ -89,6 +103,29 @@ with tempfile.TemporaryDirectory() as tmp:
     assert broken_record["evidence"]["fatal_failure"] is True
     assert broken_record["evidence"]["clean_shutdown"] is True
     assert len(broken_record["observations"]["fatal_samples"]) == 2
+
+    stage = root / "stage.log"
+    stage.write_text(STAGE_FAILURE_LOG, encoding="utf-8")
+    stage_record = mod.collect(
+        log=stage,
+        artifact=pack,
+        family="fixture",
+        name="Stage Fixture",
+        version="1.2.3",
+        runtime_name="StageFixture",
+        vitrail_head="v-head",
+        metallum_head="m-head",
+    )
+    # Everything a session is normally judged by is healthy here: the pack loaded, the world drew, the
+    # client shut down cleanly, and no pack-wide failure was logged. The one stage that gave up is
+    # still fatal, because every shadowtex lookup answers with the far plane for the rest of the
+    # session, so the image is not the one the pack asked for. Matching only the pack-wide message
+    # collected this as a clean session.
+    assert stage_record["evidence"]["loaded"] is True
+    assert stage_record["evidence"]["world_drawn"] is True
+    assert stage_record["evidence"]["clean_shutdown"] is True
+    assert stage_record["evidence"]["fatal_failure"] is True
+    assert len(stage_record["observations"]["fatal_samples"]) == 1
 
     directory = root / "pack-dir"
     directory.mkdir()
