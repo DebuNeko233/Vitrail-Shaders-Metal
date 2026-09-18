@@ -85,6 +85,7 @@ public final class ShadowTerrain {
 	private static @Nullable Camera cameraWalkCamera;
 	private static @Nullable Viewport cameraWalkViewport;
 	private static @Nullable FogParameters cameraWalkFog;
+	private static boolean cameraWalkUpdatesImmediately;
 
 	/**
 	 * The block table the cull was last measured against, or -1 for none. Counted rather than
@@ -97,7 +98,7 @@ public final class ShadowTerrain {
 	 * What the last walk for the light kept, drew and measured against, held for the F3 line.
 	 * <p>
 	 * Held rather than asked for where it is shown, because by then the render lists belong to the
-	 * camera again: this stage walks at the END of a frame and hands them straight back, so a count
+	 * camera again: this stage temporarily walks them for the light and hands them straight back, so a count
 	 * taken from the overlay would be the camera's under a shadow heading. Iris holds the same thing
 	 * for the same reason, a string taken inside its shadow scope and read outside it
 	 * ({@code shadows/ShadowRenderer.java:119} and {@code :606}).
@@ -132,10 +133,12 @@ public final class ShadowTerrain {
 	 * the next shadow stage so a frame that never ran terrain setup cannot accidentally reuse an
 	 * older camera viewport.
 	 */
-	public static void captureCameraWalk(Camera camera, Viewport viewport, FogParameters fog) {
+	public static void captureCameraWalk(Camera camera, Viewport viewport, FogParameters fog,
+			boolean updateChunksImmediately) {
 		cameraWalkCamera = camera;
 		cameraWalkViewport = viewport;
 		cameraWalkFog = fog;
+		cameraWalkUpdatesImmediately = updateChunksImmediately;
 	}
 
 	/**
@@ -162,9 +165,11 @@ public final class ShadowTerrain {
 		Camera restoreCamera = cameraWalkCamera;
 		Viewport restoreViewport = cameraWalkViewport;
 		FogParameters restoreFog = cameraWalkFog;
+		boolean restoreUpdatesImmediately = cameraWalkUpdatesImmediately;
 		cameraWalkCamera = null;
 		cameraWalkViewport = null;
 		cameraWalkFog = null;
+		cameraWalkUpdatesImmediately = false;
 
 		SodiumWorldRenderer renderer = SodiumWorldRenderer.instanceNullable();
 		Minecraft minecraft = Minecraft.getInstance();
@@ -317,7 +322,7 @@ public final class ShadowTerrain {
 			draw(renderer, minecraft, camera);
 		} finally {
 			restoreCameraWalk(manager, access, restoreCamera, restoreViewport, restoreFog,
-					cameraFrame, cameraLists, cameraTree, cameraTasks,
+					restoreUpdatesImmediately, cameraFrame, cameraLists, cameraTree, cameraTasks,
 					cameraNeedsUpdate, cameraChanged);
 		}
 	}
@@ -334,12 +339,16 @@ public final class ShadowTerrain {
 	 */
 	private static void restoreCameraWalk(RenderSectionManager manager,
 			RenderSectionManagerAccessor access, Camera camera, Viewport viewport,
-			FogParameters fog, int frame, SortedRenderLists lists,
+			FogParameters fog, boolean updateChunksImmediately, int frame, SortedRenderLists lists,
 			@Nullable SectionTree tree, @Nullable DeferredTaskList tasks,
 			boolean needsUpdate, boolean changed) {
 		try {
 			access.vitrail$setFrame(frame);
-			manager.finalizeRenderLists(camera, viewport, fog, true);
+			// The light walk reset every overlapping persistent region list under its own token.
+			// Force one camera traversal to refill those objects, but use the SAME synchronous/
+			// asynchronous choice Sodium's real setupTerrain call used for this frame.
+			access.vitrail$setNeedsRenderListUpdate(true);
+			manager.finalizeRenderLists(camera, viewport, fog, updateChunksImmediately);
 		} finally {
 			access.vitrail$setFrame(frame);
 			access.vitrail$setRenderLists(lists);
@@ -356,11 +365,6 @@ public final class ShadowTerrain {
 		Matrix4fc projection =
 				((GameRendererStorage) minecraft.gameRenderer).sodium$getProjectionMatrix();
 		ChunkRenderMatrices matrices = new ChunkRenderMatrices(projection, MODEL_VIEW);
-
-		// The light walk changed the per-region lists after Sodium prepared no batches for them.
-		// Prepare those batches now, before any shadow draw. Minecraft's ordinary camera prepare
-		// runs later in LevelRenderer.render, after this stage has restored the camera lists.
-		renderer.prepareChunkRendering(matrices, camera.x, camera.y, camera.z);
 
 		// The game's own chunk sampler, mipmapped and clamped, and it is NOT what the pack's shadow
 		// programs read the atlas through: the renderer hands this to begin, where the chunk

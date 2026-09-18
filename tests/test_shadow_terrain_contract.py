@@ -135,11 +135,19 @@ class ShadowTerrainContractTest(unittest.TestCase):
         mixin = compact(SODIUM_SETUP_MIXIN)
         config = text(MIXIN_CONFIG)
 
-        self.assertIn("ShadowTerrain.captureCameraWalk(camera, viewport, fogParameters);", mixin)
+        self.assertIn(
+            "ShadowTerrain.captureCameraWalk(camera, viewport, fogParameters, updateChunksImmediately);",
+            mixin,
+        )
         self.assertIn('"sodium.MixinSodiumWorldRendererSetup"', config)
         self.assertIn("int shadowFrame = cameraFrame ^ Integer.MIN_VALUE;", terrain)
-        self.assertIn("renderer.prepareChunkRendering(matrices, camera.x, camera.y, camera.z);", terrain)
+        self.assertNotIn("prepareChunkRendering(", terrain)
         self.assertIn("manager.finalizeRenderLists(camera, viewport, fog, true);", terrain)
+        self.assertIn(
+            "manager.finalizeRenderLists(camera, viewport, fog, updateChunksImmediately);",
+            terrain,
+        )
+        self.assertIn("access.vitrail$setNeedsRenderListUpdate(true);", terrain)
         self.assertIn("access.vitrail$setRenderLists(lists);", terrain)
         self.assertIn("access.vitrail$setRenderTree(tree);", terrain)
         self.assertIn("access.vitrail$setTaskLists(tasks);", terrain)
