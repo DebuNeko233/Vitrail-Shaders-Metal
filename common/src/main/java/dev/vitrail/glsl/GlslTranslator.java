@@ -258,13 +258,6 @@ public final class GlslTranslator {
 	static final String REDUCED_COS = "ofReducedCos";
 
 	/**
-	 * A defined spelling for the de-facto reversed-edge smoothstep used by OpenGL shader packs.
-	 * The GLSL builtin leaves {@code edge0 >= edge1} undefined; native Metal receives this helper
-	 * only for call sites whose two scalar edges are literal numbers and are statically reversed.
-	 */
-	static final String REVERSED_SMOOTHSTEP = "ofReverseSmoothstep";
-
-	/**
 	 * Whether a pack's {@code sin} and {@code cos} are sent through {@link #REDUCED_SIN} at all.
 	 * On, which is what a player gets and what every reading taken so far was taken under.
 	 * <p>
@@ -591,9 +584,6 @@ public final class GlslTranslator {
 
 	/** Calls to {@code sin} or {@code cos} sent through the reduced-argument helpers. */
 	private int trigCalls;
-
-	/** Native-Metal calls whose literal smoothstep edges are statically reversed. */
-	private int reversedSmoothstepCalls;
 
 	/**
 	 * Call sites to those two this unit matched, whether or not they were substituted. The same
@@ -2349,20 +2339,6 @@ public final class GlslTranslator {
 				}
 			}
 
-			// GLSL explicitly leaves smoothstep undefined when edge0 >= edge1. Some OpenGL drivers
-			// nevertheless evaluate the obvious Hermite expression with a negative denominator, and
-			// packs use that de-facto inverse form for fades. SPIR-V/Metal is allowed to do anything
-			// with the undefined call, so native Metal receives the defined equivalent only where the
-			// two scalar edges are literal numbers and their order can be proved here. Dynamic edges,
-			// normal-order calls, pack-defined smoothstep functions and every Vulkan translation stay
-			// exactly as written.
-			if (name.equals("smoothstep") && VendorExtensions.metal()
-					&& !this.declaredNames.contains(name) && reversedLiteralSmoothstep(index)) {
-				this.tokens.replace(index, REVERSED_SMOOTHSTEP);
-				this.reversedSmoothstepCalls++;
-				continue;
-			}
-
 			// The same two exclusions, and on MoltenVK alone: PackBuiltins says what Metal does with
 			// these calls. Above the directive guard like the sine, a call in a #define body being
 			// code the preprocessor pastes into the program.
@@ -2424,52 +2400,6 @@ public final class GlslTranslator {
 		// Token#macroName is. A position kept across here would be read against somebody else's
 		// token, and the reading pass has no way to notice.
 		this.tokens.insertClosings(closings);
-	}
-
-	/** Whether this call is exactly {@code smoothstep(NUMBER, NUMBER, ...)} with reversed edges. */
-	private boolean reversedLiteralSmoothstep(int name) {
-		int open = this.tokens.callOpener(name);
-		int first = open < 0 ? -1 : this.tokens.significantAfter(open);
-		if (first < 0 || this.tokens.get(first).kind() != Kind.NUMBER) {
-			return false;
-		}
-
-		int commaOne = this.tokens.significantAfter(first);
-		if (commaOne < 0 || !this.tokens.get(commaOne).operator(",")) {
-			return false;
-		}
-
-		int second = this.tokens.significantAfter(commaOne);
-		if (second < 0 || this.tokens.get(second).kind() != Kind.NUMBER) {
-			return false;
-		}
-
-		int commaTwo = this.tokens.significantAfter(second);
-		if (commaTwo < 0 || !this.tokens.get(commaTwo).operator(",")) {
-			return false;
-		}
-
-		double edge0 = numericLiteral(this.tokens.get(first).text());
-		double edge1 = numericLiteral(this.tokens.get(second).text());
-		return !Double.isNaN(edge0) && !Double.isNaN(edge1) && edge0 > edge1;
-	}
-
-	/** A GLSL numeric token as a double, or NaN where this deliberately narrow parser declines it. */
-	private static double numericLiteral(String token) {
-		int end = token.length();
-		while (end > 0) {
-			char suffix = token.charAt(end - 1);
-			if (suffix != 'f' && suffix != 'F' && suffix != 'l' && suffix != 'L') {
-				break;
-			}
-			end--;
-		}
-
-		try {
-			return Double.parseDouble(token.substring(0, end));
-		} catch (NumberFormatException ignored) {
-			return Double.NaN;
-		}
 	}
 
 	/**
@@ -5666,8 +5596,8 @@ public final class GlslTranslator {
 				this.synthesized,
 				this.volumes.read(), this.packOutputs, this.maxFragmentOutput, this.owedOutputs,
 				this.splits, this.gameTextureMatrix,
-				this.gameModelView, this.softRewrites, this.trigCalls, this.reversedSmoothstepCalls,
-				this.hashCalls, this.packBuiltinCalls, this.mainWrapped, this.depthEpilogue, this.terrainPrologue,
+				this.gameModelView, this.softRewrites, this.trigCalls, this.hashCalls,
+				this.packBuiltinCalls, this.mainWrapped, this.depthEpilogue, this.terrainPrologue,
 				this.distantPrologue, this.entityWrapped, this.linesWrapped, this.alphaEpilogue, this.covers,
 				wrapsFragment(), this.ordered, this.namesFragDepth, this.makesOverlayColour);
 	}
