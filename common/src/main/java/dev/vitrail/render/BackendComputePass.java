@@ -77,6 +77,13 @@ final class BackendComputePass implements AutoCloseable {
 		this.textureStage = textureStage;
 	}
 
+	/**
+	 * The maps this program's dispatches fill, made once and reused: a steady frame allocated three
+	 * {@code LinkedHashMap}s a dispatch before this, and the plan's phase 7 measured about twelve a frame.
+	 * Owned per program, so two programs dispatching in one frame cannot share a map.
+	 */
+	private final PackComputeBindings.Scratch scratch = PackComputeBindings.Scratch.of();
+
 	void dispatch(ComputeDeviceBackend deviceBackend, ComputeCommands commands, PackValues values,
 			ColorTargets targets, int width, int height, TargetSchedule.Bound step,
 			GpuTextureView depth, GpuTextureView distant) {
@@ -101,7 +108,8 @@ final class BackendComputePass implements AutoCloseable {
 				step,
 				depth,
 				distant,
-				transientBuffers());
+				transientBuffers(),
+				this.scratch);
 		int[] groups = this.compute.groupsAt(width, height);
 		if (!commands.vitrail$dispatchCompute(
 				this.pipeline,

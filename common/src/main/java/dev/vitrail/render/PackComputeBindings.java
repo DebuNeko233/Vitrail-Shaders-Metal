@@ -35,6 +35,24 @@ final class PackComputeBindings {
 	private PackComputeBindings() {
 	}
 
+	/**
+	 * The three maps a resolve fills, owned by the caller and reused.
+	 * <p>
+	 * Phase 7 of the optimisation plan: these were built from scratch per dispatch - three
+	 * {@code LinkedHashMap}s plus the three {@code Map.copyOf} copies {@link Resolved} makes - and this is the
+	 * half that can be reused without touching the ABI. {@link Resolved} still copies, so nothing downstream
+	 * can ever hold one of these maps and see it change under it.
+	 */
+	record Scratch(
+			Map<String, GpuBufferSlice> buffers,
+			Map<String, GpuTextureView> textures,
+			Map<String, GpuSampler> samplers) {
+
+		static Scratch of() {
+			return new Scratch(new LinkedHashMap<>(), new LinkedHashMap<>(), new LinkedHashMap<>());
+		}
+	}
+
 	record Resolved(
 			Map<String, GpuBufferSlice> buffers,
 			Map<String, GpuTextureView> textures,
@@ -80,7 +98,25 @@ final class PackComputeBindings {
 			GpuTextureView depth,
 			GpuTextureView distant,
 			Map<String, GpuBufferSlice> transientBuffers) {
-		Map<String, GpuBufferSlice> buffers = new LinkedHashMap<>();
+		return resolve(resources, uniformBlock, samplers, textureStage, program, targets, step, depth, distant,
+				transientBuffers, Scratch.of());
+	}
+
+	/** The same resolve, filling caller-owned maps so a steady frame allocates none of them. */
+	static Resolved resolve(
+			ComputeResources resources,
+			GpuBufferSlice uniformBlock,
+			SamplerPlan samplers,
+			TextureStage textureStage,
+			String program,
+			ColorTargets targets,
+			TargetSchedule.Bound step,
+			GpuTextureView depth,
+			GpuTextureView distant,
+			Map<String, GpuBufferSlice> transientBuffers,
+			Scratch scratch) {
+		Map<String, GpuBufferSlice> buffers = scratch.buffers();
+		buffers.clear();
 		for (String name : resources.uniformBuffers()) {
 			buffers.put(name, uniformBlock);
 		}
@@ -95,8 +131,10 @@ final class PackComputeBindings {
 			buffers.put(name, slice);
 		}
 
-		Map<String, GpuTextureView> textures = new LinkedHashMap<>();
-		Map<String, GpuSampler> samplerStates = new LinkedHashMap<>();
+		Map<String, GpuTextureView> textures = scratch.textures();
+		textures.clear();
+		Map<String, GpuSampler> samplerStates = scratch.samplers();
+		samplerStates.clear();
 		for (String name : resources.storageImages()) {
 			GpuTextureView view = storageImage(name, targets, step);
 			if (view == null) {
