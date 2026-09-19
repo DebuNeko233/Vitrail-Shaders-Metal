@@ -1345,6 +1345,32 @@ sentences and a player is owed the right one.
    the engine's own page and this engine's screen - the controls that existed for them.
 5. Verify per pack, under the compatibility evidence policy, rather than per engine.
 
+**Implemented, and running.** The seat is MetalFX's now: one encode from the scaled texture straight
+into the game's colour texture, with the bilinear blit where the scaler cannot run, and FSR 1.0's two
+passes and Temporal Fold are deleted rather than kept beside it. Measured at a 65 per cent scale on the
+M5 Pro the log reads "The 65% render scale brings the picture back with MetalFX", and the pass census has
+no upscale pass in it at all. What is *not* measured yet is what it costs against the bar the decision
+recorded - the 2.31 ms the FSR 1.0 pair took at 1800x1019 - and that needs a paired comparison of one
+scene with the scaler on and off rather than two runs of different scenes.
+
+**The correction this work forced, which is bigger than the phase.** Getting a frame to use MetalFX at
+all meant asking why it did not, and the answer was not about MetalFX. The game hands a `CommandEncoder`
+wrapper to everything, and the capabilities this engine adds are mixed into the
+`CommandEncoderBackend` behind it; every check written as `encoder instanceof SomethingCommands` was
+therefore asking a forwarding wrapper whether it can generate mipmaps, write storage images or be told
+what a pass needs of its attachments - which it can never be. Three of the callers had done this right
+from the start, resolving the backend through an accessor first, and that difference is exactly what hid
+the fault: the capabilities those three carry work, and the two asked of the wrapper do not.
+
+The two that do not are **the store half of P1 and the storage boundary that narrows an encoder**. Both
+are now resolved properly, and both of P1's readings about them are void: the store half "measured
+nothing because the chain reads almost everything it writes" and the boundary switch "moved no boundary"
+were both measuring a mechanism that never arrived. What P1's load half measured is untouched - it needs
+no capability across the seam, because the public descriptor can already express clear-or-load - so its
+32.3 per cent is still the load half's number. A contract now refuses a capability check whose receiver
+is an encoder, because a fault that survives three callers, a phase's measurements and a closure is a
+fault nothing but a rule will catch.
+
 **Exit criterion.** A recorded decision, and either an implementation that meets the regression set
 with the option off and on, or a recorded decision not to implement it. Both are valid endings; a
 half-enabled upscaler is not.

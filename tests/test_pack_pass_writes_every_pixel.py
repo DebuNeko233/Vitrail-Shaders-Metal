@@ -81,7 +81,7 @@ class PassWritesEveryPixel(unittest.TestCase):
         # to the frame's schedule, so every slot is stated as still wanted - a wrong store answer is
         # a wrong image, which is the one mistake this shape cannot survive.
         self.assertIn('boolean told = elide && tellTheBackend(encoder, writesEveryPixel);', self.text)
-        self.assertIn('if (!(encoder instanceof AttachmentCommands commands)) {', self.text)
+        self.assertIn('if (!(Backends.encoder(encoder) instanceof AttachmentCommands commands)) {', self.text)
         self.assertIn('readAfterwards[slot] = this.stillRead.contains(this.attachments.get(slot));', self.text)
         self.assertIn('overwritten[slot] = writesEveryPixel;', self.text)
         self.assertIn('commands.vitrail$setNextPassContents(readAfterwards, overwritten);', self.text)
