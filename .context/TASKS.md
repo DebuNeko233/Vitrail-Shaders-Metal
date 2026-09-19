@@ -160,6 +160,16 @@ A pack compile holds the world back, so the screen used to be the frame from bef
 
 ## P1 - Performance, Metal 4 and MetalFX (see `docs/performance.md`)
 
+- [ ] **M0 of the dual-execution plan: architecture guard + measurement readiness (done, not yet merged).**
+  The guard is `metallum/tools/ci-architecture.py` (shared/metal3/metal4 import rules, plus "one file never
+  names both command generations", mutation-proven) and Vitrail's
+  `tests/test_backend_neutrality_contract.py` (no command-generation type name in `common/`, mutation-proven);
+  both are named by their CI. The generation is said once (`Metal execution: metal3 selected (...)`), the
+  probe line carries `selectedGeneration` and splits GPU time into `gpuM3Ms`/`gpuM4Ms`/`gpuMs` - the last of
+  which used to be the Metal 3 road alone and made every Metal 4 submission invisible. **Next: M1 (the
+  runtime selector: `MetalDeviceCapabilities`, `MetalExecutionSelector`, AUTO/FORCE_M3/FORCE_M4, MetalFX
+  parity, package skeleton), which M0 deliberately did not start.**
+
 - [ ] P5 (item 3) - **The Metal 4 path, and the first bounded step of it.** Detection and advertisement are
   done (ask the device, cache the negative, `MetallumApi.supportsMetal4CoreApi()`); the path itself is
   unwritten. Two things it must not be: a migration (item 1 keeps the `MTLCommandQueue` path as the
