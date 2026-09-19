@@ -378,6 +378,14 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   first Metal 4 argument-table attempt in a session**, which matches the original observation too. **The next
   attempt wants a cheaper trigger than a reboot: a fresh process against an idle GPU, as the first arm, several
   times** - eight warm arms cost six minutes and answered nothing.
+  **The cheap trigger's in-process half exists, and its first reading argues against "the probe is flaky"**:
+  `-Dmetallum.probeRepeat=N` runs the probe N more times in the same process (the one thing the client never
+  does, since the answer is cached where the capability record reads it) and logs each answer with stage and
+  reason. One arm at N=25 gave **26 calls in one process, all true, no stage** - so a false negative is not
+  something the probe does every few calls. Cold first use therefore stands, untested: that process ran warm,
+  so its first call was warm too. The next experiment must vary what a warm run cannot - a fresh process
+  against an idle GPU, reading the first position - and the cross-process harness (create a device and exit,
+  without Minecraft) is still not built.
   **The probe is staged now, and the cheap trigger is the missing piece.** Every exit names a stage and a
   reason (nineteen call sites: selectors, objects, uniform, table, vertex, target, pipelines, pass, attachment,
   encoder, commit, completion, pixel, exception), `lastFailureStage()` is printed by the capability record, and
