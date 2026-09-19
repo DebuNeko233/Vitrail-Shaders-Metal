@@ -796,16 +796,44 @@ answer is the frame bridge with the depth fallback behind it, and `Backends.capa
 (`com.metallum.render.MetalBackend` / `com.metallum.render.MetalDevice`), which is what this batch allows to be
 named.
 
-Still owed for batch 1: the Photon run (55 %, 600 frames, camera pinned, settle 25) whose log shows the
-capability arriving through the adapter - `Error loading class` at 0, counters in band.
+Verified on hardware (`run/b1-caps`, `run/b1-caps2`, M5 Pro, Photon v1.3b at 55 %, 600 frames, camera pinned at
+`548.5,63,-248.5 yaw 0 pitch 7.8`, settle 25, fullscreen). The second arm is the one that settles it: it is
+**counter for counter identical to `run/mixin-fixed`**, the arm where the retargeted mixin still carried the
+capabilities - `renderPasses` 20934, `blitEncoders` 3000, `computeEncoders` 1800, `clearEncoders` 600,
+`encoders` 21445, `passChanged` 20845, `loadedMiB` 93964.6, `storedMiB` 132795.0, `depthAttachments` 4800,
+`depthLoadedMiB` 14385.6, `depthStoredMiB` 32449.5, `blits` 6600, `compiles` 0, `compileMs` 0.00,
+`pipelineIdentities == pipelineKeys` 345, `metal4Presents` 0, `wallP50` 7.38, `gpuM3Ms` 4432.50. `Error loading
+class` is **0** in both arms. The two broken arms for contrast (`run/m3-sealed`, `run/sealed-check`) read
+`Error loading class` 1, `blitEncoders` 2400 and **`computeEncoders` 0** - the compute capability was simply
+gone, which is the regression in counter form. The first arm (`run/b1-caps`) read `renderPasses` 21741,
+`depthAttachments` 5622, `encoders` 22252 against the same configuration, and that is **weather, not the
+change**: its own screenshot shows a rainstorm (dark sky, rain streaks), which is the one thing the harness does
+not pin, and the capability counters moved with it exactly as the scene explains.
 
-### Batch 2 - the Attachment ABI, which is broken today
+### Batch 2 - the Attachment ABI, which is broken today - **done** (`ab21e38a`, `ff344317`, metallum `3394d67`, `d80a05c`)
 
-Vitrail resolves `com.metallum.render.AttachmentContents`, a path that does not exist (the type is in
-`render.shared`). The fix is not to correct the string but to stop needing it:
+Vitrail resolved `com.metallum.render.AttachmentContents`, a path that does not exist (the type is in
+`render.shared`). The fix was not to correct the string but to stop needing it: the adapter now calls
 `MetalAttachmentBridge.setNextPassContents(Object encoder, boolean[] readAfterwards, boolean[] overwritten)`,
-with `AttachmentContents` constructed inside metallum; Vitrail passes only the two facts it has decided.
-`setNextPassReadsStorageImage(Object, boolean)` is unchanged.
+and metallum builds its own `AttachmentContents` from the two facts, one per slot, defaulting per slot to the
+interface's `CARRIED`. The value-typed overload is deleted rather than kept beside the new one, so nothing
+crosses that has to be resolved by name, and `test_pack_pass_writes_every_pixel` refuses the value type, the
+old constant and `Array.newInstance` in this adapter's code (a comment may still explain what was removed).
+Proved by mutation on both sides: re-adding the `CONTENTS_CLASS` constant fails the Vitrail contract, and
+re-adding the array overload fails metallum's `tools/ci-metalfx.py` with its own message.
+
+**Two A/Bs, and only the second one evidences the ABI.** `run/b2-attach` (plain against
+`-Dvitrail.narrowStorageBoundary=true`) moved nothing at all - every counter identical (`encoders` 21445,
+`passChanged` 20845, `loadedMiB` 93964.6, `storedMiB` 132795.0, `blits` 6600), frame time identical, picture
+difference 4.61 mean channel against this scene's recorded same-configuration floor of 4.10. The reading is
+that this pack answers "may read" for the boundary, which is the default, so that switch is a no-op here.
+That is what the new `INFO` line is for: the adapter's failure mode was silence, so nothing could tell a
+delivering session from a dead one. `run/b2-elide` (plain against `-Dvitrail.elideTargetTraffic=true`) agrees
+three ways - the line appears **exactly once** in the elide arm ("the backend was told what a pass needs of 2
+colour attachment slot(s)") and not at all in the plain arm, `loadedMiB` falls **93964.6 to 65250.7 (-30.6 per
+cent)** with `storedMiB` **132795.0 to 131199.7 (-1.2 per cent)** while `encoders`/`passChanged`/`blits`/
+`depthAttachments` stay identical and frame time moves +0.2 per cent, and the pictures differ by 4.05 - inside
+the same floor. `Error loading class` is 0 in every arm.
 
 ### Batch 3 - compute/depth/close neutrality (metallum side is partly done)
 
