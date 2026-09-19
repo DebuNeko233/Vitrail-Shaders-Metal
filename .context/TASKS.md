@@ -266,7 +266,17 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   **does not shrink the ledger** - the encoder keeps naming the present path to ask whether it is ready - and
   it moves a **safety interlock**, so it needs a two-arm session on the settled scene (property on and off
   against the same baseline) plus the picture check, not a single run. That pair is why it was not started at
-  the end of a session; it is the next thing to do.
+  the end of a session; it is the next thing to do. **Done, and the pair answered two things.** The policy now
+  lives in `MetalExecutionServices.presentsThroughMetal4()` (the property parsed there and nowhere else) and
+  the encoder asks policy then readiness, short-circuiting so a session that does not want the road never
+  records a layer for it; it deliberately does not consult `selected()` yet. The two-arm run: `plain` wallP50
+  7.20 ms, `gpuM3Ms=4355.64`, 0 presents; `m4present` wallP50 7.27 ms, `gpuM3Ms=4359.57`, **600 presents, 600
+  frames, `gpuM4Ms=28.97`**, +0.1 per cent wall. **The picture comparison does not reproduce the standing
+  claim**: mean channel difference 3.65, 88.84 per cent of pixels differing at all, 9.24 per cent by more than
+  8. That is not the 0.14-0.41 per cent one configuration repeats to, and the arms' counters differ by their
+  own present encoding (600 fewer viewports, 4200 more buffers in the m4 arm), so the frames differ too. The
+  Metal 4 present is verified as **running**, not as **equivalent**, and the old claim is now contradicted
+  rather than merely unverified.
 **Prerequisite ①'s last piece (`MetalPipelineKey`) is specified down to the lines it touches, and not
   started.** Where the identity material is: `MetalDevice.getOrCompilePipeline(RenderPipeline)` (line ~408)
   is the only place a compiled pipeline is made - `this.compiledPipelines.computeIfAbsent(pipeline, p ->
