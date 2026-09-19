@@ -1227,6 +1227,18 @@ the decision recorded, and it is measured the same way the seat's own cost was. 
 per pack afterwards under the compatibility evidence policy, because a different upscaler is a different
 picture by construction.
 
+**The framework is reachable, and that was measured rather than assumed.** The one piece of this work
+whose answer could not be read from the code is whether this backend can get at MetalFX's classes at all,
+since it reaches Objective-C through `objc_getClass` and that sees only the images already loaded. It can:
+`SymbolLookup.libraryLookup` *is* the `dlopen` - the runtime-interface package already performs it for
+Metal, Foundation and QuartzCore - and the companion backend now loads MetalFX through an optional road
+that answers rather than throwing, asks `+[MTLFXSpatialScalerDescriptor supportsDevice:]` once at device
+creation and keeps the answer. On the machine this plan is measured on that line reads **"MetalFX spatial
+scaling: available, the device supports it"**. Availability is therefore asked of Apple's own question per
+device and never of a version number, which is a stronger test and one that cannot go stale; the contract
+in the companion repository refuses a version table and refuses a load that would throw on a system
+without the framework.
+
 **Two risks worth writing down before the code exists.** MetalFX's spatial scaler has **no temporal
 component**, where this seat's own path can be paired with Temporal Fold; so at low scales MetalFX may
 lose to the FSR 1.0 plus fold combination *on picture* while winning on time, and the honest first
@@ -1263,7 +1275,8 @@ Metal 4 variants - while a framework that is not there, or a class that does not
 unavailable. That is a stronger test than any version table and it needs no version strings in this
 repository at all. Enabling is a decision per rung, because the rungs above spatial ask the frame for
 facts it does not currently produce and that a pack can observe. Spatial needs nothing the scaled frame
-does not already have, so it is the rung this phase implements. Temporal needs **jitter**, and jitter is
+does not already have, so it is the rung this phase implements - and it is confirmed available on the
+device this plan is measured on. Temporal needs **jitter**, and jitter is
 pack-visible: a pack that accumulates temporally would be jittered twice, and the plan's own rule is
 that what a pack is told about its resolution and its samples is pack semantics, decided per pack with
 evidence. Interpolation needs those plus a scaler to sit on, and it changes what is presented rather
@@ -1271,9 +1284,33 @@ than what is drawn - a third decision - and it is the one composition the API fo
 since the interpolator takes a scaler instead of replacing one. That composition is one entry in the
 interface, not two settings.
 
-**The interface, and where the choice is written.** `upscaler=` beside `renderscale=` in
-`vitrail/pack.txt`, the file this engine already keeps per pack, so the choice travels with a pack
-exactly as its render scale and its shadow distance do. Both halves of the screen side already exist:
+**FSR 1.0 is removed rather than kept beside it.** The scale's own upscaler is deleted - the EASU
+upscale, the RCAS sharpen, their two pipelines and their shader sources - and MetalFX takes the seat,
+which makes the seat one step shorter: what was two full screen draws at the window's size becomes one
+encode. Two consequences follow from that and both are named here rather than discovered later.
+
+*The bilinear blit is what is left when MetalFX cannot run.* `RenderScale.endWorld` already falls back to
+a plain blit when its pipelines do not compile, and that fallback is what a device without MetalFX, an
+older system, or a backend that is not Metal gets: the render scale keeps working everywhere and only
+the quality of bringing the picture back changes. That is the honest shape of a removal - nobody loses
+the slider - and it is also why the deleted path's bilinear fallback is the one piece of it that stays.
+
+*Temporal Fold goes with it.* The fold is a separate feature, but it is not independent: it consumes the
+**upscaled** frame at the window's size, and it is drawn **between** the EASU upscale and the RCAS
+sharpen, because folding a sharpened frame into a sharpened history sharpens the same edge once per
+frame. MetalFX's spatial scaler fuses the upscale and its own sharpening into a single encode, so that
+slot does not exist to put the fold in. The decision this phase recorded already said where the fold
+belongs - "Temporal Fold belongs to the FSR 1.0 side of that choice" - and with that side gone the fold
+is removed with it, rather than moved somewhere it was argued against. What recovers its quality at low
+scale later is `MTLFXTemporalScaler`, which is an upscaler *and* a temporal accumulator in one and would
+subsume the fold rather than sit beside it; that is the rung gated on the jitter decision, and it is why
+the fold's removal is recorded as a move rather than as a loss.
+
+**The interface, and where the setting is written.** There is one upscaler now, so there is no choice to
+write and no key to add: `renderscale=` alone says how small the world is drawn, and MetalFX brings it
+back wherever the device can, with the bilinear blit where it cannot.
+
+*What the interface carries is the availability answer, not a choice.* Both halves of the screen side already exist:
 this engine's own settings screen, and the Sodium entry that puts a page under the mod's name into the
 video settings Sodium owns - which is also where a player with Reese's Sodium Options sees it, that mod
 implementing the same entry point. One thing there is stale and this work has to fix it: the entry
@@ -1285,15 +1322,17 @@ sentences and a player is owed the right one.
 
 **Work.**
 
-1. Measure the seat as it stands: the FSR 1.0 upscale's and the sharpen's own `gpuMs` at the scales the
-   tester uses, so that "not slower than what it replaced" has a number - done, 2.31 ms at 1800x1019.
-2. Implement the first rung: the framework loader, the descriptor and the scaler bound in `metallum`,
-   the scaler cached by its configuration, the two-method capability across the seam, and
-   `RenderScale.endWorld` choosing between them.
-3. Put the choice where it belongs: `upscaler=` parsed beside `renderscale=`, shown on the engine's own
-   page in the Sodium entry as well as on this engine's screen, and the stale Vulkan-only gate on that
-   page removed.
-4. Verify per pack, under the compatibility evidence policy, rather than per engine.
+1. Measure the seat as it stands, so that "not slower than what it replaced" has a number - done:
+   2.31 ms at 1800x1019 for the FSR 1.0 upscale and its sharpen.
+2. Prove the framework is reachable at all: load MetalFX, ask the device whether it supports the spatial
+   scaler, and say so in the log. This is the one piece of the work whose answer is not knowable by
+   reading - this backend reaches Objective-C through `objc_getClass` and has never loaded a framework -
+   so it is done first and on its own.
+3. Bind the descriptor and the scaler, cache the scaler by its configuration, and encode it from
+   `RenderScale.endWorld` in place of the two draws that are being deleted.
+4. Delete the path being replaced: the EASU and RCAS pipelines, their shader sources, the fold and - on
+   the engine's own page and this engine's screen - the controls that existed for them.
+5. Verify per pack, under the compatibility evidence policy, rather than per engine.
 
 **Exit criterion.** A recorded decision, and either an implementation that meets the regression set
 with the option off and on, or a recorded decision not to implement it. Both are valid endings; a
