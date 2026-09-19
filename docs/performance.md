@@ -1162,13 +1162,78 @@ Across the seam it is the same shape P1's attachment facts took: a small interfa
 into the backend's command encoder, with a soft failure when the backend does not implement it. What
 crosses is a decision - scale this texture into that one, at these sizes - and never a Metal handle.
 
-**Work.**
+**The design.** Written before any of it, because the interesting decisions are all at the seams rather
+than in the API.
 
-1. Measure the seat as it stands: the FSR 1.0 upscale's and the sharpen's own `gpuMs` at a few scales,
-   so that "not slower than what it replaced" has a number rather than an opinion.
-2. Implement MetalFX as the second occupant of that seat, engine level and post-final, with the off
-   switch restoring exactly today's path.
-3. Verify it per pack, under the compatibility evidence policy, rather than per engine.
+**The seat, exactly.** `RenderScale.endWorld(main, encoder)` is where the scaled picture is brought back,
+and it does it in two full screen draws through this engine's own pipelines: FSR 1.0's EASU upscale from
+the scaled colour texture into a window-sized intermediate, then RCAS onto the game's own colour texture,
+with a bilinear blit as the fallback where those pipelines do not compile. That method is the swap point.
+MetalFX goes **from the scaled texture straight to the game's colour texture in one encode**, which is
+one pass fewer than today's path even before it is faster, and the off switch restores the two draws
+byte for byte.
+
+**What crosses the seam.** One narrow capability, the shape P1's attachment facts already took: an
+interface Vitrail-side, mixed into the backend's command encoder, with a soft failure where a backend
+does not implement it. Its whole content is a decision:
+
+- `boolean vitrail$metalFxAvailable()` - asked once, and false whenever anything about the device or the
+  scaler is unknown;
+- `boolean vitrail$metalFxScale(GpuTextureView from, GpuTextureView to, int contentWidth, int contentHeight)`
+  - true when the scaler was found and encoded, false otherwise, in which case the caller draws today's
+    path **for that same frame** rather than leaving a frame unpresented.
+
+No Metal handle, no framework type and no pixel format crosses: the backend already owns both textures
+(it made them), so it reads their formats and their handles on its own side. The content width and height
+are the ones the render scale is actually rendering at, which is what tells the scaler how much of the
+input is real - the distinction `inputContentWidth` exists for.
+
+**What the backend owes.** Three things, in order:
+
+1. **Load the framework.** MetalFX lives in `MetalFX.framework`, and this backend reaches Objective-C
+   through `objc_getClass`, which sees only what is already loaded. There is no `dlopen` in `metallum`
+   today, so the first piece is a loader in the same runtime-interface package, and a check that the
+   class arrived rather than a crash when it did not.
+2. **Bind the two objects.** The descriptor (input and output sizes, both pixel formats, the colour
+   processing mode, `+supportsDevice:`, and the factory), and the scaler (both textures, the input
+   content rectangle and `encodeToCommandBuffer:`). The scaler is a protocol, not a class, which the
+   message-send layer handles without anything new.
+3. **Cache the scaler by its configuration.** MetalFX scalers are made once for a size and a format pair
+   and reused; making one a frame would be a per-frame allocation storm. The cache is keyed by input
+   size, output size and both formats, and a creation failure is latched and reported once, the way the
+   render scale's own pipelines are.
+
+Two things are asked of the runtime rather than read from the documentation, because the documentation
+gives Swift names: **which selector the factory is** (the `new`-prefixed one, and a wrong guess gives a
+nil scaler rather than an error, so the binding asks `respondsToSelector:` and says what it found), and
+**whether the device supports the scaler at all** (`+supportsDevice:`, whose answer is what
+`vitrail$metalFxAvailable` returns).
+
+**Where the choice lives.** Beside `renderscale`, in the same file and for the same reason: the scale and
+the upscaler that brings it back are one choice, and the decision this phase recorded says the settings
+page presents one upscaler rather than two running together. So the file gains a key whose value names
+the upscaler, `RenderScale` reads it where it already reads the percentage, and the performance harness
+gains the matching argument - which is what makes the A/B two runs of one scene under one flag.
+
+**Failure and fallback rules.** Unavailable device, absent framework, a refused format, a scaler that
+comes back nil, an encode that throws: every one of them answers false, logs once, and leaves the frame
+on today's path. A frame is never left half-scaled, and the interface is never left without a picture -
+the same posture the bilinear fallback already takes when the FSR 1.0 pipelines do not compile.
+
+**What "done" means, and how it is measured.** With the choice off, the counters and the image are
+today's exactly, which the contracts pin. With it on, at one render scale on the scene that repeats,
+`gpuMs` a frame for the seat must be **at or under the 2.31 ms the FSR 1.0 pair costs** - that is the bar
+the decision recorded, and it is measured the same way the seat's own cost was. The picture is reviewed
+per pack afterwards under the compatibility evidence policy, because a different upscaler is a different
+picture by construction.
+
+**Two risks worth writing down before the code exists.** MetalFX's spatial scaler has **no temporal
+component**, where this seat's own path can be paired with Temporal Fold; so at low scales MetalFX may
+lose to the FSR 1.0 plus fold combination *on picture* while winning on time, and the honest first
+comparison is spatial against spatial (fold off) so that the two are being asked the same question. And
+the scaler wants textures that are readable and renderable by its own encoders, which the game's own
+colour texture is, but the scaled texture is one this engine allocates - so its usage flags are the first
+thing to check if a scaler refuses to be made at all.
 
 **Exit criterion.** A recorded decision, and either an implementation that meets the regression set
 with the option off and on, or a recorded decision not to implement it. Both are valid endings; a
