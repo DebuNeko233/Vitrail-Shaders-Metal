@@ -23,15 +23,29 @@ def require(label: str, text: str, needles: tuple[str, ...]) -> None:
         raise SystemExit(f"debug entry: {label}: missing " + ", ".join(missing))
 
 
-require("the generation is read, not guessed", STATUS, (
+require("the generation in use is read, not guessed", STATUS, (
     'readString("metalApiGeneration")',
     "public static String metalApiGeneration() {",
 ))
-require("the generation is a line of its own", ENTRY, (
+require("what the device could run is a separate reading", STATUS, (
+    'readString("deviceMetalApiGeneration")',
+    "public static String deviceMetalApiGeneration() {",
+))
+require("the API in use is the line, and the capability only where it differs", ENTRY, (
     "MetallumStatus.metalApiGeneration()",
-    'PREFIX + "Metal API: " + metalApi',
+    "String deviceApi = MetallumStatus.deviceMetalApiGeneration();",
+    'PREFIX + "Metal API: " + metalApi + capability',
     "if (!metalApi.isEmpty()) {",
 ))
+require("the capability is a parenthesised suffix and never the answer", ENTRY, (
+    "String capability = deviceApi.isEmpty() || deviceApi.equals(metalApi)",
+    ': " (device supports " + deviceApi + ")";',
+))
+# The line said "Metal 4" for a session whose every frame was Metal 3's, because it showed the device's newest
+# family under a label a reader takes as what is running. Both facts have to be read before the line is built,
+# so that neither can be mistaken for the other.
+if ENTRY.index("String deviceApi") > ENTRY.index('PREFIX + "Metal API: "'):
+    raise SystemExit("debug entry: the device's capability is read after the line is built")
 require("the scale is shown only where there is one", ENTRY, (
     "int renderScale = PackChoice.renderScale();",
     "if (renderScale < 100) {",

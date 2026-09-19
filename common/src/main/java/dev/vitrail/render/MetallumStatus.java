@@ -24,6 +24,7 @@ public final class MetallumStatus {
 	private static volatile Status status;
 	private static volatile Boolean backgroundPipelinePrecompile;
 	private static volatile String metalApiGeneration;
+	private static volatile String deviceMetalApiGeneration;
 
 	private MetallumStatus() {
 	}
@@ -123,17 +124,40 @@ public final class MetallumStatus {
 	}
 
 	/**
-	 * The generation of the Metal API this session's device runs, as one word, or empty.
+	 * The generation of the Metal API this session's frames are encoded through, as one word, or empty.
 	 * <p>
-	 * Apple has no API version to query - what a device runs is a set of families - so the backend answers
-	 * with the newest one it has, which is the sentence the F3 screen shows. Read once and kept: a session
-	 * cannot change its GPU.
+	 * This is the fact a capture is read for - which API produced the picture - and it is not the device's
+	 * newest family: a device that can run Metal 4 still has every frame encoded through Metal 3's command
+	 * buffer, and showing the capability here is what made the F3 screen claim Metal 4 for a session that
+	 * never ran one. {@link #deviceMetalApiGeneration()} is the other question.
+	 * <p>
+	 * Read once and kept: a session cannot change its GPU, and the generation it executes is fixed when the
+	 * device is created.
 	 */
 	public static String metalApiGeneration() {
 		String known = metalApiGeneration;
 		if (known == null) {
 			known = readString("metalApiGeneration");
 			metalApiGeneration = known;
+		}
+
+		return known;
+	}
+
+	/**
+	 * The newest generation of the Metal API the device this session came up on can run, as one word, or
+	 * empty.
+	 * <p>
+	 * A capability and not a fact about the frame: Apple has no API version to query, so what a device can
+	 * run is a set of families and this is the newest one it answers for. Nothing renders through Metal 4
+	 * yet, so a session can answer {@code Metal 4} here and {@code Metal 3} above at the same time - and the
+	 * F3 screen says both rather than letting the capability read as the execution.
+	 */
+	public static String deviceMetalApiGeneration() {
+		String known = deviceMetalApiGeneration;
+		if (known == null) {
+			known = readString("deviceMetalApiGeneration");
+			deviceMetalApiGeneration = known;
 		}
 
 		return known;

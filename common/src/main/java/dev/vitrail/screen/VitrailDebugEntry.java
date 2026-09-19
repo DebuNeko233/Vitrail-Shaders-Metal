@@ -20,7 +20,9 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * The engine's lines of the F3 screen, in Iris's wording so a capture of one reads against a
- * capture of the other: version, the Metal API generation, the scale in force where one is,
+ * capture of the other: version, the Metal API generation <em>in use</em> - with the device's newest
+ * family beside it only where the two differ, because a capability is not a fact about the frame - the
+ * scale in force where one is,
  * shaderpack, the scanned profile with the dirty count, then Sodium's shadow {@code C: a/b D: d}. Color space is omitted: this engine has no color-space
  * setting to name, and inventing one would be a line Iris cannot match the other way. While a
  * pack is still compiling, one extra line carries the overlay's own words
@@ -69,7 +71,15 @@ public final class VitrailDebugEntry implements DebugScreenEntry {
 		displayer.addToGroup(GROUP, PREFIX + "Version: " + Vitrail.platform().modVersion());
 		String metalApi = MetallumStatus.metalApiGeneration();
 		if (!metalApi.isEmpty()) {
-			displayer.addToGroup(GROUP, PREFIX + "Metal API: " + metalApi);
+			// The API in use, which is the question a picture's capture is read for - and the device's own
+			// newest family beside it only where the two differ, because "Metal 4" on a screen whose every
+			// frame is Metal 3's is a capability presented as a fact about the frame. The suffix disappears
+			// by itself on the day Metal 4 has a frame path and the two answers agree.
+			String deviceApi = MetallumStatus.deviceMetalApiGeneration();
+			String capability = deviceApi.isEmpty() || deviceApi.equals(metalApi)
+					? ""
+					: " (device supports " + deviceApi + ")";
+			displayer.addToGroup(GROUP, PREFIX + "Metal API: " + metalApi + capability);
 		}
 		int renderScale = PackChoice.renderScale();
 		if (renderScale < 100) {
