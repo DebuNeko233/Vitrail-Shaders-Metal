@@ -344,6 +344,12 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   pack scene, and the no-pack scene (0.04-0.05 same-config) is the only bed for this test.** Frame time does
   not follow the picture - that 100 per cent pair read `wallP50` 10.75 and 10.73 ms while the pictures differed
   by 36.
+**The services now carry the selection rather than a constant.** `MetalDevice` built them for
+  `MetalApiGeneration.METAL3` *before* the selector ran and took the selection a few lines later - harmless
+  while nothing read `selected()`, but the one object every seam asks disagreed with the selection the same
+  constructor logged, and an AUTO-Metal-4 launch would have looked identical to a forced Metal 3 one. The
+  contract that pinned the seam pinned the constant and failed the moment it went, which is the pin working;
+  it now pins the selection. No-pack run after it: 1.79 ms, `selectedGeneration=metal4`, counters unchanged.
 **Prerequisite ①'s last piece (`MetalPipelineKey`) is specified down to the lines it touches, and not
   started.** Where the identity material is: `MetalDevice.getOrCompilePipeline(RenderPipeline)` (line ~408)
   is the only place a compiled pipeline is made - `this.compiledPipelines.computeIfAbsent(pipeline, p ->
