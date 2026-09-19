@@ -12,7 +12,7 @@
 	"options.vitrail.shadow_map_scale": "Shadow Map Scale",
 	"options.vitrail.shadow_map_scale_tooltip": "Share of the pack's shadow map that is actually drawn.\nLower is faster, and edges get softer or coarser. \"100%\" is what the pack asked for.\nReloads the pack.",
 	"options.vitrail.render_scale": "Render Scale",
-	"options.vitrail.render_scale_tooltip": "Resolution the world is drawn at, as a share of the window.\nLower is faster. AMD FSR 1.0 then fills the window. The interface stays sharp.\nApplies at the next frame. No pack reload.",
+	"options.vitrail.render_scale_tooltip": "Resolution the world is drawn at, as a share of the window.\nLower is faster. MetalFX fills the window from there; a machine that does not have it gets a plain blit instead. The interface stays sharp.\nApplies at the next frame. No pack reload.",
 	"options.vitrail.shadow_amortisation": "Shadow Reuse",
 	"options.vitrail.shadow_amortisation_tooltip": "How many frames the shadow map is kept before it is drawn again.\nHigher is faster: drawing it is the most expensive pass of the frame.\nOnly the GROUND ages: a block you place or break keeps its old shadow that long.\nApplies at the next frame. No pack reload.",
 	"options.vitrail.shadow_amortisation_off": "Off",
