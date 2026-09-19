@@ -31,6 +31,8 @@ public final class MetallumAttachmentBridge {
 
 	private static boolean refused;
 
+	private static boolean announced;
+
 	private MetallumAttachmentBridge() {
 	}
 
@@ -51,6 +53,7 @@ public final class MetallumAttachmentBridge {
 
 		try {
 			found.setter().invoke(null, encoder, readAfterwards, overwritten);
+			announce(readAfterwards.length);
 		} catch (ReflectiveOperationException | RuntimeException exception) {
 			giveUp(exception);
 		}
@@ -107,6 +110,25 @@ public final class MetallumAttachmentBridge {
 		refused = true;
 		Vitrail.logger().warn("A pass could not be told what it needs of its attachments, so every "
 				+ "pass after it keeps its load and store actions: {}", exception.toString());
+	}
+
+	/**
+	 * Says once that the statements are arriving, and how wide they are.
+	 * <p>
+	 * The reason is the fault this adapter just had. Every call it made failed, was caught, and left the pass
+	 * on the fallback - so a session that delivered nothing looked exactly like one that delivered
+	 * everything, and the only evidence either way was a picture of the shadows. One line, once, is what makes
+	 * "the mechanism is live" a fact a log can be read for.
+	 */
+	private static synchronized void announce(int slots) {
+		if (announced) {
+			return;
+		}
+
+		announced = true;
+		Vitrail.logger().info("Attachment contents: the backend was told what a pass needs of {} colour "
+				+ "attachment slot(s), so its load and store actions come from this engine rather than from "
+				+ "a clear this engine substitutes", slots);
 	}
 
 	private record Methods(Method setter, Method reads) {
