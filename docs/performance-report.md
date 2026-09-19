@@ -36,7 +36,7 @@ per launch.
 | Feedback copies | NOT MEASURED | - | - | - | - | - | no  -  zero copies taken on this pack |
 | Attachment traffic | 7.22 | 7.30 | +1.1 % (inside the floor) | loadedMiB 93943.3 → 65229.4 (-30.6 %), storedMiB -1.2 % | 0 | 0 | no  -  rejected, measured |
 | Storage boundary | 7.31 | 7.31 | 0 | 0 | 0 | 0 | no  -  rejected, measured (zero boundaries merged) |
-| Mipmap planning | NOT MEASURED | - | - | - | - | - | no change made |
+| Mipmap planning | 7.27 | 7.27 | 0 (telemetry only) | 0 | 0 | 0 | no change made; 274 chains a second measured |
 | Compute bindings | 7.27 | 7.26 | 0 (CPU change) | 0 | 0 | 0 | **YES**  -  maps/dispatch 3 → 0 |
 | Capability lookup | NOT MEASURED | - | - | - | - | - | no change made |
 
@@ -45,7 +45,7 @@ per launch.
 | item | state | evidence |
 | --- | --- | --- |
 | 57.1 measurement complete | partial | anchor + repeat taken; final baseline after the one kept change taken (`run/p7-reuse`) |
-| 57.2 major GPU work understood | partial | passes, copies, clears, submits, shadow frequency and traffic known; **mipmap count NOT MEASURED** |
+| 57.2 major GPU work understood | partial | passes, copies, clears, submits, shadow frequency and traffic known; mipmap count measured (274 chains a second, 11 levels a chain), pixels reduced NOT MEASURED |
 | 57.3 target copy policy | **answered** | rejected, measured: 3 blits a frame removed, no time; refusal half proved on the history fixture |
 | 57.4 feedback copies | **answered** | zero copies on this pack; `PackChain:2066` is live, so it is a fact about the pack |
 | 57.5 attachment traffic | **answered** | rejected, measured: -30.6 % loaded bytes, no time |
@@ -55,6 +55,26 @@ per launch.
 | 57.9 correctness corpus | **not met** | fixtures cover the elision cases; no cross-pack corpus run this pass |
 | 57.10 reload/lifecycle | **not met** | NOT MEASURED |
 | 57.11 architecture clean | **yes** | Vitrail gained no Metal type, no generation path, no command type |
+
+
+## Mipmaps (phase 6, `run/p6-mips`, 02:02)
+
+Load time: **2 targets carry a chain** (colortex5, colortex11) because one program reads them at a lod, 7 MiB
+more. Per frame, from the census added this pass:
+
+```
+Mip chains: 276 reduced over 1006 ms (274.1 a second), 3036 levels (11.0 a chain)
+```
+
+- **about 2 chains a frame**, one per chain-carrying target - both are invalidated and rebuilt every frame;
+- **11 levels a chain**, which is a full chain to level nought;
+- **about 3036 level reductions a second**;
+- **pixels reduced a frame: NOT MEASURED** - the level count says the chain spans the target's own size, but the
+  census does not read the dimensions, and this report does not estimate them.
+
+The arm is the reference scene exactly (`encoders` 21435, `loadedMiB` 93922.0, `blits` 6600, `wallP50` 7.27), so
+counting costs nothing measurable. Nothing was optimised here: the code already skips a valid chain, and the only
+candidate left is invalidating less often, which needs a semantic proof before a line of it is touched.
 
 ## Remaining cost, and why work stopped there
 
