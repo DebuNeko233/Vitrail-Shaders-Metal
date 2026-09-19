@@ -1289,6 +1289,24 @@ That is a piece of work to size and decide deliberately rather than fold into th
 Until it is done, ACL and WSR are compiled in and bound but their pipelines are refused, which is where the goal
 stands: **usable - no; compiling and bound where they never were - yes.**
 
+### Phase 7 acceptance, met and measured (`run/p7-reuse`, 2026-09-20 01:59, reference configuration)
+
+| | before | after |
+| --- | --- | --- |
+| maps built a dispatch | **3** (about 12 a frame, 1644 a second) | **0.0** |
+| bindings a dispatch | 6.5 (1781 a second) | 6.5 (1794 a second - run noise) |
+| `encoders` / `passChanged` | 21435 / 20835 | 21435 / 20835 |
+| `loadedMiB` / `storedMiB` | 93922.0 / 132752.3 | 93922.0 / 132752.3 |
+| `blits` / `depthAttachments` / `pipelineIdentities` | 6600 / 4800 / 345 | 6600 / 4800 / 345 |
+| `compiles` / `compileMs` | 0 / 0.00 | 0 / 0.00 |
+| `wallP50` / `gpuP50` | 7.27 / 7.29 | 7.26 / 7.29 |
+
+Every scene counter is identical to the `p0-repeat` anchor, so the arms are the same scene, and the bound
+resources are the same names in the same count - section 33's acceptance, both halves. The time columns do not
+move, which is expected and allowed for a CPU allocation change: the evidence is the allocation count, and the
+frame was never bound on these maps. Kept as a production change (`a770cab3`), with the census line left in
+place so the number stays readable.
+
 ## Pre-M4 boundary cleanup (metallum docs/pre-m4-boundary-cleanup.md carries the long form)
 
 The `render.metal3` sealing is done (metallum `267f3b6`) and the generation-neutral capability vocabulary exists
