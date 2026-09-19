@@ -1168,7 +1168,16 @@ that allocator and ended - and releases them. Nothing in a frame path creates on
 Pro carries the three lines together, the two MetalFX ones and this:
 
     Metal 4 core API: available, the device has the family, answers to newMTL4CommandQueue, and a queue,
-    an allocator and a command buffer were made and released
+    an allocator and a command buffer were made, submitted and released
+
+**And the submission is proven, not assumed.** A buffer that can be begun is not yet one a queue takes, so
+the probe also commits it - `commit:count:` on the queue - and then has the queue signal a shared event
+(`signalEvent:value:`) and waits on that event from the CPU
+(`waitUntilSignaledValue:timeoutMS:`, the one selector of this set that is Metal 3's rather than Metal 4's).
+The wait returning true is the proof that the GPU ran the committed buffer, and the log line above is only
+printed on that path: a device that takes the objects but not the submission says so instead and the path
+stays closed. Sixty frames of the game beside it read the same 23.6 ms as before, because nothing in a
+frame path creates any of it.
 
 **The first version of it ended the process, and what it taught is worth more than the skeleton.** It sent
 `newCommandAllocatorWithDescriptor:` because the SDK declares it, and the device answered
