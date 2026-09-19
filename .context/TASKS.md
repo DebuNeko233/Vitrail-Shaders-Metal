@@ -203,14 +203,27 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   per-object field for draw ordering). **So the switch needs those five fields added first**, after which the
   cache may move to the key; until then the key is a diagnostic and the cross-generation marker, and the
   cache stays on object identity.
-**Prerequisite ① is done except for the cache switch**: `MetalPipelineKey` exists in `render.shared`
-  (location, vertex/fragment shader locations, defines, **shader profile**, argument-buffer mode), is built at
-  the one place a pipeline is compiled and stored on the compiled object, with the cache still keyed by the
-  game's object. The fields come from the game's own accessors, read with `javap` rather than assumed.
-  Verified on the settled pack scene (7.253 ms, counters inside the configuration's settled range).
-  **Next: switch the cache to the key**, with the evidence the recipe in this file names (forced Metal 3 and
-  AUTO, cache cold per arm, frame time inside 7.25-7.28 ms), and answer the one behaviour question first:
-  may two distinct game pipeline objects that are semantically equal share one compiled pipeline?
+**Prerequisite ① is done, and the cache switch it was waiting for is the step the measurement says not
+  to take.** The key now names the five things it was missing - the depth and stencil state (which carries
+  the colour-target formats), the polygon mode, culling, the primitive topology and the vertex format
+  bindings - composed into one `renderingState` description rather than five fields, so a further piece of
+  rendering state cannot be left out silently the way a fields-based key forgets one (metallum `085e0b2`).
+  Then the switch was measured before it was made: two counters ride the frame probe, distinct
+  `RenderPipeline` **identities** and distinct `MetalPipelineKey`s the device was asked for from process
+  start (pipelines compile during startup, so a census armed with the marker would report nothing). On the
+  settled pack scene they came back **345 and 345** - equal. Equal means a keyed cache and the identity
+  cache hold the same entries, so the move buys **zero** pipeline compilations while costing the eviction
+  contract (`evictCachedPipelines` takes a `Predicate<RenderPipeline>` and returns `List<RenderPipeline>`)
+  and a hoist of the argument-buffer decision out of `MetalCrossShaderCompiler.compile`, where it is derived
+  from the layout entries. **So the cache stays on object identity, deliberately**, and the key stays what
+  it already was: the diagnostic and the cross-generation marker.
+  The census is kept rather than thrown away after one reading, because it is the only thing that would say
+  if a future path - Metal 4 argument tables, a pack loader - starts handing the device freshly built equal
+  pipelines; it costs one identity-set insertion per pipeline request and hashes the key only for a new
+  identity (metallum `01f10a1`). The run that produced 345/345 read **7.27 ms** with `gpuM3Ms=4368.15`,
+  inside the configuration's settled band, so the instrument did not move the number it measures. The
+  behaviour question ("may two semantically equal pipeline objects share one artifact?") is moot for the
+  cache and stays open for the Metal 4 path, where argument tables are per-pipeline objects.
 **Prerequisite ①'s last piece (`MetalPipelineKey`) is specified down to the lines it touches, and not
   started.** Where the identity material is: `MetalDevice.getOrCompilePipeline(RenderPipeline)` (line ~408)
   is the only place a compiled pipeline is made - `this.compiledPipelines.computeIfAbsent(pipeline, p ->
