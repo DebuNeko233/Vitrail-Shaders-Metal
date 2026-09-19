@@ -1172,6 +1172,18 @@ count is item 3 - the attachment map that lets one encoder carry "the same attac
 different one" - and it needs the Metal 4 path, while item 4's unified compute encoder has about one
 boundary a frame to absorb.
 
+**And the clear batch that sizing suggested does not survive reading the code.** The proposal was to
+merge the seven pending-clear boundaries into one clear pass. `MetalCommandEncoder.flushPendingClear` shows
+why that is not the same thing: a clear is materialized lazily, at the moment something is about to read the
+target, and the encoder it opens **stays current** so the write or the read that follows continues in it -
+the clear already piggybacks wherever the attachment set allows. Its boundary is then forced by the next
+different attachment set, which is the pass structure rather than the clear, and clearing eagerly to batch
+them would pay for targets a later pass overwrites anyway, which is exactly what `clearIsRedundant` exists
+to avoid. So the engine's seven clears in that load frame are not seven removable boundaries, and the one
+boundary a frame that remains is the price of the encoder switch the Metal 4 attachment map is designed to
+remove. The honest next lever on this chain is therefore item 3 and its prerequisite - the Metal 4 path -
+and not a batching pass on the current one.
+
 **Apple documentation.**
 
 - Understanding the Metal 4 core API:
