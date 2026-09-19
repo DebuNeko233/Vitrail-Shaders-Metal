@@ -887,6 +887,41 @@ actually hot rather than the one that is easiest to change.
    here should be the kind of change that survives that, which means it belongs in the shared
    descriptor bookkeeping rather than in one of the two paths.
 
+**Measured, and the opportunity is smaller than the counter's own noise.** One window (3600x2038, Photon
+v1.3b, 600 frames at 100 per cent), one scene, two builds that differ only in how a binding is compared:
+
+| counter | before | wrappers compared | by resource and mip range |
+| --- | --- | --- | --- |
+| texture binds | 86580 | 86505 | 86588 |
+| sampler binds | 84780 | 84705 | 84788 |
+| buffer binds | 131533 | 124740 | 129231 |
+| pipeline binds | 32772 | 32515 | 32808 |
+| GPU ms a frame | 23.66 | 23.73 | 23.68 |
+
+The middle and right columns differ **only in how a texture binding is compared**, and their `buffer`
+counts differ by 3.6 per cent - which no change to texture comparison can cause. That counter's run-to-run
+spread is therefore at least 3.6 per cent, and the 5.2 per cent it appeared to fall by in the middle
+column is that spread rather than the filter. `texture` and `sampler` are tight counters (0.1 per cent
+across all three) and they moved not at all: **this chain binds each sampled image about once per pass, so
+there is no redundant re-bind to remove.** The exit criterion's first clause - bindings per frame fall -
+is **not met on this pack**, and this is the null result P0's rule exists to produce. What the change is
+kept for is the direction the phase's third item names: the comparison lives in the shared descriptor
+bookkeeping (`sameSlice` for a buffer slice, the texture's own resource plus the view's mip range for a
+texture), which is where P5's argument-buffer surface counts the same binds, and it can only ever remove a
+call - what a descriptor holds afterwards is the same either way. Frame time did not regress: 23.65 and
+23.68 against 23.66, and on the still view the same comparison reads 19.99 ms against 19.96. The picture
+did not change either: across the two builds the still view differs in 1.57 per cent of its pixels by more
+than 8 levels with a worst pixel of **46**, which is *below* the 0.994 per cent and worst 52 two runs of
+one build differ by.
+
+**The uniform question is answered by reading the call sites rather than by assuming.** Every uniform
+upload goes through `MetalRenderPass.allocateTransient` -> `MetalCommandEncoder.transientMemory()` ->
+`MetalTransientMemory.allocateGpuMapped`, which allocates from the shared block allocator and not a buffer
+per draw: the three call sites are `MetalRenderPass:458`, `:483` and `:521`. The one buffer this class
+creates for itself is the argument buffer, once per layout, kept in `argumentBufferStates` and released
+through the command encoder's own destroy queue (`:725`). **There is no per-draw buffer creation on either
+path**, so the second item closes with that finding rather than with a change.
+
 **Apple documentation.** Binding and resource management:
 
 - Resource fundamentals: https://developer.apple.com/documentation/metal/resource-fundamentals
