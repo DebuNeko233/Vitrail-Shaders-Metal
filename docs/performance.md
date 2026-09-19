@@ -1303,6 +1303,23 @@ because that happened inside the device's constructor the whole Metal device fai
 session fell back to OpenGL, with the pack undrawn. A path that fails must fail **closed**: every release
 goes through a guard now, and the reason a device is not on Metal is in the log above the line that says so.
 
+**And the harness can measure the frame with no pack in it, at fullscreen, uncapped - which is the
+configuration a migration of the frame path is judged in.** Three additions make that a run rather than a
+ritual: `--no-pack` stages no pack and writes the selection disabled, so the game draws its own image
+through this backend and nothing of a pack is in the frame; `--fullscreen` puts the measurement profile's
+window mode under the run's control, because the display's own mode is where a frame's ceiling is read and
+windowed sessions answer to the compositor; and the probe is armed by the run's *shape* - a pack's first
+full frame where there is a pack, the server's own world-load line where there is not, because a session
+with no pack has no pack frame to wait for and would otherwise never be counted at all.
+
+Measured in that configuration, M5 Pro, 1920x1200 fullscreen, `maxFps` at the slider's maximum, 600 frames:
+**1.77 ms a frame, 566 frames a second**, 1.48 ms of it GPU time, with 3.2 render passes and 2 blits a frame
+and no compute and no clears at all - the game's own renderer through this backend with no pack in it. The
+same run with the Metal 4 path carrying its frame-shaped submission reads **1.77 against 1.79 ms** - a
+difference of one per cent, with the path's own cost measured at **16.6 microseconds a frame** against the
+55 it costs with a pack loaded. So the ceiling the migration has to be judged against is 566 frames a
+second, and the new path's own overhead in that frame is under two per cent of it.
+
 **Apple documentation.**
 
 - Understanding the Metal 4 core API:
