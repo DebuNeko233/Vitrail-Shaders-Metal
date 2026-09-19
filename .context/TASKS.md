@@ -177,6 +177,23 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   the P0 numbers, the fallback is exercised deliberately at least once, and no Metal 4 type appears
   anywhere under `common/`.
 
+  - **Reconnaissance done, so the first edit is named rather than guessed.** The engine has no way today to
+    say "the same attachment set, and then a different one": on the seam a pass boundary *is*
+    `CommandEncoder.createRenderPass(RenderPassDescriptor)`, and every caller that asks for one gets a new
+    encoder. The call sites that would express the distinction are the mixins hooking that method -
+    `mixin/sodium/MixinDefaultChunkRenderer.java:130`, `mixin/CloudRendererMixin.java:76`,
+    `mixin/QuadParticleFeatureRendererMixin.java:64`, `mixin/WeatherEffectRendererMixin.java:120` - and the
+    capability surface they would carry it on is `mixin/metallum/MetalCommandEncoderMixin.java:31` (beside
+    `ComputeCommands`, `AttachmentCommands`, `ScaleCommands`). On the backend the decision lives in three
+    places: `MetalCommandEncoder.renderCommandEncoder` (`:358`) opens an encoder, `submitRenderPass`
+    (`:555`) closes one, and `invalidateEncoderState` (`:287`) is the existing "this encoder may no longer
+    be reused" signal. **The first bounded step is therefore a semantic seat** - one capability that says
+    "the attachment set is the one already open; only its contents or state differ" - published by Vitrail
+    and answered by the backend, with the backend free to keep using one encoder or to end it. No Metal 4
+    type crosses: the capability carries the attachment description and the contents facts the engine
+    already computes (`AttachmentContents`, `setNextPassContents`), which is what item 2 and `AGENTS.md`
+    require, and it is the same rule P1's capabilities were built under.
+
 The roadmap is a page rather than this list: it records what is already implemented so it is not built twice, what is actually absent, the phases, and their exit criteria. What this list owns is the intent and the order.
 
 - [ ] P0 - Instrument. Three counters behind a marker: render encoders per frame, bytes stored and loaded per attachment, bindings per frame split by kind. A phase whose number was never captured does not proceed.
