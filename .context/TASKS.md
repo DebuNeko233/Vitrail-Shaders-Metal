@@ -1033,6 +1033,32 @@ doubt, named rather than papered over**: the counter proves `take` copied nothin
 `ask` never being called, that inference resting on the map being empty. Counting `ask` itself is the airtight
 version and is a small addition if this verdict ever needs to carry weight.
 
+### Phase 7 - the compute dispatch allocation inventory, verified in code
+
+The plan's premise is confirmed at the sites rather than remembered. `BackendComputePass.dispatch` calls
+`PackComputeBindings.resolve` per dispatch, and that call allocates:
+
+| site | allocation |
+| --- | --- |
+| `PackComputeBindings.java:83` | `new LinkedHashMap<>()` for buffers |
+| `PackComputeBindings.java:98` | `new LinkedHashMap<>()` for textures |
+| `PackComputeBindings.java:99` | `new LinkedHashMap<>()` for sampler states |
+| `PackComputeBindings.java:43-45` | `Map.copyOf(...)` three times, in `Resolved`'s compact constructor |
+| `PackComputeBindings.java:146-172` | one `new Sampled(...)` per sampler reached |
+
+So six map allocations a dispatch plus the sampler objects. The pattern is not recompiled per dispatch
+(`COLOUR_IMAGE` is a static `Pattern`), but the matching and the `TargetName` work run inside the same call.
+
+**What the plan's own order says to do first, and why it has not been done yet.** Section 48 puts measurement
+before the change and section 33's acceptance is an allocation count, not a feeling: "before: maps/dispatch,
+objects/dispatch; after: significantly lower" with the same bound names, resource count, ping-pong side and
+compute output. Nothing in either repository counts allocations per dispatch today, so the first step is a
+counting line - the same shape as `TargetCopyCensus`, which this session already added and read - and only
+then the candidate section 32 sanctions: reusable scratch maps cleared and filled per dispatch, with the
+Map ABI unchanged and `Resolved` still copying, so the backend can never see a map it holds mutate under it.
+There is no cached `Resolved` anywhere (`resolve` builds fresh maps on every call), which is what makes the
+scratch-map candidate safe rather than merely plausible.
+
 ## Pre-M4 boundary cleanup (metallum docs/pre-m4-boundary-cleanup.md carries the long form)
 
 The `render.metal3` sealing is done (metallum `267f3b6`) and the generation-neutral capability vocabulary exists
