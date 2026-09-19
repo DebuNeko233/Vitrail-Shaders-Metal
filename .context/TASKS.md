@@ -312,7 +312,17 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   different selections. **The capability verdict is not deterministic run to run**, which breaks the one rule
   this migration leans on hardest (AUTO from capability, never a chip name) and is therefore **ahead of M4**,
   whose behaviour depends on that answer. Both live in `render.execution` and the log already prints the
-  capability line, so it is small to chase.
+  capability line, so it is small to chase. **The cause is now located.** The two arms' capability lines
+  differ in **exactly two fields** - arm `a` `argumentTable=false render=false`, arm `b`
+  `argumentTable=true render=true`, everything else equal - and in `MetalDeviceCapabilities` those two are the
+  only fields read through **`Metal4.canBindAndDraw()`**: `argumentTable` is
+  `respondsTo(device, "newArgumentTableWithDescriptor:error:") || respondsTo(..., ":")` **AND** that functional
+  probe, and `render` is `renderEncoder && canBindAndDraw()`. A selector question cannot flip between
+  processes, so the flipping part is the probe that actually makes a table, binds through it and draws: **its
+  first answer in a session is a false negative**, and AUTO currently reads it as "this device cannot". The
+  fix is two small things - do not turn a transient failure into a capability verdict (retry or warm up before
+  the verdict is read), and make the failure say what failed so a false negative is distinguishable from an
+  absence. It stays ahead of M4, whose behaviour depends on this answer.
 **Prerequisite ①'s last piece (`MetalPipelineKey`) is specified down to the lines it touches, and not
   started.** Where the identity material is: `MetalDevice.getOrCompilePipeline(RenderPipeline)` (line ~408)
   is the only place a compiled pipeline is made - `this.compiledPipelines.computeIfAbsent(pipeline, p ->
