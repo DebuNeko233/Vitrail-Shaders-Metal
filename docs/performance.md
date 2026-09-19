@@ -1235,6 +1235,66 @@ the scaler wants textures that are readable and renderable by its own encoders, 
 colour texture is, but the scaled texture is one this engine allocates - so its usage flags are the first
 thing to check if a scaler refuses to be made at all.
 
+**Which side of the seam MetalFX lives on.** The backend's, and the rule that decides it is the one
+`AGENTS.md` already states: Vitrail owns shader-pack policy, semantics and scheduling, a backend owns
+native GPU execution, and a capability crosses only where the public API cannot express the operation
+and never as a handle. MetalFX is execution - a framework, two bound objects and an encode into the
+frame's command buffer - so it belongs in `metallum`, beside the argument-buffer decision and the
+resource bindings that are also the backend's business. What Vitrail owns is the *choice*: which
+upscaler, at what scale, and in the file that describes a pack. The distinction is worth naming
+precisely, because Vitrail's `common` module is not "no third-party API" - it already implements
+Sodium's `ConfigEntryPoint` in `dev.vitrail.sodium.ConfigEntry`, and that is a user-interface API rather
+than an execution one. The line is execution and handles, not dependencies.
+
+**The ladder, with what each rung actually needs.** All four exist, they are not interchangeable, and
+their floors and their inputs differ - which is the whole answer to "turn on everything the hardware
+can do":
+
+| rung | available from | inputs it needs | what it changes |
+| --- | --- | --- | --- |
+| `MTLFXSpatialScaler` | macOS 13 | the colour texture, nothing else | the picture, by being a different upscaler |
+| `MTLFXTemporalScaler` | macOS 13 | colour, **depth**, **motion vectors**, a jitter offset, a reset discipline | needs jitter, which is a fact a pack can see |
+| `MTLFXFrameInterpolator` | **macOS 26** | colour, depth, motion, output, **and a scaler to sit on** | presentation: it generates frames |
+| `MTL4FX*` variants | newer still | the same inputs on a Metal 4 command buffer | belongs to P5 |
+
+So **availability is automatic and enabling is not**, and the two are separated on purpose. Availability
+is asked of the API per device - `+supportsDevice:` on each descriptor, and `+supportsMetal4FX:` for the
+Metal 4 variants - while a framework that is not there, or a class that does not answer, means
+unavailable. That is a stronger test than any version table and it needs no version strings in this
+repository at all. Enabling is a decision per rung, because the rungs above spatial ask the frame for
+facts it does not currently produce and that a pack can observe. Spatial needs nothing the scaled frame
+does not already have, so it is the rung this phase implements. Temporal needs **jitter**, and jitter is
+pack-visible: a pack that accumulates temporally would be jittered twice, and the plan's own rule is
+that what a pack is told about its resolution and its samples is pack semantics, decided per pack with
+evidence. Interpolation needs those plus a scaler to sit on, and it changes what is presented rather
+than what is drawn - a third decision - and it is the one composition the API forces rather than offers,
+since the interpolator takes a scaler instead of replacing one. That composition is one entry in the
+interface, not two settings.
+
+**The interface, and where the choice is written.** `upscaler=` beside `renderscale=` in
+`vitrail/pack.txt`, the file this engine already keeps per pack, so the choice travels with a pack
+exactly as its render scale and its shadow distance do. Both halves of the screen side already exist:
+this engine's own settings screen, and the Sodium entry that puts a page under the mod's name into the
+video settings Sodium owns - which is also where a player with Reese's Sodium Options sees it, that mod
+implementing the same entry point. One thing there is stale and this work has to fix it: the entry
+registers its second page - the settings that are the engine's own rather than a pack's, which is
+exactly where an upscaler choice belongs - **on Vulkan alone**, and Metal has been the production path
+since the rule in `AGENTS.md` changed. A rung the device does not support is shown as unavailable there
+rather than hidden, because "this Mac cannot do it" and "this build cannot do it" are different
+sentences and a player is owed the right one.
+
+**Work.**
+
+1. Measure the seat as it stands: the FSR 1.0 upscale's and the sharpen's own `gpuMs` at the scales the
+   tester uses, so that "not slower than what it replaced" has a number - done, 2.31 ms at 1800x1019.
+2. Implement the first rung: the framework loader, the descriptor and the scaler bound in `metallum`,
+   the scaler cached by its configuration, the two-method capability across the seam, and
+   `RenderScale.endWorld` choosing between them.
+3. Put the choice where it belongs: `upscaler=` parsed beside `renderscale=`, shown on the engine's own
+   page in the Sodium entry as well as on this engine's screen, and the stale Vulkan-only gate on that
+   page removed.
+4. Verify per pack, under the compatibility evidence policy, rather than per engine.
+
 **Exit criterion.** A recorded decision, and either an implementation that meets the regression set
 with the option off and on, or a recorded decision not to implement it. Both are valid endings; a
 half-enabled upscaler is not.
