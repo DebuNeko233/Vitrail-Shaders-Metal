@@ -154,6 +154,34 @@ class PassWritesEveryPixel(unittest.TestCase):
         # A pass the chain cannot place answers "everything", never "nothing".
         self.assertIn('? Set.copyOf(pass.attachments())', PACK_CHAIN.read_text(encoding='utf-8'))
 
+    def test_the_traffic_fixture_can_decide_the_question_the_switch_asks(self):
+        # A switch that removes attachment traffic can only be cleared by a frame whose picture is a function
+        # of the state and not of the weather: two launches of the reference scene differ by a mean channel
+        # difference of 30.68 with their counters agreeing to 0.02 per cent, so screenshots of it cannot judge
+        # anything. This fixture is that frame - the writer paints every pixel from its own coordinates, the
+        # control beside it can leave a pixel unwritten, and the reader quantises so one wrong pixel is a
+        # whole level - and these are the properties the comparison rests on.
+        fixture = ROOT / 'tests/fixtures/shaderpacks/attachment-traffic-contract/shaders'
+        self.assertEqual({path.name for path in fixture.iterdir()},
+                         {'composite.vsh', 'composite.fsh', 'composite1.vsh', 'composite1.fsh',
+                          'final.vsh', 'final.fsh'})
+        writer = (fixture / 'composite.fsh').read_text(encoding='utf-8')
+        self.assertIn('/* DRAWBUFFERS:0 */', writer)
+        self.assertIn('mod(floor(gl_FragCoord.x / 16.0) + floor(gl_FragCoord.y / 16.0), 2.0)', writer)
+        # The writer may not sample anything, or the load it is supposed to make unnecessary would be needed.
+        self.assertNotIn('texture2D(', writer)
+        # And nothing in it may depend on the sun, the world or the pack's clock.
+        for weather in ('frameTimeCounter', 'sunPosition', 'worldTime', 'cameraPosition'):
+            self.assertNotIn(weather, writer)
+
+        control = (fixture / 'composite1.fsh').read_text(encoding='utf-8')
+        self.assertIn('discard;', control)
+        self.assertNotIn('texture2D(', control)
+
+        reader = (fixture / 'final.fsh').read_text(encoding='utf-8')
+        self.assertIn('uniform sampler2D colortex0;', reader)
+        self.assertIn('floor(colour * 8.0 + 0.5) / 8.0', reader)
+
     def test_the_answer_is_reported_and_not_yet_acted_on(self):
         # Carried and said, not spent: the store action waits until the answer has been measured
         # against a session that does not have it.
