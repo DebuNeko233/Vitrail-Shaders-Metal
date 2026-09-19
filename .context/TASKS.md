@@ -177,7 +177,16 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   the P0 numbers, the fallback is exercised deliberately at least once, and no Metal 4 type appears
   anywhere under `common/`.
 
-  - **Reconnaissance done, so the first edit is named rather than guessed.** The engine has no way today to
+  - **The skeleton is done: the objects are made on device** (`MTL4Probe`, one queue, one
+    allocator and a begun-and-ended command buffer, made and released at device creation, nothing
+    in a frame path). What it taught is a rule for the rest of the path: **a device implements a
+    subset of the factory surface its header declares** - `newCommandAllocatorWithDescriptor:` is
+    declared in this machine's SDK and is not implemented by the device, and sending it is an
+    Objective-C exception that ends the process - so every selector is asked for with
+    `respondsToSelector:` first, and `preferredGraphicsBackend` in the instance's `options.txt`
+    has to be checked after any startup crash, because Vitrail puts it back to Vulkan by design
+    and the next run then measures MoltenVK.
+  - **What remains is the path itself.** Reconnaissance done, so the first edit is named rather than guessed.** The engine has no way today to
     say "the same attachment set, and then a different one": on the seam a pass boundary *is*
     `CommandEncoder.createRenderPass(RenderPassDescriptor)`, and every caller that asks for one gets a new
     encoder. The call sites that would express the distinction are the mixins hooking that method -

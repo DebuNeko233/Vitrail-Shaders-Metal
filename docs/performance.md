@@ -1161,6 +1161,31 @@ closed before a device has been asked, so a caller can act on the hardware's ans
 and with the javadoc saying plainly that nothing in this engine renders through Metal 4 yet, which is what
 keeps a capability from being read as a promise. No caller takes it up: the path itself is item 3's work.
 
+**And the objects of the new structure can actually be made, which the skeleton now proves.** At device
+creation, once the two questions above have been answered, `MTL4Probe` makes one of each - the queue of the
+new command structure, an allocator for a command buffer's working memory, and a command buffer begun on
+that allocator and ended - and releases them. Nothing in a frame path creates one, and the log on the M5
+Pro carries the three lines together, the two MetalFX ones and this:
+
+    Metal 4 core API: available, the device has the family, answers to newMTL4CommandQueue, and a queue,
+    an allocator and a command buffer were made and released
+
+**The first version of it ended the process, and what it taught is worth more than the skeleton.** It sent
+`newCommandAllocatorWithDescriptor:` because the SDK declares it, and the device answered
+`-[AGXG17SDevice newCommandAllocatorWithDescriptor:]: unrecognized selector` - an
+`NSInvalidArgumentException`, which is a SIGABRT and not a catchable error, three seconds into a session
+that had already said yes to the family and to `newMTL4CommandQueue`. **A device implements a subset of the
+factory surface its own header describes**, which is the same lesson the spatial scaler taught with
+`setInputContentOriginX:`, and it is now a rule for every selector of the new path: asked for with
+`respondsToSelector:` first, the buffer's own protocol included, with the descriptor-less
+`newCommandAllocator` preferred where the device offers it.
+
+One trap that cost two runs and is worth writing down for anyone measuring here: **a crash during startup
+makes Vitrail put the graphics API back to Vulkan** ("The last startup ended badly", by design), so the next
+run comes up on MoltenVK with no Metal device, no pack and no probe window - and the harness reports that
+as an empty collection rather than as a wrong backend. The setting is `preferredGraphicsBackend` in the
+instance's `options.txt`.
+
 **Item 4's prize is sized, and on this chain it is one boundary a frame.** In a 600-frame window at 100 per
 cent the probe reads `encoders` 18210 and `passChanged` 17610, which is **30.35 boundaries and 29.35 pass
 changes a frame**, with `submit` at 600 - one command buffer a frame - so the engine's own steady overhead
