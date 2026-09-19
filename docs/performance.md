@@ -448,7 +448,9 @@ cent of frame time could not be attributed to anything.
 
 The companion backend's `tools/freeze-world.py` closes that: it rewrites the staged world's `level.dat`
 - gzipped NBT, losslessly, with a self-test that round-trips a document carrying every tag type before it
-is trusted with a real save - pinning `Time` to noon and setting the game rules that let a world change
+is trusted with a real save - pinning `Time` to mid-morning, and not to noon, because noon is exactly
+where vanilla swaps the sunrise band for the sunset one and a comparison whose runs straddled it drew a
+different number of sky passes - and setting the game rules that let a world change
 on its own (the daylight and weather cycles off, mob spawning and its patrols and traders off, random
 ticks and fire spread off). On a real save it is verified to change those values and nothing else. The
 acceptance test is two runs of **one configuration**, where any difference at all is irreproducibility:
@@ -468,18 +470,56 @@ already standing in a save, and one extra entity draws a family's pass: measured
 appeared in one run of one configuration and not the other, which moved the depth attachments by a tenth
 and the counted bytes by six per cent. So the freeze takes the entity stores out of the copy as well -
 `dimensions/*/*/entities`, which is the mobs and not the player, whose data is `players/` beside them.
-The same two-run test then reads: `loadedMiB`, `storedMiB`, `depthAttachments`, `blits` and the depth
-byte counters **identical**, encoders within 0.01 per cent, and **25.86 ms of GPU time a frame within
-0.11 per cent**. One variable pass is left - `shadow_cutout_cull entity`, which the player's own entity
-is enough to draw - and it costs the eleventh of a per cent the frame time varies by.
+The same two-run test then read the byte and depth counters identical, encoders within 0.01 per cent and
+GPU time within 0.11 per cent, with one variable pass left: `shadow_cutout_cull entity`, which the
+player's own entity is enough to draw.
 
-So the resolution of a comparison is now **a tenth of a per cent**, against the three to nineteen per
-cent it was, and every claim from here on can be read against that. What the fixture does not give
-is identical pixels: particles respawn and the idle arm is in another position, so thirty per cent of
-pixels still differ between two runs of one configuration. **An image verdict therefore needs a scene
-without them** - the companion repository's own smoke fixtures, which already compare screenshots - and
-that is what the picture half of P1 and the copy half of P4 are still waiting on. The counter half, which
-is what a frame-time comparison needs, is closed.
+**And the player comes out with them.** The body the camera is in is the last thing inside a frame that
+varies - a player draws their own entity and their hand, and that pass is family-scoped, so it moved the
+counted bytes even after the mobs were gone. The freezer therefore sets the world's game type to
+spectator as well, in `level.dat`'s `Data.GameType` and in every `players/data/*.dat` beside it, and the
+harness asks for it on every run. Two runs of one configuration, Photon at 1800x1019:
+
+| counter | run one | run two | difference |
+| --- | --- | --- | --- |
+| depth attachments / blits / their bytes | 4800 / 6600 / 179933.4 | same | 0 |
+| blittedMiB | 135186.8 | 135186.8 | 0 |
+| loadedMiB / storedMiB | 747787.1 / 934913.2 | 747680.6 / 934806.6 | 0.014 per cent |
+| encoders | 18404 | 18377 | 0.15 per cent |
+| pipelines | 33896 | 33924 | 0.08 per cent |
+| textures / samplers | 88401 / 86601 | 88200 / 86400 | **0.23 per cent** |
+| buffer binds | 135489 | 127050 | 6.2 per cent, unexplained |
+| ms a frame of GPU time | 26.79 | 26.43 | 1.4 per cent |
+
+Texture and sampler binds were five to nine per cent apart before the player left the scene, which is the
+whole distance between an instrument that can see a small effect and one that cannot: the four-arm P1
+session below reads its two switches against that floor. **The counters repeat to a quarter of a per
+cent; the frame's own time repeats to 1.4 per cent**, which is the floor a frame-time claim has to beat -
+and it is why P1's re-measurement below can say what its switches do *not* buy, but not what a tenth of a
+per cent would buy. Two counters still move without the pass record naming them: 27 passes in 18404, and
+8439 buffer binds.
+
+**The pixels still do not repeat, and this is what is left of the fixture.** Two runs of one
+configuration differ in **79 per cent of their pixels** (mean channel difference 7.18). The difference is
+not one thing. One region of it is named: 335431 pixels inside a 520x700 box around the scene's nether
+portal differ by up to 223 levels, because a portal's swirl texture and the particles it sheds advance
+with the world's age and no game rule reaches them. The rest is spread over the whole frame, and its
+shape is not a moved object or a changed exposure: translating one frame against the other by up to two
+pixels in either direction does not improve it, scaling the darker frame by the measured brightness ratio
+(1.0061) does not improve it either, the two frames' mean level in the terrain is the same (31.17 against
+31.36 of 255) and yet 98 per cent of the pixels in a terrain window differ. That is the shape of a
+per-frame noise or dither pattern - the scene is dark, and the pack's own frame-varying noise is a large
+fraction of a dark pixel - and it is the second thing the fixture would have to remove: **a picture
+comparison needs a scene that is bright enough for its noise to be below the level of the claim, and
+still enough that no animated block texture, particle or cloud is in frame.**
+
+What the picture comparison *can* already say is bounded and worth keeping: the two switches of P1 were
+compared on this scene and the failure mode their exit criterion names - a target emptied that a later
+pass reads, which comes back as a region of the frame cleared to black - does not appear anywhere in
+either comparison. What it cannot say is that nothing at all moved, which is what a verdict would need.
+**An image verdict therefore still needs a scene without them** - the companion repository's own smoke
+fixtures, which already compare screenshots - and that is what the picture half of P1 and the copy half
+of P4 are still waiting on. The counter half, which is what a frame-time comparison needs, is closed.
 
 ---
 
@@ -668,18 +708,18 @@ answer of a pack's can reach it. Measured over 600 frames of the same scene:
 
 | | per frame | share of its side |
 | --- | --- | --- |
-| attachment loads | 1558 MiB | - |
-| attachment stores | 1870 MiB | - |
-| depth loaded | 172 MiB | 11.0% of the loads |
-| depth stored | 272 MiB | 14.5% of the stores |
-| depth attachments | 11 a frame | - |
+| attachment loads | 1246 MiB | - |
+| attachment stores | 1558 MiB | - |
+| depth loaded | 100 MiB | 8.0% of the loads |
+| depth stored | 200 MiB | 12.8% of the stores |
+| depth attachments | 8 a frame | - |
 
 So the whole of the depth attachment - both directions, the one slot no lifetime fact can currently
-reach - is **444 MiB a frame, 13.0% of the frame's attachment traffic**. Wiring its two doors could not
+reach - is **300 MiB a frame, 10.7% of the frame's attachment traffic**. Wiring its two doors could not
 recover all of that even if they were free, and they are not: depth accumulates, so a pass that
 depth-tests against what is already there needs its result visible to the pass after it, and only a
 store that the next operation on that depth overwrites or clears before anything reads it can go. The
-load half already removed **509 MiB a frame and bought nothing**, and the entire remaining prize is
+load half already removed **503.8 MiB a frame and bought nothing**, and the entire remaining prize is
 smaller than that.
 
 Apple's guidance for that slot is worth reading against the current code: `storeAction.dontCare` is
@@ -699,12 +739,14 @@ state between draws. That is the part unified memory does not hand over, and `en
 that says whether it is happening: 19575 over 600 frames is 32.6 a frame against 26 pack passes.
 
 **P1 is closed.** Both halves are wired, off by default, and measured on the pack and the hardware the
-plan was written for: the load half removes a sixth of the frame's attachment traffic and no frame time
-at all; the store half removes nothing, because this chain reads almost everything it writes; the depth
-slot, the only attachment left, is worth less than the half that already measured zero; and the boundary
-switch moved no boundary. The mechanism stays - the lifetime facts are what P4's reachability work
-consumes, and the switch costs nothing when nothing is unread - and the phase's place in the order does
-not.
+plan was written for, in the last session on the fixture that repeats: the load half removes **40.4 per
+cent of the frame's attachment loads, 503.8 MiB a frame, and no frame time at all** (+0.1 per cent against
+a 1.4 per cent floor); the store half removes **27.99 MiB a frame, one colour target the chain announces
+as read by nothing, and no frame time either**; the depth slot, the only attachment left, is worth 10.7
+per cent of the traffic and less than the half that already measured zero; and the boundary switch does
+reach the backend, merging 14 encoder boundaries in 600 frames, and buys nothing measurable. The
+mechanism stays - the lifetime facts are what P4's reachability work consumes, and the switch costs
+nothing when nothing is unread - and the phase's place in the order does not.
 
 What would reopen it is a frame bound on memory rather than on the fragment shader, and that is a
 property of the resolution and the pack rather than of the code: the deciding experiment is this same
@@ -725,47 +767,63 @@ them targets rather than scratch. They are recorded because they are where the b
 future frame were memory-bound, and because a reader who finds the verdict above surprising should see
 what Apple's own answer to the same problem is.
 
-**Re-measured with the capability actually delivered.** One session, four configurations of one scene,
-1800x1019: plain, `-Dvitrail.elideTargetTraffic=true`, `-Dvitrail.narrowStorageBoundary=true`, and both.
+**Re-measured on the scene that repeats.** Same pack, same 1800x1019 window, one session, four
+configurations: plain, `-Dvitrail.elideTargetTraffic=true`, `-Dvitrail.narrowStorageBoundary=true`, and
+both. The world is the frozen spectator fixture above, so this is the first session in which the four
+arms draw the same frame inside their passes: texture and sampler binds within 0.27 per cent between them,
+identical depth and copy-back counters, 600 answered frames each.
 
 | | plain | elide | narrow | both |
 | --- | --- | --- | --- | --- |
-| loadedMiB | 884471 | **582311 (-34.2%)** | 885708 (+0.1%) | 633669 (-28.4%) |
-| storedMiB | 1071597 | **1054911 (-1.6%)** | 1072834 | 1106270 |
-| depth attachments | 6000 | 6000 | 6000 | 6600 |
-| copy-backs | 6600 | 6600 | 6600 | 6600 |
-| encoders | 18981 | 19017 | **19252** | 19823 |
+| loadedMiB | 747659 | **445392 (-40.4%)** | 747595 (-0.0%) | 445435 (-40.4%) |
+| storedMiB | 934785 | **917993 (-1.8%)** | 934721 | 918035 |
+| depth attachments / copy-backs | 4800 / 6600 | same | same | same |
+| blittedMiB, and the depth bytes | 135186.8 / 179933.4 | same | same | same |
+| encoders | 18366 | 18372 | **18352** | 18381 |
+| textures / samplers | 88176 / 86376 | 88166 / 86366 | 88027 / 86227 | 88268 / 86468 |
+| ms a frame of GPU time | 26.32 | 26.35 (+0.1%) | 26.11 (-0.8%) | 26.50 (+0.7%) |
 
-**The store half works, and it is worth exactly what the engine said it was.** It removes 16686 MiB over
-600 frames - **27.8 MiB a frame, one full-size colour target** - which is the one target the load's own
-announcement names as read by nothing in the frame. That number is mechanism-shaped rather than
-scene-shaped, and the copy-back and depth counters are identical across those three arms, so it is the
-switch. The boundary switch also reaches the backend now, and changes something: 271 more encoders over
-the window, half an encoder a frame.
+**Both halves work, and neither buys a millisecond.** The load half removes 302267 MiB over the window -
+**503.8 MiB a frame, 40.4 per cent of the frame's loads** - and the store half removes 16793 MiB - **27.99
+MiB a frame, one target's worth**. That second number is the same one the earlier session measured on a
+different scene (27.8 MiB), which is what makes it mechanism-shaped rather than scene-shaped: it is the
+store of a colour target the chain's own announcement names as read by nothing afterwards, and it does not
+depend on what the world looks like. The depth and copy-back counters are identical in all four arms and
+each switch moves the one counter it is supposed to, so these are the switches and not the scene. The
+boundary switch reaches the backend as well and **merges 14 encoder boundaries in 600 frames**, where the
+earlier session - measuring a wrapper that could not answer the question - read 271 more.
 
-**And the frame-time readings from that session are not usable**, for a reason worth writing down: the
-four arms drew the same pass *structure* (identical depth and copy-back counters) but not the same frame -
-the texture and sampler counts differ by five to nine per cent between them, which is the intra-frame
-variation this fixture cannot remove: a hand, an entity, a particle. So the two time columns for `narrow`
-(+18 per cent) and `both` (+16 per cent) belong to the scene those runs happened to draw and not to the
-switch, exactly as the earlier four per cent did. What P1's store half is *worth* in milliseconds is
-therefore still unmeasured, but no longer because it is not delivered: because a comparison of a few per
-cent needs two runs that draw the same frame down to the entity, and this world does not.
+**The time columns are readable now, and they say the two switches are worth nothing here.** +0.1 per
+cent with both load and store elided, -0.8 per cent for the boundary switch alone, +0.7 per cent for both
+- against the 1.4 per cent two runs of one configuration differ by in GPU time on this fixture. So this
+instrument can say **"it buys nothing measurable"** and cannot say "it buys nothing at all", which is a
+weaker claim than the one the phase's premise wanted and a stronger one than the null the previous session
+had to hedge. The switch stays off by default: it costs nothing, it buys nothing here, and a change to
+what Metal is told still owes a picture comparison.
 
-That is the instrument's next gap, and it is narrower than the one the fixture closed: the pass structure
-repeats and the bytes repeat, and what varies is what is drawn *inside* one. Two ways out and they are
-worth naming before either is built: freeze the last thing that moves - the player's own entity, by
-putting the world's game type into spectator, which is one field in the same file the freezer already
-rewrites - or run each configuration more than once and compare the least-perturbed of them.
+**The picture comparison answers its failure mode and not the pixels.** Simpler than the counters and
+already worth recording: comparing the arms' pictures shows no region of the frame cleared to black or
+otherwise emptied, which is exactly what the exit criterion's wrong `dontClear` would produce - a target
+emptied that a later pass reads comes back as a region of the picture. The two switches differ from plain
+in 1.9 per cent of pixels by more than 8 levels, 141000 of those 161000 inside a box around the scene's
+nether portal - whose texture and particles animate between the two captures - and the remaining 19935
+scattered across the whole frame, which is the footprint of drifting particles rather than a region. The
+rest of the frame differs by one level, which is below what the dark scene's own noise does between two
+runs of one configuration (79 per cent of their pixels differ), this fixture's remaining gap. That is a
+weaker verdict
+than "image for image", and it is the strongest one this scene can give: **what is owed is a scene that
+repeats pixel for pixel**, and until it exists the exit criterion is met in the direction that matters - no
+region of the picture changed - and unproven in the direction that would catch a sub-level error.
 
 **Exit criterion.** Attachment bytes per frame fall on the P0 capture, the bindings and encoder counts
 do not regress, and the regression set in "Regression, not just frame rate" is unchanged, image for
 image. The counter alone does not close this phase. Two of the three are met on the pack measured above -
-the bytes fall and the counts do not regress - and the third is not: the image has not been compared on
-a scene that repeats, because two launches of one scene do not draw the same frame. The phase is closed
-on the verdict above and not on this criterion: what it was for is measured, the answer is that this
-frame does not pay it, and the comparison that would finish the criterion is owed to the deterministic
-fixture every later phase wants anyway.
+the bytes fall and the counts do not regress - and the third is half met: the pictures now exist for both
+switches on the fixture that repeats *structurally*, and they say the one thing a wrong action would say
+loudly - no region of the frame is emptied - while an image-for-image verdict still needs a scene that
+repeats pixel for pixel, which this one does not. The phase is closed on the verdict above and not on this
+criterion: what it was for is measured, the answer is that this frame does not pay it, and the comparison
+that would finish the criterion is owed to the deterministic fixture every later phase wants anyway.
 
 **Risk.** The failure mode is silent and looks like a pack defect, which is why the phase is
 entry-gated on P0 and exit-gated on the comparison rather than on the number.
@@ -966,7 +1024,8 @@ eleven copies is what this pack's declarations over-count, and it is not where a
 
 **Closed below the floor.** Re-measured on the scene that repeats, the two arms of that comparison still
 differ by a whole pass - one arm drew ten depth-attaching passes a frame and the other eleven, the
-residual `shadow_cutout_cull entity` variation the fixture does not remove - and one pass is worth one to
+`shadow_cutout_cull entity` variation that the fixture has since removed by putting the player into
+spectator mode - and one pass is worth one to
 two per cent of a frame, where the three copies are worth about a twentieth of a millisecond. **So this
 switch's effect is below what any comparison here can resolve, and the counter is the proof that it
 works**: eleven copies a frame become eight, and 6.24 MiB a frame of the 225 stops moving. It stays in
