@@ -8,7 +8,10 @@ FIXTURE = ROOT / "tests/fixtures/shaderpacks/shadow-mipmap-contract/shaders"
 SHADOW_TARGETS = ROOT / "common/src/main/java/dev/vitrail/render/ShadowTargets.java"
 GPU_FORMATS = ROOT / "common/src/main/java/dev/vitrail/render/GpuFormats.java"
 MIPMAP_REDUCTION = ROOT / "common/src/main/java/dev/vitrail/render/MipmapReduction.java"
-METAL_MIXIN = ROOT / "common/src/main/java/dev/vitrail/mixin/metallum/MetalCommandEncoderMixin.java"
+METAL_MIXIN_DIR = ROOT / "common/src/main/java/dev/vitrail/mixin/metallum"
+METAL_MIXINS_JSON = ROOT / "common/src/main/resources/vitrail.mixins.json"
+METAL_CAPABILITIES = ROOT / "common/src/main/java/dev/vitrail/compat/metallum/MetallumEncoderCapabilities.java"
+BACKENDS = ROOT / "common/src/main/java/dev/vitrail/render/Backends.java"
 METAL_BRIDGE = ROOT / "common/src/main/java/dev/vitrail/compat/metallum/MetallumDepthMipmapBridge.java"
 PACK_DIRECTIVES = ROOT / "common/src/main/java/dev/vitrail/pack/target/PackDirectives.java"
 
@@ -67,9 +70,26 @@ class ShadowMipmapContractTest(unittest.TestCase):
         self.assertIn("Backends.capabilities(encoder) instanceof MipmapCommands commands "
                       "&& commands.vitrail$generateMipmaps(texture)", reduction)
 
-        mixin = compact(METAL_MIXIN)
-        self.assertIn("import dev.vitrail.compat.metallum.MetallumDepthMipmapBridge;", mixin)
-        self.assertIn("return generateMipmaps(texture) || MetallumDepthMipmapBridge.generate(this, texture);", mixin)
+        # The capability is supplied by an adapter over the stable flat surface, not by injecting methods into
+        # whichever Metallum class happens to be named. Injection read as working until that class moved and the
+        # @Mixin target stopped resolving; the capability then vanished silently and shadows went dark again.
+        capabilities = compact(METAL_CAPABILITIES)
+        self.assertIn("MetallumFrameBridge.generateMipmaps(backend, texture) "
+                      "|| MetallumDepthMipmapBridge.generate(backend, texture)", capabilities)
+        self.assertIn("implements MipmapCommands, StorageImageCommands, ComputeCommands, "
+                      "AttachmentCommands, ScaleCommands", capabilities)
+
+        mixins = compact(METAL_MIXINS_JSON)
+        self.assertNotIn("MetalCommandEncoderMixin", mixins)
+        for source in METAL_MIXIN_DIR.rglob("*.java"):
+            # A capability injected into a named class leaves with that class, and nothing can tell: no mixin of
+            # this engine may carry one again, whichever Metallum class it names.
+            self.assertNotIn("MipmapCommands", compact(source), source.name)
+
+        resolver = compact(BACKENDS)
+        self.assertIn("if (carriesCapabilities(backend)) { return backend; }", resolver)
+        self.assertIn("if (MetallumFrameBridge.supports(backend)) { return adapterFor(backend); }", resolver)
+        self.assertIn("return METALLUM.computeIfAbsent(backend, MetallumEncoderCapabilities::new);", resolver)
 
         bridge = compact(METAL_BRIDGE)
         self.assertIn("package dev.vitrail.compat.metallum;", bridge)

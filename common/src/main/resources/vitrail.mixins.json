@@ -31,7 +31,6 @@
 		"access.IntermediaryShaderModuleAccessor",
 		"IntermediaryShaderModuleMixin",
 		"metallum.MetalBackendMixin",
-		"metallum.MetalCommandEncoderMixin",
 		"metallum.MetalDeviceMixin",
 		"MinecraftStartupGuardMixin",
 		"sodium.MixinDefaultChunkRenderer",
