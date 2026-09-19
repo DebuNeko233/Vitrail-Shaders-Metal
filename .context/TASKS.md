@@ -364,6 +364,14 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   `framePathReady()` is for. Three pins fired while writing it (the seam's log format, the queue seam's factory
   call, the `executing()` literal), each naming the line that moved; the third had pinned an implementation
   detail as if it were the design and now pins the property it was about.
+  **The next pack run reproduced the flip and exposed a trap in that seam.** The capability probe answered
+  `argumentTable=false render=false` again - a second independent observation, different session - and with the
+  selection degraded to Metal 3 the seam read `servicesSelected=metal3 servicesExecuting=metal3
+  referenceShell=false framePathReady=true`. **`framePathReady()` is true while the frame is drawn by Metal 3**,
+  because the selected generation is the one executing: the predicate is a self-consistency check, not "the
+  Metal 4 path is available". **M4 must not gate on it to decide whether the new path can be used** - that
+  question is the capability record's. Frame time was unmoved either way (`wallP50` 7.24 ms, `gpuM3Ms=4368.17`,
+  inside the session's 7.24-7.31 band), because both selections execute Metal 3.
   **And the readiness seam nothing asks**: `framePathReady()` and `isReferenceShell()` have exactly one reader
   in the whole source tree - the log line just added. `framePathReady()` is `!isReferenceShell() && selected()
   == executing()`, `executing()` is a constant `METAL3`, and AUTO's `selected()` is `metal4`, so readiness is
