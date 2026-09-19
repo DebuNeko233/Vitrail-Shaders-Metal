@@ -26,7 +26,7 @@ import java.util.Map;
  * resources are cleared, copied, mipmapped, or dispatched and what each declared resource means.
  */
 @Pseudo
-@Mixin(targets = "com.metallum.render.MetalCommandEncoder", remap = false)
+@Mixin(targets = "com.metallum.render.metal3.MetalCommandEncoder", remap = false)
 public abstract class MetalCommandEncoderMixin implements MipmapCommands, StorageImageCommands,
 		ComputeCommands, AttachmentCommands, ScaleCommands {
 
