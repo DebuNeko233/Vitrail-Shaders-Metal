@@ -181,7 +181,13 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   `MetalRenderPass`, `MetalComputeBridge`, `MetalDepthMipmapBridge`, `MetalSurface` and the `Metal3*` seats
   the specification names) and `com.metallum.render.shared` for the version-neutral resource classes.
   **Shared layer done** (`com.metallum.render.shared`, eleven classes, public by design, verified on both
-  scenes). **The facade was started and stopped on a third measurement: the 17-method surface is not the problem.**
+  scenes). **Prerequisite ① has its first piece**: `MetalResourceBinding` (the neutral record describing one binding
+  a compiled pipeline declares) is in `com.metallum.render.shared`, with the generation-specific remainder -
+  the argument-buffer encoder, the pipeline states, cull/fill/topology - still in the Metal 3 pipeline object.
+  Both scenes unchanged. **Next pieces of ①: the pipeline's *key/identity* and the argument-buffer layout's
+  neutral part; then ② `MetalDevice`'s facade with the queue coming from `MetalExecutionServices`; then the
+  frame path.**
+**The facade was started and stopped on a third measurement: the 17-method surface is not the problem.**
   Renaming the implementation to `Metal3CommandEncoder`, moving `MetalRenderPass` beside it and letting the
   compiler name what crosses produced **144 errors**, and their *content* is the finding: not the encoder's
   own API but its coupling into **`MetalDevice`'s pipeline cache** (`getOrCompilePipeline`,
