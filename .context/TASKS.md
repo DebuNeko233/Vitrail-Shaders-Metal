@@ -898,6 +898,39 @@ diagnostic fixture whose output is a function of the state - the fixture idiom t
 - or an in-session A/B. Until such a fixture exists, `elideTargetTraffic` stays experimental and unmeasured for
 correctness, which is exactly the state section 57.5 forbids at the end.
 
+### Phase 4 - attachment traffic: first correctness-cleared evidence (`run/at-fixture`, 2026-09-20 01:06/01:07)
+
+The fixture from round 11 ran, and this is the first picture verdict in this session that means anything:
+**mean channel difference 0.00, 0.00 % of pixels differing at all**, between `plain` and
+`-Dvitrail.elideTargetTraffic=true`, on a frame built to expose a wrong elision - the writer paints every
+pixel from its own coordinates and samples nothing, and the control beside it discards, so a load elided where
+it should not be shows as the checker missing from the discarding half.
+
+| | plain | elide | change |
+| --- | --- | --- | --- |
+| `loadedMiB` | 42677.7 | 42741.7 | +0.2 % |
+| `storedMiB` | 84391.8 | **79182.3** | **-6.2 %** |
+| `depthStoredMiB` / `depthAttachments` | 23493.8 / 3000 | 23493.8 / 3000 | 0 |
+| `renderPasses` | 6738 | 6756 | +0.3 % |
+| `gpuP50` | 1.27 | 1.19 | -6.3 % |
+| `wallP50` | 1.77 | 2.60 | +47 % |
+| picture | - | - | **0.00, bit-identical** |
+
+So the **store** half of the elision delivered (a colour target's store stopped: -5209 MiB over 600 frames,
+-8.7 MiB a frame) and changed no visible pixel, and the **load** half did not move on this fixture (+0.2 %,
+i.e. noise) - the load the writer makes unnecessary was already not being paid for, which is a fact about a
+fixture whose first pass is the one that fills the target rather than about Photon. **The wall-clock column is
+not a result**: these frames are 1.2 ms of GPU work, both arms ran minutes apart, and the fixture's shape is
+not the plan's target. The Phase 4 A/B that matters is still Photon's (`run/b2-elide` read `loadedMiB` -30.6 %,
+`storedMiB` -1.2 %), and **its correctness is now covered by an argument rather than by a screenshot**: the
+fixture shows the store elision removing traffic with a bit-identical picture, and its discard control shows a
+load that must not be elided is not.
+
+**What this does not yet settle.** Whether Photon's own `-30.6 %` load elision is safe is not shown by a
+fixture whose writer owns the target from its first pass; that needs a fixture that *reads* a target and then
+overwrites it (a real ping-pong), or an in-session A/B on Photon. Section 57.5's conclusion is therefore still
+open, but it now has a method that can produce one.
+
 ## Pre-M4 boundary cleanup (metallum docs/pre-m4-boundary-cleanup.md carries the long form)
 
 The `render.metal3` sealing is done (metallum `267f3b6`) and the generation-neutral capability vocabulary exists
