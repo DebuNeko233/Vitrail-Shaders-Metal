@@ -386,6 +386,16 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   so its first call was warm too. The next experiment must vary what a warm run cannot - a fresh process
   against an idle GPU, reading the first position - and the cross-process harness (create a device and exit,
   without Minecraft) is still not built.
+  **Registered and moved off the main line**: `Blocks: Metal4 AUTO production enable`;
+  `Does not block: M1 / M2 / M3 / Metal4 implementation work` (nothing gates on `selected()`; the frame
+  executes Metal 3 with `executing` passed explicitly; the forced switches pin the selection meanwhile).
+  **Wording corrected**: 26/26 true proves only that **no in-process high-frequency or deterministic repeat
+  failure was observed** - it does **not** prove that a failure must come from cold/first use. Low-frequency
+  race, object lifetime and driver state stay open. Remaining work is only: (1) build the cross-process harness
+  (`new process → create MTLDevice → probe once → report → exit`) before Metal 4 is AUTO by default; (2) count
+  cold-first against warm/repeated separately; (3) if it fails, read the existing stage/reason; (4) no root-cause
+  claim about argument-table first use without that evidence; (5) `-Dmetallum.probeRepeat` is a development
+  diagnostic switch and stays out of the production hot path.
   **The probe is staged now, and the cheap trigger is the missing piece.** Every exit names a stage and a
   reason (nineteen call sites: selectors, objects, uniform, table, vertex, target, pipelines, pass, attachment,
   encoder, commit, completion, pixel, exception), `lastFailureStage()` is printed by the capability record, and
