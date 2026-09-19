@@ -1458,6 +1458,18 @@ FSR 1.0 gave 1.90, 1.67 at 65 per cent where it gave 1.50, 1.31 at 80 per cent w
 of those four runs drew the same frame - the depth attachments and the copy-backs come back identical
 across all four - so the numbers are the seat's and not the scene's.
 
+**And a player's own session takes the same road.** A recorded session on a build of this branch (Photon
+v1.3b with 56 mods, Apple M5 Pro, macOS 27.0) had the slider moved by hand to **55 per cent**: the world
+rendered at 1980x1243 for a 3600x2260 window, the seat logged that the 55 per cent scale "brings the
+picture back with MetalFX", and over the two and a half minutes of the session no configuration was
+refused and no bilinear fallback was taken - those two lines are the log's only mention of the scale. It
+shows the two properties the setting is documented with: the render scale caused no pack reload, its line
+being said once and no reload following it, while both reloads that did happen are logged as "the shadow
+map scale has moved". It also settles the interaction a pack could bring: **Photon ships its own temporal
+upscaler and does not run it** (`composite3 (TAAU)` is in that session's "programs this place ships and
+does not run"), so the engine's scale is not stacked on the pack's. What the picture at 55 per cent looks
+like is the phase's remaining item, and it is a human verdict rather than a number.
+
 **The correction this work forced, which is bigger than the phase.** Getting a frame to use MetalFX at
 all meant asking why it did not, and the answer was not about MetalFX. The game hands a `CommandEncoder`
 wrapper to everything, and the capabilities this engine adds are mixed into the
