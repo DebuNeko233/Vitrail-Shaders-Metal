@@ -446,13 +446,27 @@ else - the two arms of one comparison still differed by **eleven per cent in pip
 depth attachments**, which is a different frame rather than a switch, and it is why that run's four per
 cent of frame time could not be attributed to anything.
 
-The companion backend's `tools/freeze-world.py` closes that: it rewrites the staged world's `level.dat`
-- gzipped NBT, losslessly, with a self-test that round-trips a document carrying every tag type before it
-is trusted with a real save - pinning `Time` to mid-morning, and not to noon, because noon is exactly
+The companion backend's `tools/freeze-world.py` closes that: it rewrites the staged world's files
+losslessly, with a self-test that round-trips a document carrying every tag type before it is trusted
+with a real save, pinning the day-time clock to mid-morning - and not to noon, because noon is exactly
 where vanilla swaps the sunrise band for the sunset one and a comparison whose runs straddled it drew a
-different number of sky passes - and setting the game rules that let a world change
-on its own (the daylight and weather cycles off, mob spawning and its patrols and traders off, random
-ticks and fire spread off). On a real save it is verified to change those values and nothing else. The
+different number of sky passes - and setting the rules that let a world change on its own: the daylight
+and weather cycles off, mob spawning and its patrols and traders and phantoms off, random ticks off and
+fire spread off.
+
+**And writing them into `level.dat` did nothing, which is the correction this fixture owes.** The rule
+names above are the ones a *command* uses. This game moved the parts of a world that are not terrain out
+of `level.dat` and renamed them: the clock is `data/minecraft/world_clocks.dat`'s
+`minecraft:overworld.total_ticks`, the weather is `data/minecraft/weather.dat`, and the rules are
+`data/minecraft/game_rules.dat` under `minecraft:advance_time`, `minecraft:spawn_mobs`,
+`minecraft:random_tick_speed` and the rest. Measured on the save the client itself left behind after a
+run: **both spellings of the rules were absent** - the game drops a compound it does not recognise - and
+the clock had advanced 562 ticks across a single window, so the fixture that was supposed to hold the sun
+still had been running it, in a world that was at 14630 ticks, which is night, while the tool said
+mid-morning. All of the counter comparisons above survive that, because staging the same save and taking
+the entities out were doing their work; what does not survive is any claim about the *picture*, which was
+being drawn at night under a moving sun. The freezer now writes all four files, and the clock reads 4000
+after two runs where it used to read 4562. The
 acceptance test is two runs of **one configuration**, where any difference at all is irreproducibility:
 
 | counter | run one | run two | difference |
@@ -499,27 +513,39 @@ and it is why P1's re-measurement below can say what its switches do *not* buy, 
 per cent would buy. Two counters still move without the pass record naming them: 27 passes in 18404, and
 8439 buffer binds.
 
-**The pixels still do not repeat, and this is what is left of the fixture.** Two runs of one
-configuration differ in **79 per cent of their pixels** (mean channel difference 7.18). The difference is
-not one thing. One region of it is named: 335431 pixels inside a 520x700 box around the scene's nether
-portal differ by up to 223 levels, because a portal's swirl texture and the particles it sheds advance
-with the world's age and no game rule reaches them. The rest is spread over the whole frame, and its
-shape is not a moved object or a changed exposure: translating one frame against the other by up to two
-pixels in either direction does not improve it, scaling the darker frame by the measured brightness ratio
-(1.0061) does not improve it either, the two frames' mean level in the terrain is the same (31.17 against
-31.36 of 255) and yet 98 per cent of the pixels in a terrain window differ. That is the shape of a
-per-frame noise or dither pattern - the scene is dark, and the pack's own frame-varying noise is a large
-fraction of a dark pixel - and it is the second thing the fixture would have to remove: **a picture
-comparison needs a scene that is bright enough for its noise to be below the level of the claim, and
-still enough that no animated block texture, particle or cloud is in frame.**
+**The pixels do not repeat either, and after the correction the remaining cause is the pack's own
+noise.** With the clock, the rules and the weather actually frozen, two runs of one configuration read
+**mean channel difference 2.03, 56.84 per cent of pixels differing at all, 3.10 per cent by more than 8,
+and a worst pixel of 221** - where the same pair before the correction read 7.18, 79.24, 20.00 and 226.
+That worst pixel is inside the nether portal's 520x700 box, so the number is the scene's own animation
+and not the fixture's.
 
-What the picture comparison *can* already say is bounded and worth keeping: the two switches of P1 were
-compared on this scene and the failure mode their exit criterion names - a target emptied that a later
-pass reads, which comes back as a region of the frame cleared to black - does not appear anywhere in
-either comparison. What it cannot say is that nothing at all moved, which is what a verdict would need.
-**An image verdict therefore still needs a scene without them** - the companion repository's own smoke
-fixtures, which already compare screenshots - and that is what the picture half of P1 and the copy half
-of P4 are still waiting on. The counter half, which is what a frame-time comparison needs, is closed.
+The freezer can also choose the frame it is judged on - `--at X,Y,Z` and `--yaw`/`--pitch` write the
+staged player's place and angle, because what a save happens to leave in front of the camera is a nether
+portal from one angle and open sky from another. Aimed at the ground with no sky in frame (45 degrees
+down, away from the portal), the same pair inside the game's own area reads **47.70 per cent of pixels
+differing at all, 6.91 per cent by more than 2, 0.994 per cent by more than 8, and a worst pixel of 52**,
+and those pixels above 8 are **scattered over 141 cells of a 240-pixel grid rather than gathered in any
+one of them**. Nothing in the scene moves any more: no sun, no mob, no rain, no cloud in frame, no portal
+in frame. What is left is a per-frame noise or dither the pack itself draws, one level over most of the
+frame and a few levels over the rest, and it is the floor a picture comparison on this pack now has.
+
+That changes what an image verdict has to be. A scene whose pixels repeat exactly is not reachable
+without turning the pack's own noise off, and it is not what the criterion needs: what a wrong
+attachment action produces is a *region* of the frame changed together, and the measurement now
+distinguishes that from noise by shape - scattered pixels above 8 in every cell of the grid is a pack
+drawing dithered frames, while one cell's worth of them at 200 levels is a target that was emptied.
+
+What the picture comparison says about P1's own switches follows from that shape. Comparing the arms
+shows no region of the frame changed together, which is exactly what the exit criterion's wrong action
+would produce - a target emptied that a later pass reads comes back as one region of the picture - and
+the pixels that do differ between two arms are scattered the way the noise is. What it cannot do is
+certify the absence of a sub-level error, because one level of difference between two frames is what
+this pack draws whether or not anything is wrong. **The picture half of P1 and the copy half of P4 are
+therefore owed a criterion rather than a scene**: the scene repeats scenically now, and what a verdict
+needs next is the shape test written down as a check - so many cells, so many levels - rather than the
+pixel-identical fixture the earlier reading asked for. The counter half, which is what a frame-time
+comparison needs, is closed.
 
 ---
 
