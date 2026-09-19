@@ -160,6 +160,20 @@ A pack compile holds the world back, so the screen used to be the frame from bef
 
 ## P1 - Performance, Metal 4 and MetalFX (see `docs/performance.md`)
 
+- [ ] **M3's render half: the frame-path move was tried and reverted, and what it cost is now measured.**
+  Moving `MetalCommandEncoder`, `MetalRenderPass` and `MetalFence` into `com.metallum.render.metal3` as a
+  pure move produced **100 compile errors, every one of them "class/member is not public"**: the render
+  package is package-private throughout, so a move out of it either widens a dozen engine-internal classes
+  and dozens of their members in place, or is done together with the shared layer where public is the design.
+  The attempt was reverted rather than pushed through - an API widened to satisfy a move is not the same
+  decision as an API widened because it is the neutral vocabulary - and the tree is green at the wrapper
+  milestone. **Next attempt's order: (1) `com.metallum.render.shared` with the version-neutral set
+  (`MetalGpuBuffer`, `MetalGpuTexture`, `MetalGpuTextureView`, `MetalGpuSampler`, `MetalTransientMemory`,
+  `MetalDestructionQueue`, `MetalGpuQueryPool`, `MetalPipelineSupport`, `MetalCompiledRenderPipeline`,
+  `MetalFrameProbe`, `AttachmentContents`, `Stats`), public by design; (2) then `render.metal3` for the frame
+  path importing `render.shared.*`; (3) `MetalDevice` stays a facade and loses the concrete generation - the
+  queue must come from `MetalExecutionServices`, not from the device, or the split will force imports between
+  the two generation packages.**
 - [ ] **M3 of the dual-execution plan: isolate the existing implementation as Metal 3 (wrapper half done).**
   Done: `com.metallum.mtl.metal3` with the six command wrappers and `com.metallum.mtl.metal4` with the three
   Metal 4 wrappers, imports and contracts repointed, behaviour
