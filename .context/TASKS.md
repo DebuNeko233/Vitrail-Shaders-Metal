@@ -350,6 +350,11 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   constructor logged, and an AUTO-Metal-4 launch would have looked identical to a forced Metal 3 one. The
   contract that pinned the seam pinned the constant and failed the moment it went, which is the pin working;
   it now pins the selection. No-pack run after it: 1.79 ms, `selectedGeneration=metal4`, counters unchanged.
+  **And the seam's answer is now printed**, because a value nothing prints cannot be checked: two arms in one
+  session read `servicesSelected=metal4 servicesExecuting=metal3 referenceShell=true` (AUTO) and
+  `servicesSelected=metal3 ... referenceShell=false` (forced `-Dmetallum.execution=metal3`), both executing
+  Metal 3 at 1.78 ms wallP50 with a picture difference of 0.03. The AUTO line is the evidence: before the fix
+  that arm's services would have answered `metal3`.
 **Prerequisite ①'s last piece (`MetalPipelineKey`) is specified down to the lines it touches, and not
   started.** Where the identity material is: `MetalDevice.getOrCompilePipeline(RenderPipeline)` (line ~408)
   is the only place a compiled pipeline is made - `this.compiledPipelines.computeIfAbsent(pipeline, p ->
