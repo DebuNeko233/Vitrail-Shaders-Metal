@@ -303,7 +303,16 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   docs: no picture-equivalence claim about the Metal 4 road is supportable by a single screenshot pair in
   either direction, and a valid measurement needs the temporal state pinned (scaler off for the comparison, a
   fixed frame index, or several shots per arm compared by median). **This is the "这个测试方式不对" lesson again,
-  this time about pictures rather than about hand-run clients.**
+  this time about pictures rather than about hand-run clients.** **The fix is measured too**: the same
+  two-run comparison **without a pack** gives a mean channel difference of **0.05** (1.61 per cent of pixels
+  differ at all, 0.09 per cent by more than 8) against the pack scene's 4.10 - so the pack's temporal upscaler
+  is the noise, the no-pack scene is where picture equivalence can be measured, and that is the scene a
+  frame-path change is judged in first anyway. **The same run found a second thing**: its two arms reported
+  `selectedGeneration=metal3` and `selectedGeneration=metal4` - two identical runs, one session, same build,
+  different selections. **The capability verdict is not deterministic run to run**, which breaks the one rule
+  this migration leans on hardest (AUTO from capability, never a chip name) and is therefore **ahead of M4**,
+  whose behaviour depends on that answer. Both live in `render.execution` and the log already prints the
+  capability line, so it is small to chase.
 **Prerequisite ①'s last piece (`MetalPipelineKey`) is specified down to the lines it touches, and not
   started.** Where the identity material is: `MetalDevice.getOrCompilePipeline(RenderPipeline)` (line ~408)
   is the only place a compiled pipeline is made - `this.compiledPipelines.computeIfAbsent(pipeline, p ->
