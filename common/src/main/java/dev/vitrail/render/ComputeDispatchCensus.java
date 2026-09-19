@@ -21,13 +21,19 @@ final class ComputeDispatchCensus {
 	private static final long INTERVAL_NANOS = 1_000_000_000L;
 
 	private static int dispatches;
+	private static int maps;
 	private static long bindings;
 	private static long saidAt;
 
 	private ComputeDispatchCensus() {
 	}
 
-	/** One resolve: three maps, three copies of them, and the bindings that went into them. */
+	/** One map built for a resolve: three of them when the maps are made fresh, none when they are reused. */
+	static void mapsBuilt(final int count) {
+		maps += count;
+	}
+
+	/** One resolve: the bindings that went into it, and the three copies {@code Resolved} always makes. */
 	static void resolved(final int samplerEntries) {
 		dispatches++;
 		bindings += samplerEntries;
@@ -44,12 +50,14 @@ final class ComputeDispatchCensus {
 		}
 
 		double seconds = elapsed / 1_000_000_000.0;
-		Vitrail.logger().info("Compute dispatches: {} over {} ms ({} a second), 3 maps and 3 copies each, "
-						+ "{} bindings ({} a dispatch)",
+		Vitrail.logger().info("Compute dispatches: {} over {} ms ({} a second), {} maps built ({} a dispatch), "
+						+ "3 copies each, {} bindings ({} a dispatch)",
 				dispatches, elapsed / 1_000_000, String.format(Locale.ROOT, "%.1f", dispatches / seconds),
+				maps, String.format(Locale.ROOT, "%.1f", (double) maps / Math.max(dispatches, 1)),
 				bindings, String.format(Locale.ROOT, "%.1f", (double) bindings / Math.max(dispatches, 1)));
 
 		dispatches = 0;
+		maps = 0;
 		bindings = 0L;
 		saidAt = now;
 	}

@@ -49,6 +49,7 @@ final class PackComputeBindings {
 			Map<String, GpuSampler> samplers) {
 
 		static Scratch of() {
+			ComputeDispatchCensus.mapsBuilt(3);
 			return new Scratch(new LinkedHashMap<>(), new LinkedHashMap<>(), new LinkedHashMap<>());
 		}
 	}
