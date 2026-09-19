@@ -874,6 +874,30 @@ number rather than a rank. Next round: look for an existing diagnostic switch th
 historical figure "shadows removed 1.96 ms" implies one existed), and if there is none, derive the share from
 the probe's depth counters (`depthAttachments`, `depthLoadedMiB`, `clearEncoders`) rather than from the table.
 
+**The shadow's own GPU ms a frame cannot be isolated with the switches that exist, and this is the honest
+answer to phase 1.** The complete set of diagnostic switches in this repository is `boxShadowCull`,
+`clearStorageAtBirth`, `declaredSamplers`, `driverTrig`, `elideTargetCopies`, `elideTargetTraffic`,
+`fullPassBarrier`, `keepFirstDrawCompiles`, `keepPackAcrossReload`, `keepPackOpen`, `keepRedoneWork`,
+`keepShadowRotate`, `legacyTerrainFilter`, `moduleCache`, `narrowStorageBoundary`, `passCensus`, `passTimings`,
+`probeNoShadowTranslucent`, `probeShadowFrames`, `rawLocals`, `reloadBeforeLevel`, `ringTimings`,
+`shaderDebugInfo`, `shadowFrameBudget`, `softShadowCompare`, `transferInPass`, `translationDir`. **None of them
+skips the shadow pass**, so the historical "shadows removed 1.96 ms" was measured by some means that is not in
+the tree - and inventing one would be a shadow-semantics change, which the plan forbids. The shadow facts this
+phase can stand behind are therefore: drawn every frame; reuse refused by the pack; the most expensive single
+pass row (21.3 % of the stamped pass total, x2 a frame); and its traffic, which the probe does give -
+`depthStoredMiB` 32449.5 over 600 frames is **54.1 MiB a frame**, the largest single attachment store in the
+frame, against `depthLoadedMiB` 14385.6 (24.0 MiB a frame) and `depthAttachments` 4800 (8 a frame).
+
+**A correction this phase's floor measurement forces on an earlier result.** The `elideTargetTraffic` A/B taken
+earlier in this session (`run/b2-elide`: `loadedMiB` -30.6 per cent, `storedMiB` -1.2 per cent, pictures 4.05
+apart) read its picture difference as "inside this scene's floor of 4.10", and that floor was measured on a
+different scene at a different time. The reference scene's real cross-launch picture difference is **30.68**
+(Phase 0, same counters to 0.02 per cent). So **that correctness verdict is void**: no GPU-traffic change on this
+fixture can be cleared by comparing two launches' screenshots, and the plan's sections 13/20/21/52 need a
+diagnostic fixture whose output is a function of the state - the fixture idiom the checkpoint smokes already use
+- or an in-session A/B. Until such a fixture exists, `elideTargetTraffic` stays experimental and unmeasured for
+correctness, which is exactly the state section 57.5 forbids at the end.
+
 ## Pre-M4 boundary cleanup (metallum docs/pre-m4-boundary-cleanup.md carries the long form)
 
 The `render.metal3` sealing is done (metallum `267f3b6`) and the generation-neutral capability vocabulary exists
