@@ -466,7 +466,10 @@ still had been running it, in a world that was at 14630 ticks, which is night, w
 mid-morning. All of the counter comparisons above survive that, because staging the same save and taking
 the entities out were doing their work; what does not survive is any claim about the *picture*, which was
 being drawn at night under a moving sun. The freezer now writes all four files, and the clock reads 4000
-after two runs where it used to read 4562. The
+after two runs where it used to read 4562. The frame's own time moved with it, on the same window and the same view: **29.95
+ms a frame before the clock was ever pinned and 23.59 after**, which is a night scene lit by a moving
+sun and spawning mobs leaving the measurement at once - so the absolute baselines recorded earlier in
+this document belong to that scene and not to a daylight one. The
 acceptance test is two runs of **one configuration**, where any difference at all is irreproducibility:
 
 | counter | run one | run two | difference |
