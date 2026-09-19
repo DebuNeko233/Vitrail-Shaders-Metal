@@ -931,6 +931,16 @@ fixture whose writer owns the target from its first pass; that needs a fixture t
 overwrites it (a real ping-pong), or an in-session A/B on Photon. Section 57.5's conclusion is therefore still
 open, but it now has a method that can produce one.
 
+**Phase 4's load half is now decided on the fixture too** (`run/at-fixture2`, 01:08/01:09, with the
+read-then-overwrite control added): **mean channel difference 0.00, no pixel differing**, while `loadedMiB`
+falls **47929.8 to 42741.7 (-10.8 %)** and `storedMiB` **100190.8 to 89729.2 (-10.4 %)**, `gpuP50` flat
+(1.28 against 1.29) and the wall column again not a result on 1.2 ms frames. The control is the pass that
+samples the very target it writes (`composite2`, `carried + 0.5` clamped), so `readsWhatItWrites` has to be
+true there and the load may not be elided - and the picture being bit-identical says it was not, because an
+elided load there would start every pixel from nothing and land the quantised step a level away for good. So
+the elision refuses where it must and removes a tenth of both traffics where it may, on a frame whose output
+cannot drift with the weather.
+
 ## Pre-M4 boundary cleanup (metallum docs/pre-m4-boundary-cleanup.md carries the long form)
 
 The `render.metal3` sealing is done (metallum `267f3b6`) and the generation-neutral capability vocabulary exists

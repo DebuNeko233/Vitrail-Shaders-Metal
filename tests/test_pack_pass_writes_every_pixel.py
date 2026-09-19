@@ -164,7 +164,7 @@ class PassWritesEveryPixel(unittest.TestCase):
         fixture = ROOT / 'tests/fixtures/shaderpacks/attachment-traffic-contract/shaders'
         self.assertEqual({path.name for path in fixture.iterdir()},
                          {'composite.vsh', 'composite.fsh', 'composite1.vsh', 'composite1.fsh',
-                          'final.vsh', 'final.fsh'})
+                          'composite2.vsh', 'composite2.fsh', 'final.vsh', 'final.fsh'})
         writer = (fixture / 'composite.fsh').read_text(encoding='utf-8')
         self.assertIn('/* DRAWBUFFERS:0 */', writer)
         self.assertIn('mod(floor(gl_FragCoord.x / 16.0) + floor(gl_FragCoord.y / 16.0), 2.0)', writer)
@@ -177,6 +177,16 @@ class PassWritesEveryPixel(unittest.TestCase):
         control = (fixture / 'composite1.fsh').read_text(encoding='utf-8')
         self.assertIn('discard;', control)
         self.assertNotIn('texture2D(', control)
+
+        # The read-then-overwrite control: a pass that samples its own target, so `readsWhatItWrites` must be
+        # true and the load may not be elided - the case a writer-only fixture cannot decide.
+        rewrite = (fixture / 'composite2.fsh').read_text(encoding='utf-8')
+        self.assertIn('uniform sampler2D colortex1;', rewrite)
+        self.assertIn('/* DRAWBUFFERS:1 */', rewrite)
+        self.assertIn('float carried = texture2D(colortex1, texcoord).r;', rewrite)
+        self.assertIn('gl_FragData[0] = vec4(min(carried + 0.5, 1.0), 0.0, 0.0, 1.0);', rewrite)
+        for weather in ('frameTimeCounter', 'sunPosition', 'worldTime', 'cameraPosition'):
+            self.assertNotIn(weather, rewrite)
 
         reader = (fixture / 'final.fsh').read_text(encoding='utf-8')
         self.assertIn('uniform sampler2D colortex0;', reader)
