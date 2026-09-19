@@ -202,6 +202,15 @@ compatibility is finally decided, under the five statuses `Supported`, `Partiall
 `Fallback`, `Unsupported` and `Broken`; "compatible" on its own is not an answer. See
 [PHASE 17 compatibility](phase17-compatibility.md) for the evidence rules.
 
+**Two numbering systems are in use and they are not the same one.** This page numbers the *migration*,
+PHASE 0 to PHASE 17 above. The performance work that follows it - attachment lifetime, bindings,
+compilation, dead resources, Metal 4, MetalFX and the removal of the Vulkan path - is numbered `P0` to
+`P7` in [Performance, Metal 4 and MetalFX](performance.md), which carries each phase's Apple
+documentation, its measurements and its exit criterion, and which is where a phase's status is
+recorded. A bare "P1" is ambiguous between the two: PHASE 1 here is backend neutralization, and
+performance P1 is attachment lifetime, whose measured verdict is that removing a sixth of a frame's
+attachment traffic returns no frame time on the hardware it was measured on.
+
 ## Definition of done
 
 A phase is done when the implementation is complete, its tests are complete, CI is green, there is
