@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
-"""The F3 screen names the Metal API and what MetalFX made of the device.
+"""The F3 screen names the Metal API, and the scale only where there is one.
 
-The three facts a report about a picture needs - which generation of the API is running, whether the
-scaler is there, and what the scale is set to - are read through the same narrow interface the runtime
-path uses, so a capture and a log cannot disagree. This pins the reading, the pairing and the seam:
-nothing here may name a Metal type, because these lines are the pack-facing side's and a native handle
-reaching it is the fault `AGENTS.md` forbids.
+Which generation of the API is running is the fact a report about a picture is usually missing, and the
+scale in force is the other - but a scale of 100 per cent is not a fact worth a line, so the line is
+absent rather than saying "native". Both are read through the same narrow interface the runtime path
+uses, so a capture and the log cannot disagree, and nothing here may name a Metal type: these lines are
+the pack-facing side's, and a native handle reaching it is the fault `AGENTS.md` forbids.
 """
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -26,28 +25,25 @@ def require(label: str, text: str, needles: tuple[str, ...]) -> None:
 
 require("the generation is read, not guessed", STATUS, (
     'readString("metalApiGeneration")',
-    'readString("metalFxStatus")',
     "public static String metalApiGeneration() {",
-    "public static String metalFxStatus() {",
 ))
-require("the two lines are shown together", ENTRY, (
+require("the generation is a line of its own", ENTRY, (
     "MetallumStatus.metalApiGeneration()",
     'PREFIX + "Metal API: " + metalApi',
-    'PREFIX + "MetalFX: " + metalFxLine()',
     "if (!metalApi.isEmpty()) {",
 ))
-require("the scaler's line carries the scale in force", ENTRY, (
-    "String status = MetallumStatus.metalFxStatus();",
-    "int scale = PackChoice.renderScale();",
-    'scale + "% render scale"',
-    '"native"',
+require("the scale is shown only where there is one", ENTRY, (
+    "int renderScale = PackChoice.renderScale();",
+    "if (renderScale < 100) {",
+    'PREFIX + "MetalFX: " + renderScale + "% scale"',
 ))
-require("the same readers are said once in the log", STAGES, (
-    'Vitrail.logger().info("Metal API: {}, MetalFX: {}", metalApi,',
-    "String metalApi = MetallumStatus.metalApiGeneration();",
+require("the log names the generation, which is all that is known that early", STAGES, (
+    'Vitrail.logger().info("Metal API: {}", metalApi);',
 ))
 
 if "MTL" in ENTRY:
     raise SystemExit("debug entry: a Metal type name reached the pack-facing side")
+if "available - " in ENTRY:
+    raise SystemExit("debug entry: the scaler's own sentence is back on the screen")
 
 print("Vitrail debug entry contract: PASS")

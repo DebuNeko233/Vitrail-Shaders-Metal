@@ -20,7 +20,7 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * The engine's lines of the F3 screen, in Iris's wording so a capture of one reads against a
- * capture of the other: version, the Metal API generation with what MetalFX made of the device,
+ * capture of the other: version, the Metal API generation, the scale in force where one is,
  * shaderpack, the scanned profile with the dirty count, then Sodium's shadow {@code C: a/b D: d}. Color space is omitted: this engine has no color-space
  * setting to name, and inventing one would be a line Iris cannot match the other way. While a
  * pack is still compiling, one extra line carries the overlay's own words
@@ -70,7 +70,10 @@ public final class VitrailDebugEntry implements DebugScreenEntry {
 		String metalApi = MetallumStatus.metalApiGeneration();
 		if (!metalApi.isEmpty()) {
 			displayer.addToGroup(GROUP, PREFIX + "Metal API: " + metalApi);
-			displayer.addToGroup(GROUP, PREFIX + "MetalFX: " + metalFxLine());
+		}
+		int renderScale = PackChoice.renderScale();
+		if (renderScale < 100) {
+			displayer.addToGroup(GROUP, PREFIX + "MetalFX: " + renderScale + "% scale");
 		}
 		PackChain.compilingWords().ifPresent(words ->
 				displayer.addToGroup(GROUP, PREFIX + words.getString()));
@@ -110,24 +113,6 @@ public final class VitrailDebugEntry implements DebugScreenEntry {
 		int total = walk == null ? 0 : walk.total();
 		displayer.addToGroup(GROUP, PREFIX + "Shadows: C: " + drawn + "/" + total
 				+ " D: " + Minecraft.getInstance().options.getEffectiveRenderDistance());
-	}
-
-	/**
-	 * What the upscaler made of this device and what the scale is set to, in one line.
-	 * <p>
-	 * The two halves belong together because either alone misleads: "available" says nothing about whether a
-	 * picture is being scaled, and a scale of 55 per cent says nothing about whether MetalFX or a plain blit
-	 * brings it back. The scale is the setting in force, not a per-frame reading - a pack reload or a
-	 * resolution change does not move it.
-	 */
-	private static String metalFxLine() {
-		String status = MetallumStatus.metalFxStatus();
-		if (status.isEmpty()) {
-			return "not asked yet";
-		}
-
-		int scale = PackChoice.renderScale();
-		return status + " (" + (scale >= 100 ? "native" : scale + "% render scale") + ")";
 	}
 
 	/**

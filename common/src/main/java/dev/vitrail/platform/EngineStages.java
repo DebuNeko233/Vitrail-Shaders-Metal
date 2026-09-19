@@ -4,10 +4,10 @@ import dev.vitrail.cache.ModuleCache;
 import dev.vitrail.glsl.TranslationCache;
 import dev.vitrail.HostReport;
 import dev.vitrail.render.MetallumStatus;
+import dev.vitrail.render.PackChoice;
 import dev.vitrail.render.EntityDraw;
 import dev.vitrail.render.HandDraw;
 import dev.vitrail.render.PackChain;
-import dev.vitrail.render.PackChoice;
 import dev.vitrail.render.pbr.PbrAtlases;
 import dev.vitrail.render.pbr.PbrTextures;
 import dev.vitrail.render.RenderScale;
@@ -68,9 +68,10 @@ public final class EngineStages {
 		// of the API it ran and what the upscaler made of the device.
 		String metalApi = MetallumStatus.metalApiGeneration();
 		if (!metalApi.isEmpty()) {
-			String metalFx = MetallumStatus.metalFxStatus();
-			Vitrail.logger().info("Metal API: {}, MetalFX: {}", metalApi,
-					metalFx.isEmpty() ? "not asked yet" : metalFx);
+			// The generation only: the scale is read from the pack selection, which has not been read yet at
+			// this point in the boot - measured, the line lost its second half because of it. The F3 screen
+			// reads it when it is drawn, which is after the pack is chosen, and that is where it belongs.
+			Vitrail.logger().info("Metal API: {}", metalApi);
 		}
 
 		// And what an install decides that this mod cannot, said before the pack is read so that it

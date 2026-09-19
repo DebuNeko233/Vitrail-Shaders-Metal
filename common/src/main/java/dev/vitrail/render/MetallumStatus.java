@@ -24,7 +24,6 @@ public final class MetallumStatus {
 	private static volatile Status status;
 	private static volatile Boolean backgroundPipelinePrecompile;
 	private static volatile String metalApiGeneration;
-	private static volatile String metalFxStatus;
 
 	private MetallumStatus() {
 	}
@@ -135,21 +134,6 @@ public final class MetallumStatus {
 		if (known == null) {
 			known = readString("metalApiGeneration");
 			metalApiGeneration = known;
-		}
-
-		return known;
-	}
-
-	/**
-	 * What the MetalFX spatial scaler made of this device, or empty before it was asked.
-	 * <p>
-	 * The same sentence the backend logs, so a debug screen and a log read against each other.
-	 */
-	public static String metalFxStatus() {
-		String known = metalFxStatus;
-		if (known == null) {
-			known = readString("metalFxStatus");
-			metalFxStatus = known;
 		}
 
 		return known;
