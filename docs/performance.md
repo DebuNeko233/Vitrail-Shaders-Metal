@@ -376,13 +376,41 @@ readings say so rather than one:
 - The largest row in the smaller window is `GUI before blur` at 0.823 ms, forty-three times the
   0.019 ms it reads in the larger one, for a quarter of the pixels.
 
-The likely cause is that a counter sample written outside a render pass on a frame's command buffer
-does not drain the tile pipeline, so a pair of them measures the distance the *commands* were
-processed at and not the time the passes took; the report's own accounting leaves fifty frames of one
-window unsummed and reports no drops, which is a second thing to settle. Until it is, this phase's
-exit criterion is half met: the numbers exist and the per-pass attribution does not. That is also why
-P4 and P6 cannot be aimed yet - they are the phases that remove fragment work, and where the fragment
-work *is* remains unanswered.
+The cause is not the sampling point and not the accounting: **the pool is the host clock.** Both
+`MetalCommandEncoder.writeTimestamp` and `MetalRenderPass.writeTimestamp` fill it with
+`device.getTimestampNow()`, and `MetalDevice.getTimestampNow()` is `System.nanoTime()`. So the pair of
+values a row is built from are two readings of the CPU clock taken around the encoding of a pass -
+`PassTimings.open` before the backend records it, `PassTimings.close` after the backend submits it - and
+what the table prints is **what encoding each pass cost the CPU**, with nothing in it about the GPU.
+That is a real number and a useful one, and it is not the number the class says it is: `PassTimings`
+documents itself as "The numbers are the card's, not the clock's". `metallum/tools/ci-frame-probe.py`
+now pins the substitution, so that making it true has to fail that assertion on purpose rather than
+change what the table means by accident.
+
+Apple's API for the real thing is a counter sample buffer: `sampleCounters(sampleBuffer:sampleIndex:barrier:)`
+on the encoders, "A barrier ensures that the commands you encode before this one complete before the GPU
+samples the hardware counters", with a descriptor carrying a counter set, a sample count and a storage
+mode, and `resolveCounters` on the command buffer to get the values out after it completes. Two things
+make it more than a flag flip, and both are worth knowing before anybody tries:
+
+- **There is no encoder to sample on when a pass opens.** `PassTimings.open` runs before the backend
+  records the pass, and at that moment the previous render pass has ended, so the "start of this pass"
+  sample has no encoder of its own. The two boundaries of a pass are the same instant, which means one
+  sample per pass boundary is enough - but it has to be taken on the *closing* side, on the render pass's
+  own encoder, and each pass's duration becomes its boundary minus the previous one's.
+- **A barrier per boundary serialises the frame.** That is what makes the number precise and it is also
+  why an armed run is not a run to compare frame rates with. The existing switch already keeps this off
+  by default, which is the right place for it.
+
+**What this phase can now be measured on.** The probe reads the driver's own answer for a completed
+frame - `GPUStartTime` and `GPUEndTime`, which Apple documents as "the host time, in seconds, when the
+GPU starts command buffer execution" and its end, and which "remain 0.0 until the GPU finishes running
+the command buffer" - and reports the window's sum as `gpuMs` over `gpuFrames`. On one 600-frame window
+of photon v1.3b at 1800x1019 the two readings are **25.25 ms of GPU time a frame against 25.21 ms a
+frame of wall-clock**, which is the check that says both are the same thing: this frame is GPU-bound
+with no measurable CPU or presentation slack, and the pass table taken in the same session claims
+1.188 ms of it, or 4.7 per cent. So P4 and P6 have a yardstick - `gpuMs` a frame - and the per-pass
+attribution is still owed, now with a known cause and a known design.
 
 ---
 
