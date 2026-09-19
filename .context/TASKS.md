@@ -671,3 +671,24 @@ a facade - it owns the Metal 3 shader/function/pipeline caches and the depth-ste
 directly.** So the finished move is: the generation owns its caches, the device asks it through contracts
 (`MetalDeviceFacts`, `MetalCompiledArtifact` - both in place), `executionServices()` becomes a public facade fact,
 and the import fixer resolves nested and `mtl`/`objc` types. Reverted; build clean; ledger 15 in 6 files.
+
+**M3 cache ownership: one owner, migrated one cache at a time.** The chain
+(`shader source → IntermediaryShaderModule → MTLFunction → MetalCompiledRenderPipeline → retirement`) is one
+lifetime, so `Metal3CompilationContext` stays one object. **Moved:** the depth-stencil cache and its factory.
+**Remaining:** `shaderCache`/`getOrCompileShader` (only `MetalCrossShaderCompiler` calls it; the key already
+carries the MSL profile and must not change), `functionCache`/`getOrCompileFunction` (three Metal 3 callers),
+`compiledPipelines`/`deferredPipelineReleases`/`compiledFor` + profile guard + `getOrCompilePipeline`,
+`precompilePipeline`, `evictCachedPipelines`, `clearPipelineCache`. The device keeps **migration-only** delegates
+until the frame classes move, and no new generation-specific getter is to be added.
+**`deferredPipelineReleases` is GPU retirement lifetime, not cache lifetime** - it exists so native objects
+outlive their map entry while recorded work may reference them, and its final home is a Metal 3
+execution-lifetime service; the context may hold it temporarily to keep behaviour identical. **Do not conflate
+the two lifetimes to save a class.**
+**`MetalCrossShaderCompiler` has two responsibilities**: translation (GLSL → SPIR-V → MSL, profile selection,
+resource/entry-point metadata - what a Metal 4 compiler would need again, so it stays shared) and native
+construction (`MTLLibrary`/`MTLFunction`/pipeline, which belongs to the context). Intended shape:
+`MetalCrossShaderTranslator` (shared) → MSL description → `Metal3CompilationContext` → native objects.
+**A failed mechanical step, recorded:** the attempt to relocate the four caches by extracting method bodies and
+rewriting `this.` stopped on `public synchronized @NonNull … precompilePipeline(` (the extractor did not match the
+annotations) before writing anything; the tree was verified clean. Next attempt: one cache at a time by hand,
+compiler as the oracle.
