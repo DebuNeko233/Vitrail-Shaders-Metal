@@ -378,6 +378,15 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   first Metal 4 argument-table attempt in a session**, which matches the original observation too. **The next
   attempt wants a cheaper trigger than a reboot: a fresh process against an idle GPU, as the first arm, several
   times** - eight warm arms cost six minutes and answered nothing.
+  **The probe is staged now, and the cheap trigger is the missing piece.** Every exit names a stage and a
+  reason (nineteen call sites: selectors, objects, uniform, table, vertex, target, pipelines, pass, attachment,
+  encoder, commit, completion, pixel, exception), `lastFailureStage()` is printed by the capability record, and
+  the two exits that had no reason at all - the selector pre-check and a nil `newTarget` result - now do.
+  **But 600-frame arms are the wrong instrument**: ~70 s each, and two flips in fourteen means no experiment can
+  be run often enough to catch one on demand. The next step is a harness that does `create device → probe once →
+  report → exit`, so `first probe in a process` can be compared with `later probes in the same process` dozens
+  of times. **2/14 remains a hypothesis about cold first use, not a root cause**, and nothing should be written
+  as though it were until a run is captured with its stage named.
   **And the readiness seam nothing asks**: `framePathReady()` and `isReferenceShell()` have exactly one reader
   in the whole source tree - the log line just added. `framePathReady()` is `!isReferenceShell() && selected()
   == executing()`, `executing()` is a constant `METAL3`, and AUTO's `selected()` is `metal4`, so readiness is
