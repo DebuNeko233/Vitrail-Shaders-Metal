@@ -293,7 +293,17 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   more buffers). **The separating test is a same-road repeat - `m4present` against `m4present` in one session -
   and it has not been run.** Tight repeat means the difference is road-specific and the frame's synchronisation
   is the next thing to vary; loose repeat means the road is less stable frame to frame. The claim stays
-  "running" until then, but **the present is no longer the suspect**.
+  "running" until then, but **the present is no longer the suspect**. **The repeat was run and it settles the
+  question the other way round**: same-road (`m4a` against `m4b`, both `-Dmetallum.metal4Present=true`, one
+  session, 600 frames each) gives wallP50 7.24 ms both times, `gpuM4Ms` 28.82 against 29.49, and a picture
+  difference of **mean 4.10, 90.95 per cent of pixels differing at all, 11.35 per cent by more than 8** -
+  **larger than the 3.65 / 88.84 per cent the two roads differed by**. So the cross-road difference is not the
+  road's: it is inside this scene's own run-to-run picture noise, and that noise is the size of the effect
+  being measured. Frame time repeats tightly; **the picture does not**. Consequence for this file and for the
+  docs: no picture-equivalence claim about the Metal 4 road is supportable by a single screenshot pair in
+  either direction, and a valid measurement needs the temporal state pinned (scaler off for the comparison, a
+  fixed frame index, or several shots per arm compared by median). **This is the "这个测试方式不对" lesson again,
+  this time about pictures rather than about hand-run clients.**
 **Prerequisite ①'s last piece (`MetalPipelineKey`) is specified down to the lines it touches, and not
   started.** Where the identity material is: `MetalDevice.getOrCompilePipeline(RenderPipeline)` (line ~408)
   is the only place a compiled pipeline is made - `this.compiledPipelines.computeIfAbsent(pipeline, p ->
