@@ -75,8 +75,10 @@ page needs is what changed underneath the slider.
 
 **The upscale still runs at the window's size and is still a fixed cost.** Whatever writes the window's
 pixels, it writes all of them however small the world was drawn, so lowering the scale makes the world
-cheaper and leaves the upscale where it was. What the fixed cost is now is MetalFX's encode rather than
-FSR's two passes, and the plan measures both.
+cheaper and leaves the upscale where it was. What that cost is has been measured from both sides: the
+FSR 1.0 pair took 2.31 ms of a frame at 1800x1019 and MetalFX's encode takes 0.38, so the same slider
+setting now returns more of what it saves. The numbers and the fits behind them are in the performance
+plan.
 
 **A device without it gets a blit.** Where MetalFX is not there to be used - an older system, a GPU that
 refuses the scaler, a backend that is not this one - the picture is brought back with a plain bilinear

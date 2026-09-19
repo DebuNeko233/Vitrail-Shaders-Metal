@@ -1349,9 +1349,22 @@ sentences and a player is owed the right one.
 into the game's colour texture, with the bilinear blit where the scaler cannot run, and FSR 1.0's two
 passes and Temporal Fold are deleted rather than kept beside it. Measured at a 65 per cent scale on the
 M5 Pro the log reads "The 65% render scale brings the picture back with MetalFX", and the pass census has
-no upscale pass in it at all. What is *not* measured yet is what it costs against the bar the decision
-recorded - the 2.31 ms the FSR 1.0 pair took at 1800x1019 - and that needs a paired comparison of one
-scene with the scaler on and off rather than two runs of different scenes.
+no upscale pass in it at all. **And it is six times cheaper than what it replaced.** The same four-size sweep that priced the FSR 1.0
+seat prices this one, fitted the same way, and the third term is the seat's own cost:
+
+| | fixed | per drawn megapixel | the seat itself |
+| --- | --- | --- | --- |
+| FSR 1.0 upscale and sharpen | 7.22 ms | 2.775 ms | **2.31 ms** |
+| MetalFX spatial scaler | 7.80 ms | 2.580 ms | **0.38 ms** |
+
+So the bar the decision recorded - not slower than the upscaler it replaced - is met with room to spare:
+what used to cost 2.31 ms of every frame costs 0.38. The two fits come from different sessions, which is
+why the fixed and per-megapixel terms differ by a few per cent between them, and the seat term is the one
+being compared: it is six times apart and far outside that variation. The practical gains rise with it,
+because the fixed cost a scale has to pay is now smaller: **2.05 times the frames at 50 per cent** where
+FSR 1.0 gave 1.90, 1.67 at 65 per cent where it gave 1.50, 1.31 at 80 per cent where it gave 1.23. Each
+of those four runs drew the same frame - the depth attachments and the copy-backs come back identical
+across all four - so the numbers are the seat's and not the scene's.
 
 **The correction this work forced, which is bigger than the phase.** Getting a frame to use MetalFX at
 all meant asking why it did not, and the answer was not about MetalFX. The game hands a `CommandEncoder`
