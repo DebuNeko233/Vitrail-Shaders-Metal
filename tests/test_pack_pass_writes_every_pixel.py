@@ -13,14 +13,23 @@ default stays what the engine did before any of this existed until a session wit
 been measured against one with it off.
 """
 from pathlib import Path
+import re
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def code_only(path):
+    """The file without comments, because a comment may name what the code may not carry."""
+    source = path.read_text(encoding='utf-8')
+    return re.sub(r'//[^\n]*|/\*.*?\*/', lambda match: '\n' * match.group(0).count('\n'), source, flags=re.DOTALL)
+
 PASS = ROOT / 'common/src/main/java/dev/vitrail/render/PackPass.java'
 PACK_CHAIN = ROOT / 'common/src/main/java/dev/vitrail/render/PackChain.java'
 TARGETS = ROOT / 'common/src/main/java/dev/vitrail/render/ColorTargets.java'
 GEOMETRY = ROOT / 'common/src/main/java/dev/vitrail/render/GeometryProgram.java'
 CHAIN = ROOT / 'common/src/main/java/dev/vitrail/pack/target/ChainPlan.java'
+ATTACHMENT_BRIDGE = ROOT / 'common/src/main/java/dev/vitrail/compat/metallum/MetallumAttachmentBridge.java'
 BUILD = ROOT / '.github/workflows/build.yml'
 
 
@@ -85,6 +94,21 @@ class PassWritesEveryPixel(unittest.TestCase):
         self.assertIn('readAfterwards[slot] = this.stillRead.contains(this.attachments.get(slot));', self.text)
         self.assertIn('overwritten[slot] = writesEveryPixel;', self.text)
         self.assertIn('commands.vitrail$setNextPassContents(readAfterwards, overwritten);', self.text)
+
+    def test_what_crosses_to_the_backend_is_two_arrays_and_not_a_value_type(self):
+        # The adapter used to build Metallum's own record itself, by reflection, from a class name it
+        # carried - and the name was wrong, because that type lives in the backend's render.shared
+        # package. The lookup threw, the throw was caught as "this backend cannot be told", and every
+        # pass kept its default for as long as it existed. So what crosses is the two facts this engine
+        # actually decided, and the backend makes its own value out of them.
+        bridge = ATTACHMENT_BRIDGE.read_text(encoding='utf-8')
+        self.assertIn('"com.metallum.render.MetalAttachmentBridge"', bridge)
+        self.assertIn('bridge.getMethod("setNextPassContents", Object.class, boolean[].class, boolean[].class)', bridge)
+        # A comment may name the type it is explaining; the code may not carry it.
+        code = code_only(ATTACHMENT_BRIDGE)
+        self.assertNotIn('AttachmentContents', code)
+        self.assertNotIn('CONTENTS_CLASS', code)
+        self.assertNotIn('Array.newInstance', code)
 
     def test_a_backend_that_cannot_be_told_falls_back_to_a_clear(self):
         # The clear is the same traffic saved, paid for as a tile fill this engine asks for instead.
