@@ -323,6 +323,13 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   fix is two small things - do not turn a transient failure into a capability verdict (retry or warm up before
   the verdict is read), and make the failure say what failed so a false negative is distinguishable from an
   absence. It stays ahead of M4, whose behaviour depends on this answer.
+  **And it did not reproduce**: three identical no-pack arms in a later session all reported
+  `selectedGeneration=metal4` with identical capability lines and all three probes saying they drew what they
+  were told to. So the flip is **observed once, not reproduced on demand**, and the leading explanation is a
+  **cold** first attempt (the flipping session was the first to touch Metal 4 argument tables in a while; the
+  session that did not ran minutes after runs that had each presented 600 frames through them). The test needs
+  a genuinely cold state - reboot, long idle, or the first run of the day - and **the `lastFailure()` plumbing
+  has not fired yet**, so its usefulness is unproven rather than proven. It stays ahead of M4.
 **Prerequisite ①'s last piece (`MetalPipelineKey`) is specified down to the lines it touches, and not
   started.** Where the identity material is: `MetalDevice.getOrCompilePipeline(RenderPipeline)` (line ~408)
   is the only place a compiled pipeline is made - `this.compiledPipelines.computeIfAbsent(pipeline, p ->
