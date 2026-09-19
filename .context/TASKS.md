@@ -1244,6 +1244,34 @@ and the order they belong in:
    its non-mac branch - but that is overriding a platform gate the pack author wrote, so it must be explicit,
    named as what it is, and never a silent default.
 
+### The switch works: ACL and WSR compile now, and the next fault is Metal's sampler limit
+
+`run/comp-acl` (2026-09-20 01:54, Complementary r5.9.1, `-Dvitrail.shaderPlatformNonMac=true`, fullscreen
+1920x1200, 600 frames): **the floodfill errors are gone** - `floodfill_sampler`/`GetLight*` count is **0** against
+56 in the owner's session - and the engine reports that the images are bound and read:
+
+```
+6 samplers this chain read a storage image the pack declared with image.NAME:
+    [voxel_sampler, floodfill_sampler, floodfill_sampler_copy, ...]
+25 samplers of this program read a real texture: [gaux4, noisetex, tex, voxel_sampler, floodfill_sampler, ...]
+```
+
+So the pack's custom-image pipe was **already implemented** (`image.NAME` is read and bound; the round-23
+`CustomImages` parser is likely redundant with that path and should be re-checked before it is wired anywhere),
+and the platform symbol was the whole of what stopped these programs from compiling.
+
+What is left is a different fault, and it is in this engine's MSL translation: **6 errors**, of two shapes -
+
+```
+error: 'sampler' attribute parameter is out of bounds: must be between 0 and 15
+error: 'id' attribute only applies to non-static data members
+```
+
+Metal allows only sixteen `[[sampler(N)]]` attributes in one argument set, and ACL's programs reach past that
+(`25 samplers of this program read a real texture`), so the programs it needs are compiled *in* and their
+pipelines are still refused at MSL compile. That is the next fix, on the metallum/MSL side of the seam, and it is
+not a shader-pack-semantics question.
+
 ## Pre-M4 boundary cleanup (metallum docs/pre-m4-boundary-cleanup.md carries the long form)
 
 The `render.metal3` sealing is done (metallum `267f3b6`) and the generation-neutral capability vocabulary exists
