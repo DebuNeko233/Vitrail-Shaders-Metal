@@ -794,15 +794,35 @@ harness now fingerprints the file it wrote, refuses the window if it changed (ex
 window under 10 render passes a frame with zero copy-backs. `Saving and pausing game` / `Stopping worker
 threads` are in the good runs too and are **not** evidence of leaving the level.
 
-**Do not arm pass timings across a measurement window.** `-Dvitrail.passTimings=1` serialises the frame on its
-GPU queries: the run read single-frame spans of **1910 ms** ("Pass timings over 1.9 s, 1 frames"), the pack
-never reached the first-full-frame line the harness arms on, and the whole 900 s timeout was spent before the
-window opened (`run/p0-baseline`). The counting census (`vitrail/pass-census` holding N seconds) is the switch
-to use for a pass breakdown; `passTimings` is for a short, deliberate window with the harness told to expect it.
+**The instrument is the documented one, and my first reading of it was wrong.** I wrote here that
+`-Dvitrail.passTimings` stalls the frame and must not be armed across a measurement window. The repository's
+own documentation says the opposite and says why - `docs/developing.md` and `docs/performance.md`: the table's
+timestamps are "the device's own, read back a few frames late **without waiting**, so the table costs nothing to
+speak of, and nothing at all when the property is absent". The 1910 ms single-frame spans I based that on were
+**load-time frames while the pack compiled**, which the same documentation warns about ("a reading is only as
+good as the run around it: compare runs taken in the same state"). The two arms that ended before arming had a
+different cause, and it is not attributable to the switch yet: `run/p0-census` ran 00:52:11 to 00:54:13, 833
+lines, no first-full-frame line, no error - so look at what ends that launch rather than at the instrument.
 
-**Next action:** take the pass breakdown with the census armed (`vitrail/pass-census` = 15 s) and no
-`passTimings`, then Phase 1's shadow cost census (shadow terrain GPU ms a frame, draw frequency, reuse
-frequency) - A/B with one variable at a time, per the plan.
+Armed the documented way (`-Dvitrail.passTimings=N` among the JVM arguments, i.e. `--run
+'plain=-Dvitrail.passTimings=5'`), not through the `vitrail/pass-census` file, whose N is read at every pack
+load and which is the road nothing in `tools/` uses.
+
+**The drift axis is the render target, not the window, and the screen capture measures the wrong one.** The
+windowed arm at `--width 1920 --height 1200` (`run/p0-windowed`, 01:01) reproduced the reference *structure* -
+`renderPasses` 21276 (35.5 a frame), `blits` 6600, `depthAttachments` 4800, `pipelineIdentities` 345 - and read
+**2.7x** the attachment traffic: `loadedMiB` 252660.8 against 93943.3, `storedMiB` 334334.5 against 132773.6,
+`blittedMiB` 48045.3 against 22159.3, `wallP50` 12.15 against 7.29. So a window 1920x1200 points and a display
+mode 1920x1200 pixels are different render targets, and the `screen.png` both arms were photographed at (1920x1200
+each) is the *display*, not the framebuffer - the picture-size check added last round compares the wrong number.
+The attachment traffic is the honest proxy for the render target's area, and it is already refused as drift.
+**The reference baseline was taken fullscreen at the display's own 1920x1200 (`run/p0-base`, 93943.3 loadedMiB);
+an arm is comparable with it only if it renders that same target**, which is what to check before reading a time
+column - not the window size and not the screenshot's dimensions.
+
+**Next action:** reproduce `run/p0-base`'s exact invocation (`--fullscreen`, 1920x1200 display mode) once to
+confirm the reference counters repeat, take that as the Phase 0 anchor, and only then start Phase 1's shadow cost
+census on the `run-vitrail-shadow-*` fixtures.
 
 ## Pre-M4 boundary cleanup (metallum docs/pre-m4-boundary-cleanup.md carries the long form)
 
