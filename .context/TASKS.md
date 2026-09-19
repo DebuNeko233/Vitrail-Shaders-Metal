@@ -968,6 +968,34 @@ is, and the production default stays off.
 **Section 57.5 is therefore answered**: `elideTargetTraffic` = rejected as a production default, with a
 measured reason.
 
+### Phase 2 verdict on `elideTargetCopies`: copies stop, time does not move, and the refusal half is proved
+
+Reference configuration, `run/photon-copies` (01:13):
+
+| | plain | copies | change |
+| --- | --- | --- | --- |
+| `blits` | 6600 | **4800** | **-27.3 %** (3 fewer a frame) |
+| `blittedMiB` | 22159.3 | **21260.2** | -4.1 % (1.5 MiB a frame) |
+| `renderPasses` / `depthAttachments` / `loadedMiB` | 20922 / 4800 / 93922.0 | 20928 / 4800 / 93943.3 | same scene |
+| `wallP50` / `gpuP50` | 7.31 / 7.31 | 7.25 / 7.29 | -0.8 % / -0.3 %, inside the floor |
+
+So it stops the copies it claims to - a structural change, not noise, since the scene counters are identical - and
+buys no frame time, which is the fourth time this frame has answered that way (P1's store half, the boundary
+switch, attachment traffic, and now this): **the frame is GPU-bound at 7.3 ms on work the removed traffic was
+not the critical path of.**
+
+**Correctness, and it is the half that matters here**: `run/at-history` (01:14/01:15) ran the existing
+`composite-history-contract` fixture - a target carried across the frame boundary with `colortex2Clear = false`,
+whose value the next frame genuinely reads - with the switch on and off. **The picture is bit-identical (0.00,
+no pixel differing) and every counter is unchanged (`blits` 600, `blittedMiB` 5273.4 in both arms)**: the switch
+refused to elide a copy-back the next frame needed, because eliding it would reset that history and move the
+fixture's own marker colour. The delivery half cannot be picture-verified on Photon (its cross-launch picture
+difference is 30.68), so the pair is: the fixture proves it refuses where something reads the copy, and Photon
+shows it removing three blits a frame where nothing does.
+
+**Verdict: not made the default, with a measured reason** - it removes 3 blits and 1.5 MiB a frame and moves no
+time inside the scene's own floor. Section 57.3 is answered for it.
+
 ## Pre-M4 boundary cleanup (metallum docs/pre-m4-boundary-cleanup.md carries the long form)
 
 The `render.metal3` sealing is done (metallum `267f3b6`) and the generation-neutral capability vocabulary exists
