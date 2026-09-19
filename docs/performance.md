@@ -444,8 +444,18 @@ acceptance test is two runs of **one configuration**, where any difference at al
 | pipelines | 41416 | 41599 | 0.44 per cent |
 | ms a frame of GPU time | 25.86 | 25.78 | **0.29 per cent** |
 
-So the resolution of a comparison is now **a few tenths of a per cent**, against the three to nineteen
-per cent it was, and every claim from here on can be read against that. What the fixture does not give
+**And the world's entities come out of it.** A rule stops new mobs and does nothing about the ones
+already standing in a save, and one extra entity draws a family's pass: measured, `cutout_cull entity`
+appeared in one run of one configuration and not the other, which moved the depth attachments by a tenth
+and the counted bytes by six per cent. So the freeze takes the entity stores out of the copy as well -
+`dimensions/*/*/entities`, which is the mobs and not the player, whose data is `players/` beside them.
+The same two-run test then reads: `loadedMiB`, `storedMiB`, `depthAttachments`, `blits` and the depth
+byte counters **identical**, encoders within 0.01 per cent, and **25.86 ms of GPU time a frame within
+0.11 per cent**. One variable pass is left - `shadow_cutout_cull entity`, which the player's own entity
+is enough to draw - and it costs the eleventh of a per cent the frame time varies by.
+
+So the resolution of a comparison is now **a tenth of a per cent**, against the three to nineteen per
+cent it was, and every claim from here on can be read against that. What the fixture does not give
 is identical pixels: particles respawn and the idle arm is in another position, so thirty per cent of
 pixels still differ between two runs of one configuration. **An image verdict therefore needs a scene
 without them** - the companion repository's own smoke fixtures, which already compare screenshots - and
