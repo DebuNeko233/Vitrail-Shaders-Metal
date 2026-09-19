@@ -181,7 +181,21 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   `MetalRenderPass`, `MetalComputeBridge`, `MetalDepthMipmapBridge`, `MetalSurface` and the `Metal3*` seats
   the specification names) and `com.metallum.render.shared` for the version-neutral resource classes.
   **Shared layer done** (`com.metallum.render.shared`, eleven classes, public by design, verified on both
-  scenes). **Started the facade route instead**: `com.metallum.render.metal3` now exists with `MetalFence` (two
+  scenes). **The facade's shape is now measured, not guessed** (from the game's own interface and the actual call
+  sites, so the next session does not re-derive it): `CommandEncoderBackend` declares **17 methods** -
+  `submit`, `transientMemory`, `createRenderPass`, `submitRenderPass`, `clearColorTexture`,
+  `clearColorAndDepthTextures` (two overloads), `clearDepthTexture`, `writeToBuffer`, `copyToBuffer`,
+  `writeToTexture`, `copyBufferToTexture`, `copyTextureToBuffer` (two overloads), `copyTextureToTexture`,
+  `createFence`, `writeTimestamp` - and the classes that stay outside it call the encoder for
+  `queueForDestroy`, `flushPendingClear`, `renderCommandEncoder`, `endEncoder`, `encodedLength`,
+  `commandBuffer`, `waitForSubmittedGpuWork`, `awaitSubmitCompletion`, `setNextPassReadsStorageImage`,
+  `transientMemory`. So the work is: rename the implementation to `Metal3CommandEncoder` in
+  `render.metal3` (beside `MetalFence`, and with `MetalRenderPass` moving in the same step because the two
+  are coupled through package-private state), write the 17 delegations plus those extras as the facade in
+  `render`, and open exactly the members that list names - which is the seam, as opposed to the 118 a plain
+  move wanted. Verified: the interface's method list was read from the game's own `CommandEncoderBackend`
+  class, not from memory.
+**Started the facade route instead**: `com.metallum.render.metal3` now exists with `MetalFence` (two
   members opened, vs 118 for a move), which is the `Metal3Synchronization` seat. **Next: the facade for
   `MetalCommandEncoder`** - define its outward shape (it already implements `CommandEncoderBackend`), rename
   the implementation to `Metal3CommandEncoder` in the same package as the fence, and delegate method by
