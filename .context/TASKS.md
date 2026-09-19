@@ -160,6 +160,12 @@ A pack compile holds the world back, so the screen used to be the frame from bef
 
 ## P1 - Performance, Metal 4 and MetalFX (see `docs/performance.md`)
 
+- [ ] **M3 of the dual-execution plan: isolate the existing implementation as Metal 3 (first half done).**
+  Done: `com.metallum.mtl.metal3` with the six command wrappers, imports and contracts repointed, behaviour
+  unchanged on hardware. Remaining: `com.metallum.render.metal3` (the frame path: `MetalCommandEncoder`,
+  `MetalRenderPass`, `MetalComputeBridge`, `MetalDepthMipmapBridge`, `MetalSurface` and the `Metal3*` seats
+  the specification names) and `com.metallum.render.shared` for the version-neutral resource classes.
+  **Next: finish M3's render half, then M4 (the Metal 4 frame submission shell).**
 - [ ] **M2 of the dual-execution plan: shader language profiles (done, not yet merged).**
   `MetalShaderLanguageProfile` pairs the SPIRV-Cross MSL version with `MTLLanguageVersion`; the Metal 3
   ladder is probed by compiling (3.2 -> 3.1 -> 3.0) and the Metal 4 pairing is 4.0; render and compute both
