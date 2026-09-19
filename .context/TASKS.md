@@ -160,6 +160,13 @@ A pack compile holds the world back, so the screen used to be the frame from bef
 
 ## P1 - Performance, Metal 4 and MetalFX (see `docs/performance.md`)
 
+- [ ] **M2 of the dual-execution plan: shader language profiles (done, not yet merged).**
+  `MetalShaderLanguageProfile` pairs the SPIRV-Cross MSL version with `MTLLanguageVersion`; the Metal 3
+  ladder is probed by compiling (3.2 -> 3.1 -> 3.0) and the Metal 4 pairing is 4.0; render and compute both
+  read it; `MTLCompileOptions.languageVersion` is set explicitly; the function cache identity names the
+  profile. The profile follows what executes, so Metal 3 sessions emit `msl3.2` today.
+  **Next: M3 (the pure refactor that isolates the existing implementation as Metal 3 into its own packages,
+  moved and not rewritten).**
 - [ ] **M1 of the dual-execution plan: runtime selector + capability record (done, not yet merged).**
   `render/execution/` holds `MetalApiGeneration`, `MetalExecutionPreference` (`-Dmetallum.execution`),
   `MetalSystemProfile`, `MetalDeviceCapabilities`, `MetalExecutionSelector`, `MetalExecutionServices`,
