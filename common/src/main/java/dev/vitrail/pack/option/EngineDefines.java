@@ -142,7 +142,18 @@ public final class EngineDefines {
 		defines.put("IRIS_VERSION", Integer.toString(IRIS_VERSION));
 		defines.put("MC_GL_VERSION", "460");
 		defines.put("MC_GLSL_VERSION", "460");
-		defines.put(osSymbol(environment.os()), "");
+		// The platform symbol, and one developer switch over it. Complementary Reimagined gates its Advanced
+		// Colored Lighting and its world-space reflections on `!defined MC_OS_MAC`, because Iris on macOS has
+		// never served the custom images those paths are built on - a statement about Iris and not about Metal.
+		// Whether this engine's own custom-image pipe carries them can only be asked with the pack on the
+		// branch it wrote for the platforms it serves, so the symbol is omitted when
+		// `-Dvitrail.shaderPlatformNonMac=true` is set. Omitted, never replaced by another platform's: posing
+		// MC_OS_LINUX would switch on every Linux-gated path in the pack as well. Off by default, and a session
+		// reporting a platform it is not is a session whose bug reports have to be read with that in mind.
+		if (!(environment.os() == Os.MAC && Boolean.getBoolean("vitrail.shaderPlatformNonMac"))) {
+			defines.put(osSymbol(environment.os()), "");
+		}
+
 		defines.put(vendorSymbol(environment.vendorName()), "");
 		defines.put(rendererSymbol(environment.rendererName()), "");
 		defines.put("MC_RENDER_QUALITY", "1.0");
