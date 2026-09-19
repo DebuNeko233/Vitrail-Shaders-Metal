@@ -1208,6 +1208,42 @@ GLSL compiler for `world0/composite6.fsh` and the shadowcomp compute program: wh
 defines `COLORED_LIGHTING_INTERNAL` is expanded before `lib/common.glsl` in those two expansions, and whether the
 declaration lines survive. That is a definite answer sitting in the expansion, not a fourth hypothesis.
 
+### The answer, and it is the pack's own macOS gate: `!defined MC_OS_MAC`
+
+`shaders/lib/common.glsl`, first 60 lines, verbatim:
+
+```
+31:    #define COLORED_LIGHTING 0 //[128 192 256 384 512 768 1024]
+32:    #define WORLD_SPACE_REFLECTIONS -1 //[-1 1]
+33:    #if defined IRIS_FEATURE_CUSTOM_IMAGES && SHADOW_QUALITY > -1 && !defined MC_OS_MAC && !(...)
+34:        #define COLORED_LIGHTING_INTERNAL COLORED_LIGHTING
+40:                #define WORLD_SPACE_REFLECTIONS_INTERNAL 1
+57:        #define COLORED_LIGHTING_INTERNAL 0
+58:        #define WORLD_SPACE_REFLECTIONS_INTERNAL -1
+```
+
+and this engine's side, `EngineDefines.java:313`: `case MAC -> "MC_OS_MAC";`.
+
+So on macOS the engine truthfully tells the pack the platform, the pack **skips its whole custom-image block by design**,
+and both features collapse to off: `COLORED_LIGHTING_INTERNAL 0`, `WORLD_SPACE_REFLECTIONS_INTERNAL -1`. Advanced
+Colored Lighting and world-space reflections are **not offered by Complementary on macOS** - that is the pack's
+decision, made because the custom-image/SSBO/3D-image path is what it needs and macOS is the platform it excludes.
+The 56 compile errors are then a guard inconsistency of the pack's own on a platform it excludes: the declarations
+in `lib/uniforms.glsl` sit under `COLORED_LIGHTING_INTERNAL > 0` (skipped) while some uses in
+`lib/voxelization/lightVoxelization.glsl` and `program/shadowcomp.glsl` survive without it.
+
+**Therefore this cannot be fixed in the engine without overriding a pack's explicit platform gate.** The options,
+and the order they belong in:
+
+1. **The pipe first.** Whether this engine's custom images work end to end on Metal is *unverified*: the
+   `image.<name>` directive was not even read until `f990ec31`. Nothing should be enabled on the strength of a
+   comment.
+2. **Report it upstream.** A pack that skips its declarations and keeps some uses is a pack bug on macOS,
+   independent of this engine.
+3. **Only then a decision:** a *developer-only* switch that omits `MC_OS_MAC` for testing would let the pack take
+   its non-mac branch - but that is overriding a platform gate the pack author wrote, so it must be explicit,
+   named as what it is, and never a silent default.
+
 ## Pre-M4 boundary cleanup (metallum docs/pre-m4-boundary-cleanup.md carries the long form)
 
 The `render.metal3` sealing is done (metallum `267f3b6`) and the generation-neutral capability vocabulary exists
