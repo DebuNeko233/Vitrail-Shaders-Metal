@@ -191,6 +191,21 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   mode), not a rename. `MetalResourceBinding` is out (previous commit); the remaining neutral part of
   `ArgumentBufferLayout` (`stageMask`, `descriptorSet`, `bufferIndex`, `encodedLength`) can follow once the
   key exists, with `MTLArgumentEncoder` staying on the generation side.
+**Prerequisite ①'s last piece (`MetalPipelineKey`) is specified down to the lines it touches, and not
+  started.** Where the identity material is: `MetalDevice.getOrCompilePipeline(RenderPipeline)` (line ~408)
+  is the only place a compiled pipeline is made - `this.compiledPipelines.computeIfAbsent(pipeline, p ->
+  MetalCrossShaderCompiler.compile(this, p, this.defaultShaderSource))` - and the object it makes takes
+  `MetalDevice, RenderPipeline info, vertexMsl, fragmentMsl, vertexEntryPoint, fragmentEntryPoint,
+  List<MetalResourceBinding>, usesArgumentBuffers, vertexArgumentBufferSets, fragmentArgumentBufferSets`
+  (`MetalCompiledRenderPipeline` line 81). So the key can be built at exactly that one place and stored on
+  the compiled object first, with the cache left on identity - the strangler order, and the only order that
+  does not change caching semantics in the same commit that introduces the key. Open questions that need the
+  game's own `RenderPipeline` read rather than assumed (its shader-location and defines accessors), and the
+  one semantic question: whether two distinct `RenderPipeline` objects that are semantically equal may share
+  one compiled pipeline - which is a behaviour decision, not a refactor. Verification recipe, now executable:
+  forced Metal 3 and AUTO, pack scene at the settled default (`--settle 25`, camera pinned), requiring the
+  cache to be cold on the first run of each arm (`compiles`/`pipeline` counters) and the frame time inside
+  the configuration's settled range (7.25-7.28 ms on this machine today).
 **Prerequisite ①'s second piece is done**: `MetalArgumentBufferLayout` (where an argument buffer sits, how
   big it is, which stages and descriptor set) is in `render.shared`, with the Metal 3 encoder composed beside
   it in the pipeline record - verified on the pack scene at the settled default (7.247 against 7.277 ms, 0.41
