@@ -191,6 +191,14 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   mode), not a rename. `MetalResourceBinding` is out (previous commit); the remaining neutral part of
   `ArgumentBufferLayout` (`stageMask`, `descriptorSet`, `bufferIndex`, `encodedLength`) can follow once the
   key exists, with `MTLArgumentEncoder` staying on the generation side.
+**Prerequisite ① is done except for the cache switch**: `MetalPipelineKey` exists in `render.shared`
+  (location, vertex/fragment shader locations, defines, **shader profile**, argument-buffer mode), is built at
+  the one place a pipeline is compiled and stored on the compiled object, with the cache still keyed by the
+  game's object. The fields come from the game's own accessors, read with `javap` rather than assumed.
+  Verified on the settled pack scene (7.253 ms, counters inside the configuration's settled range).
+  **Next: switch the cache to the key**, with the evidence the recipe in this file names (forced Metal 3 and
+  AUTO, cache cold per arm, frame time inside 7.25-7.28 ms), and answer the one behaviour question first:
+  may two distinct game pipeline objects that are semantically equal share one compiled pipeline?
 **Prerequisite ①'s last piece (`MetalPipelineKey`) is specified down to the lines it touches, and not
   started.** Where the identity material is: `MetalDevice.getOrCompilePipeline(RenderPipeline)` (line ~408)
   is the only place a compiled pipeline is made - `this.compiledPipelines.computeIfAbsent(pipeline, p ->
