@@ -643,3 +643,13 @@ ledger is unchanged at 15 couplings in 6 files.
 render pass and `MetalCompiledRenderPipeline` with its nested layout), and a mechanical move needs a reference
 fixer that understands nested and `mtl`/`objc` types. **Next attempt is a decision, not a move**: does
 `MetalCompiledRenderPipeline` become a `render.shared` contract, or does it move with the frame path?
+
+**Second move attempt: 118 errors, and the real seam is the facade's internals.** With `MetalCompiledRenderPipeline`
+made visible, moving the two frame-path files gave **118 errors** (first attempt: 82) - 24 nested
+`STAGE_VERTEX`/`STAGE_FRAGMENT`, 10 nested `ArgumentBufferLayout`, **14 `MetalDevice.useLabels()` /
+`metalDeviceHandle()`** (the facade's package-private members, called by the encoder), 30 import cascades.
+**The frame path reaches into the facade by package access** - that is what makes the move need widening, and
+widening is what produced the original 100/118/144. Reverted; build clean; ledger 15 in 6 files.
+**Next attempt must first make those two contracts**: what a generation's encoder may ask the device (labels, the
+native device handle) and the artifact's nested surface (stages, layout record). No ordering of `git mv` fixes
+this.
