@@ -191,6 +191,11 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   mode), not a rename. `MetalResourceBinding` is out (previous commit); the remaining neutral part of
   `ArgumentBufferLayout` (`stageMask`, `descriptorSet`, `bufferIndex`, `encodedLength`) can follow once the
   key exists, with `MTLArgumentEncoder` staying on the generation side.
+**Prerequisite ②'s first piece is done**: the frame's queue comes from `MetalExecutionServices` (its first
+  consumer), the handle crossing as an address, with a contract refusing `this.metalDevice.newCommandQueue()`
+  again. **Next: the rest of ② - `MetalDevice`'s facade losing the concrete generation and the *encoder* also
+  coming from the services; then prerequisite ①'s `MetalPipelineKey` (which needs designing, see below);
+  then the frame path's own facade move.**
 **Prerequisite ① has its first piece**: `MetalResourceBinding` (the neutral record describing one binding
   a compiled pipeline declares) is in `com.metallum.render.shared`, with the generation-specific remainder -
   the argument-buffer encoder, the pipeline states, cull/fill/topology - still in the Metal 3 pipeline object.
