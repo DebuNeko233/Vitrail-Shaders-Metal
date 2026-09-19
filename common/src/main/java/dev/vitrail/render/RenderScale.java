@@ -384,7 +384,7 @@ public final class RenderScale {
 		// and formats, a backend that is not this one - and the blit below is what the frame gets then.
 		boolean scaledWithMetalFx = false;
 		Object backend = Backends.encoder(encoder);
-		if (backend instanceof ScaleCommands commands) {
+		if (Backends.capabilities(encoder) instanceof ScaleCommands commands) {
 			boolean available = commands.vitrail$metalFxAvailable();
 			scaledWithMetalFx = available
 					&& commands.vitrail$metalFxScale(world, into, scaled.width, scaled.height);
@@ -400,7 +400,7 @@ public final class RenderScale {
 			Vitrail.logger().warn("The {}% render scale brings the picture back with a blit: the "
 					+ "backend behind {} carries no scale capability (mipmaps {}), so nothing MetalFX "
 					+ "offers can be reached", percent, encoder.getClass().getName(),
-					backend instanceof MipmapCommands);
+					Backends.capabilities(encoder) instanceof MipmapCommands);
 		}
 
 		if (scaledWithMetalFx) {

@@ -40,6 +40,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import dev.vitrail.render.Backends;
 
 /**
  * The storage images a pack declared with {@code image.NAME}.
@@ -781,8 +782,7 @@ public final class StorageImages implements AutoCloseable {
 	}
 
 	private static @Nullable StorageImageCommands storageCommands(CommandEncoder encoder) {
-		CommandEncoderBackend backend = ((CommandEncoderAccessor) encoder).vitrail$backend();
-		return backend instanceof StorageImageCommands commands ? commands : null;
+		return Backends.capabilities(encoder) instanceof StorageImageCommands commands ? commands : null;
 	}
 
 	int count() {

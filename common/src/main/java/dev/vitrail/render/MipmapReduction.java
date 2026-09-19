@@ -68,9 +68,7 @@ final class MipmapReduction {
 		}
 
 		GeometryHold.flush(() -> "a mip chain being filled");
-		CommandEncoderBackend backend = ((CommandEncoderAccessor) encoder).vitrail$backend();
-
-		return backend instanceof MipmapCommands commands
+		return Backends.capabilities(encoder) instanceof MipmapCommands commands
 				&& commands.vitrail$generateMipmaps(texture);
 	}
 }

@@ -645,7 +645,7 @@ final class PackCompute implements AutoCloseable {
 		GpuDeviceBackend deviceBackend = ((GpuDeviceAccessor) device).vitrail$backend();
 		Object commandBackend = ((CommandEncoderAccessor) encoder).vitrail$backend();
 		if (deviceBackend instanceof ComputeDeviceBackend computeDevice
-				&& commandBackend instanceof ComputeCommands computeCommands) {
+				&& Backends.capabilities(encoder) instanceof ComputeCommands computeCommands) {
 			return new BackendRoute(computeDevice, computeCommands);
 		}
 		return null;

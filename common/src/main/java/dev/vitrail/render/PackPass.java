@@ -649,7 +649,7 @@ final class PackPass {
 
 		// Said before the pass exists, because the backend decides the boundary as it builds one.
 		if (NARROW_STORAGE_BOUNDARY
-				&& Backends.encoder(encoder) instanceof AttachmentCommands boundary) {
+				&& Backends.capabilities(encoder) instanceof AttachmentCommands boundary) {
 			boundary.vitrail$setNextPassReadsStorageImage(this.readsStorageImage);
 		}
 
@@ -737,7 +737,7 @@ final class PackPass {
 	 * half and to storing everything for the other.
 	 */
 	private boolean tellTheBackend(CommandEncoder encoder, boolean writesEveryPixel) {
-		if (!(Backends.encoder(encoder) instanceof AttachmentCommands commands)) {
+		if (!(Backends.capabilities(encoder) instanceof AttachmentCommands commands)) {
 			return false;
 		}
 

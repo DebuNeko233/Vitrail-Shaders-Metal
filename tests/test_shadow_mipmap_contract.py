@@ -62,7 +62,10 @@ class ShadowMipmapContractTest(unittest.TestCase):
 
     def test_backend_capability_failure_still_clamps_shadow_sampling_to_base(self):
         reduction = compact(MIPMAP_REDUCTION)
-        self.assertIn("backend instanceof MipmapCommands commands && commands.vitrail$generateMipmaps(texture)", reduction)
+        # The capability is resolved through Backends.capabilities: asking the raw backend silently answered no for
+        # every backend that does not carry the capabilities itself, which is the fault this resolver exists for.
+        self.assertIn("Backends.capabilities(encoder) instanceof MipmapCommands commands "
+                      "&& commands.vitrail$generateMipmaps(texture)", reduction)
 
         mixin = compact(METAL_MIXIN)
         self.assertIn("import dev.vitrail.compat.metallum.MetallumDepthMipmapBridge;", mixin)
