@@ -359,6 +359,31 @@ difference it prints is lighting and particles rather than the switch. The frame
 used to owe now exists: the probe's line carries the window's own wall-clock, and the first thing it
 measured is that a third of the attachment traffic was worth nothing in it. That reading is in P1.
 
+**The per-pass report names every pass and does not price them.** `-Dvitrail.passTimings=N` is the
+instrument this phase wanted - one row a pass, ranked by the card's own timestamps, with the labels
+the game already puts on a pass - and it works as a list: a run of photon v1.3b prints `Vitrail
+shadow chunk`, `Vitrail chunk`, `Vitrail sky`, `Vitrail entity`, `Vitrail world0/deferred4` and the
+rest, which is the shape the trace could not export. Its milliseconds are another matter, and three
+readings say so rather than one:
+
+- The whole frame's passes are stamped at **1.348 ms** in a window whose frames take **28.25 ms** by
+  the same report's own middle-frame line, and 28.6 ms of shader-core activity per frame in the GPU
+  trace. The stamped total is five per cent of the work it claims to describe.
+- Shrinking the window from 1800x1019 to 900x509 makes the frame **2.3 times faster** (28.25 to 12.22
+  ms) and makes the stamped total **2.7 times larger** (1.348 to 3.671 ms), with the span growing from
+  3.2 to 10.0 ms. The shadow map shrinks with the window - 4080x4080 to 2048x2048 - so nothing in the
+  frame is fixed enough to explain that.
+- The largest row in the smaller window is `GUI before blur` at 0.823 ms, forty-three times the
+  0.019 ms it reads in the larger one, for a quarter of the pixels.
+
+The likely cause is that a counter sample written outside a render pass on a frame's command buffer
+does not drain the tile pipeline, so a pair of them measures the distance the *commands* were
+processed at and not the time the passes took; the report's own accounting leaves fifty frames of one
+window unsummed and reports no drops, which is a second thing to settle. Until it is, this phase's
+exit criterion is half met: the numbers exist and the per-pass attribution does not. That is also why
+P4 and P6 cannot be aimed yet - they are the phases that remove fragment work, and where the fragment
+work *is* remains unanswered.
+
 ---
 
 # Phase P1 - Attachment lifetime, and the load and store actions that follow
