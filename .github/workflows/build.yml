@@ -45,6 +45,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Check optional Metallum integration and smoke contracts
         run: |
+          python3 tests/test_debug_entry_lines.py
           python3 tests/test_metallum_compute_bridge.py
           python3 tests/test_metallum_status.py
           python3 tests/test_mrt_smoke_fixture.py

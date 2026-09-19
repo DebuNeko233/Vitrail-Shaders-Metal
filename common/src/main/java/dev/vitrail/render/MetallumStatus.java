@@ -23,6 +23,8 @@ public final class MetallumStatus {
 
 	private static volatile Status status;
 	private static volatile Boolean backgroundPipelinePrecompile;
+	private static volatile String metalApiGeneration;
+	private static volatile String metalFxStatus;
 
 	private MetallumStatus() {
 	}
@@ -118,6 +120,49 @@ public final class MetallumStatus {
 			return MISSING;
 		} catch (ReflectiveOperationException | LinkageError | RuntimeException ignored) {
 			return INCOMPATIBLE;
+		}
+	}
+
+	/**
+	 * The generation of the Metal API this session's device runs, as one word, or empty.
+	 * <p>
+	 * Apple has no API version to query - what a device runs is a set of families - so the backend answers
+	 * with the newest one it has, which is the sentence the F3 screen shows. Read once and kept: a session
+	 * cannot change its GPU.
+	 */
+	public static String metalApiGeneration() {
+		String known = metalApiGeneration;
+		if (known == null) {
+			known = readString("metalApiGeneration");
+			metalApiGeneration = known;
+		}
+
+		return known;
+	}
+
+	/**
+	 * What the MetalFX spatial scaler made of this device, or empty before it was asked.
+	 * <p>
+	 * The same sentence the backend logs, so a debug screen and a log read against each other.
+	 */
+	public static String metalFxStatus() {
+		String known = metalFxStatus;
+		if (known == null) {
+			known = readString("metalFxStatus");
+			metalFxStatus = known;
+		}
+
+		return known;
+	}
+
+	/** One string from the integration API, or empty where there is none to read. */
+	private static String readString(final String name) {
+		try {
+			Class<?> api = Class.forName(API_CLASS, true, MetallumStatus.class.getClassLoader());
+			Method method = api.getMethod(name);
+			return method.invoke(null) instanceof String value ? value : "";
+		} catch (ReflectiveOperationException | LinkageError | RuntimeException ignored) {
+			return "";
 		}
 	}
 

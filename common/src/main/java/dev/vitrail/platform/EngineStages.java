@@ -3,6 +3,7 @@ package dev.vitrail.platform;
 import dev.vitrail.cache.ModuleCache;
 import dev.vitrail.glsl.TranslationCache;
 import dev.vitrail.HostReport;
+import dev.vitrail.render.MetallumStatus;
 import dev.vitrail.render.EntityDraw;
 import dev.vitrail.render.HandDraw;
 import dev.vitrail.render.PackChain;
@@ -61,6 +62,16 @@ public final class EngineStages {
 		Vitrail.logger().info("Client setup reached on the {} backend, Sodium is {}",
 				HostReport.backend(),
 				Vitrail.platform().isModLoaded("sodium") ? "present" : "missing");
+
+		// The same two facts the F3 screen shows, said once here as well: the readers are the same, so a
+		// log and a capture cannot disagree, and a session nobody presses F3 in still names the generation
+		// of the API it ran and what the upscaler made of the device.
+		String metalApi = MetallumStatus.metalApiGeneration();
+		if (!metalApi.isEmpty()) {
+			String metalFx = MetallumStatus.metalFxStatus();
+			Vitrail.logger().info("Metal API: {}, MetalFX: {}", metalApi,
+					metalFx.isEmpty() ? "not asked yet" : metalFx);
+		}
 
 		// And what an install decides that this mod cannot, said before the pack is read so that it
 		// stands above whatever the pack has to say for itself.
