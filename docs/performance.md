@@ -1155,9 +1155,11 @@ an Objective-C exception rather than a nil). On the M5 Pro running macOS 27.0 th
 **"Metal 4 core API: available, the device has the family and answers to newMTL4CommandQueue"**, beside
 the MetalFX line said at the same moment. Nothing in a frame path depends on it yet: this is the capability
 advertisement item 1 asks for, and the fallback it names is not a branch to write but the path that is
-already running. What item 1 still owes is the other half of its shape - putting that answer on the
-advertised capability the pack-facing side reads (`metallum/api/MetallumApi.java`, `MetallumStatus`) rather
-than only in the log.
+already running. The other half of that item is done as well: the same
+cached answer is advertised on the integration surface (`MetallumApi.supportsMetal4CoreApi()`), failing
+closed before a device has been asked, so a caller can act on the hardware's answer without reading a log -
+and with the javadoc saying plainly that nothing in this engine renders through Metal 4 yet, which is what
+keeps a capability from being read as a promise. No caller takes it up: the path itself is item 3's work.
 
 **Item 4's prize is sized, and on this chain it is one boundary a frame.** In a 600-frame window at 100 per
 cent the probe reads `encoders` 18210 and `passChanged` 17610, which is **30.35 boundaries and 29.35 pass
