@@ -968,6 +968,34 @@ That also demotes one argument for P5: the "same shaders, different colour state
 milliseconds, not seconds. Specialisation remains the right shape for that work; it is no longer a
 compilation-time lever.
 
+**Measured across every run this instrument has recorded, and there are exactly two populations.**
+Sixty-odd collected runs of one pack in one window split cleanly, and the split is the edition the cache
+key names rather than anything the pack does:
+
+| the load's own report | a warm edition (same build as the last run) | a cold edition (a new build) |
+| --- | --- | --- |
+| reading the pack | 225-260 ms | 850-900 ms |
+| translating | **~280 ms, zero translator calls** | **~1700 ms, 63 calls, none served** |
+| flattening the chain's units | 580-660 ms | 480-700 ms |
+| making modules | **25-47 ms** | **1850-2065 ms** |
+| leftover pipelines in the background | 780-1025 ms | 2900-3235 ms |
+| pack open to the first full frame | **4-5 s** | **9-10 s** |
+
+Every run that follows a rebuild reads *zero* translator calls, and every run after a rebuild of the tree
+reads sixty-three; there is no third state in the set. **So the store misses nothing on a warm edition**:
+what a load pays, it pays once per edition, and the edition is what a development build's commit changes -
+which is the count this phase asked for, and it says the answer is not that the store is too small.
+
+That leaves the phase's exit criterion unmeetable by the mechanism it names, and the numbers say so twice.
+A warm load is 4 to 5 seconds and **compilation is 25 to 47 ms of it**; the 2.5 to 3.7 seconds a warm pack
+*switch* costs are the world rebuild the trace already identified, with the driver's compiler idle. What a
+warm load still spends that this phase could touch is the ~600 ms of chain flattening and the ~900 ms of
+background pipeline work - neither of which is a cache miss, and both of which are *this* engine's own
+work rather than the driver's. A cache key and a content-addressed pipeline store remain the right shape
+for what the exit criterion wants to see (and P5's specialisation key should be the same key), but the
+number they could move on a warm load is tens of milliseconds, and the phase's size is now a decision
+rather than an unknown.
+
 **Needs first.** P0's compilation counter, so that "warm" and "cold" are separated and a cache miss
 can be told from a slow compile.
 
