@@ -1092,6 +1092,46 @@ honest output is an interaction to report and a decision for the owner, not an e
 the game's fog from the clear, refreshed every frame) or stays put with the sky (then it is the pack's own
 horizon). Only the owner can see that; the code cannot.
 
+### Complementary r5.9.1: why Advanced Colored Lighting (and possibly WSR) does not run
+
+The owner reported "no support for Complementary's advanced coloured lighting and world-space reflection". The
+log of that session carries **56 compile errors**, all of them in `world0/composite6.fsh` and `compute.csh`:
+`'floodfill_sampler' : undeclared identifier`, `'floodfill_sampler_copy' : undeclared identifier`, and
+`GetLightSample` / `GetLightCalculated` / `GetComplexLightVolume` with "no matching overloaded function found".
+
+The cause is one properties directive the engine does not read. `ComplementaryReimagined_r5.9.1.zip`'s
+`shaders/shaders.properties` says:
+
+```
+iris.features.optional = CUSTOM_IMAGES SSBO BLOCK_EMISSION_ATTRIBUTE FADE_VARIABLE
+voxelizeLightBlocks = false
+    image.voxel_img          = voxel_sampler          red_integer r16ui   unsigned_int true  false 128 64 128
+    image.floodfill_img      = floodfill_sampler      rgba        rgba16f half_float   false false 128 64 128
+    image.floodfill_img_copy = floodfill_sampler_copy rgba        rgba16f half_float   false false 128 64 128
+```
+
+and its shaders declare `uniform sampler3D floodfill_sampler;` / `floodfill_sampler_copy` and use them in
+`GetComplexLightVolume` and `imageStore(floodfill_img, ...)`. Vitrail reads neither `image.<name> = ...` nor
+`iris.features.*`, and defines no `CUSTOM_IMAGES` macro (grep: no hits in `common/src/main/java`), so the
+declarations are compiled out while the uses remain - which is exactly the error shape above, the two type
+errors being fallout.
+
+This is a **compatibility** gap, the same class as the 3D-image machinery that already exists
+(`IntermediaryShaderModuleMixin` names Complementary's `uimage3D voxel_img`; `SamplerTypes` and
+`GlslCompilerMixin` bend `SpvDim3D` to `SpvDim2D` so a volume can reach a pipeline; `PackProgram.unbindable`
+refuses a `sampler3D` with nothing behind it). It is not a shader-semantics change and not a generation matter.
+
+**The work, in order:**
+1. Read `image.<name> = <samplerName> <formatType> <format> <type> <mipmap?> <clear?> <w> <h> <d>` in
+   `dev.vitrail.pack.source.PropertiesFile` / `PackDirectives` (the `Clear`/`ClearColor` cases at
+   `PackDirectives.java:531-536` are the neighbour to sit beside) and materialise the volume at that size and
+   format, bound under the **declared sampler name**.
+2. Read `iris.features.optional` / `iris.features.required` and define the matching macros, so the pack's
+   guards take the branch that matches what the engine actually provides.
+3. Acceptance: Complementary r5.9.1 loads with **no `floodfill_sampler` errors** on `composite6.fsh`/`compute.csh`,
+   and its ACL option stops being inert. Then check whether `WORLD_SPACE_REFLECTIONS` (same pack screen,
+   `screen.ACT_FEATURES_SETTINGS`, carried by `composite6`) returns with it or has a second cause.
+
 ## Pre-M4 boundary cleanup (metallum docs/pre-m4-boundary-cleanup.md carries the long form)
 
 The `render.metal3` sealing is done (metallum `267f3b6`) and the generation-neutral capability vocabulary exists
