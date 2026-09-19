@@ -835,6 +835,26 @@ matter; the Metal side of it is the argument-buffer binding model that P5 formal
 - Metal enumerations (storage modes and related enums):
   https://developer.apple.com/documentation/metal/metal-enumerations
 
+**What is actually there, measured.** The copy consumer is not empty on Photon, and the engine
+already prints the answer this phase was going to look for:
+
+    10 targets are copied back from their far half at the end of every frame, because the pack keeps
+    them and the chain left them there: [4, 5, 6, 7, 8, 9, 10, 11, 12, 14], and 3 of those are read
+    by nothing in the frame, so moving them is work nothing asked for
+
+So the declaration-versus-use gap named above is already reduced to a list of three: **three of the ten
+copies move a target that nothing in the frame reads.** At 1800x1019 a full-size colour target is 29 MiB,
+so three copies are about 87 MiB read and 87 MiB written a frame - of the order of a millisecond of a
+27.58 ms frame, which is the honest size of it: certain, named, and small. The binding consumer is in the
+same position rather than in a worse one - sampler reachability already runs at bind time
+(`Samplers bound from what a module reaches`) - so what is left for this phase is that list, and not a
+reflection project.
+
+**What would make it measurable.** The probe counts attachment loads and stores, encoders and bindings,
+and a copy-back is a blit, so none of its counters sees one: the copies are inside `gpuMs` and invisible
+in its decomposition. A blit counter - how many copies a window ran and how many mebibytes they moved -
+is the missing reading, and it is what turns "three of ten" into milliseconds before anybody skips them.
+
 **Exit criterion.** At least one real pack is shown to take fewer copies or fewer bindings because a
 sampler is provably unreachable after preprocessing, with no image change on the regression set, and
 the finding is written down with the pack and the evidence. If reflection turns out not to prove
@@ -952,6 +972,33 @@ cent it is 14.13 ms (**1.90 times**); at 50 per cent, 11.93 ms (**2.25 times**) 
 cost, and with the picture quality question that P6's placement section is about. It also bounds every
 other phase on this list: P4 can only remove work inside the 20 ms, and P1's verdict is consistent with
 the fit, because attachment traffic is not what the 20 ms is made of.
+
+**The seat's own cost, measured.** The upscaler this phase would replace is the engine's, and its cost is
+now a number too: one window of 1800x1019, four render scales, 600 frames each.
+
+| render scale | megapixels drawn | ms a frame of GPU time | against 100 per cent |
+| --- | --- | --- | --- |
+| 100 | 7.34 | 27.58 | - |
+| 80 | 4.70 | 22.46 | 1.23 times |
+| 65 | 3.10 | 18.36 | 1.50 times |
+| 50 | 1.83 | 14.50 | 1.90 times |
+
+Fitting those four to `fixed + per-megapixel + upscaler` gives
+
+    gpu ms a frame = 7.22 + 2.775 x megapixels drawn + 2.31 x (scale below 100)
+
+with a residual sum of 0.077 over four points, so the three parts separate cleanly: **7.22 ms of the
+frame does not scale with pixels at all, each drawn megapixel costs 2.775 ms, and the FSR 1.0 upscale
+plus its sharpen costs 2.31 ms** - paid at the window's size whatever the slider says, which is exactly
+what [render-scale.md](render-scale.md) says of it. The two fits agree to within two per cent on the
+per-megapixel term (2.775 here against 2.726 from the window sweep) and to within 0.3 ms on the fixed
+term, which is the run-to-run drift of a scene whose sun moves: the upscaler's 2.31 ms sits well above
+that drift, and the gains below sit far above it.
+
+So the numbers this phase starts from are: the world at 50 per cent is **1.90 times** the frames, at 65
+per cent **1.50 times**, at 80 per cent **1.23 times**, with the current upscaler already paid for - and
+**2.31 ms is the bar a replacement has to beat** at this window, or the frame gets slower while the
+picture is argued about.
 
 **Apple documentation.**
 
