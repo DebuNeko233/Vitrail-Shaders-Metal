@@ -1470,6 +1470,23 @@ upscaler and does not run it** (`composite3 (TAAU)` is in that session's "progra
 does not run"), so the engine's scale is not stacked on the pack's. What the picture at 55 per cent looks
 like is the phase's remaining item, and it is a human verdict rather than a number.
 
+**And the window is where the scale stops paying.** The sweep above varied the scale at a 1800x1019
+window, where the world and the output are the same size at 100 per cent and both shrink together below
+it. A player's window is not that shape: measured at the window a player's session used (3600x2260,
+Photon v1.3b, 600 frames at each scale), **the world at 100 per cent costs 29.95 ms a frame (33.4 frames
+a second) and at 55 per cent 14.31 ms (69.9)**. Two points give the split at that size: the world's own
+pixels cost 2.756 ms a megapixel, so at 55 per cent they are 6.78 ms of the 14.31 and **the other
+7.53 ms does not move with the slider at all** - the upscale writes every one of the window's 8.14
+million pixels whatever the world was drawn at, and the geometry, shadow and compute work is a property
+of the scene rather than of the scale. At 25 per cent, the slider's own floor, that fixed part puts the
+same scene at about 8.9 ms (112 frames a second), which is the ceiling the setting can reach. So 55 per
+cent buys 2.09 times against 1.00 and the next 30 points of slider buy about 1.6: **below roughly 60 per
+cent, more of the frame is the part the scale cannot touch than the part it can**, and that is where a
+player who expects the slider to keep paying finds that it does not. The session that motivated this
+reading reports 43 and 31 frames a second over two windows that each contain a pack reopen - neither is a
+steady reading, and the same build reports 172 over the window that contains the startup and its menus.
+
+
 **The correction this work forced, which is bigger than the phase.** Getting a frame to use MetalFX at
 all meant asking why it did not, and the answer was not about MetalFX. The game hands a `CommandEncoder`
 wrapper to everything, and the capabilities this engine adds are mixed into the
