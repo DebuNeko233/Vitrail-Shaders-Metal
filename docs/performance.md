@@ -402,17 +402,25 @@ Without that number there is no way to tell a real win from a smaller one.
 
 **Background: why the actions matter on this hardware.** Apple GPUs are tile-based deferred
 renderers: a render pass begins by loading each attachment into tile memory, the pass writes into
-tile memory, and it ends by storing the result back. Every `Load` and every `Store` is therefore
-system-memory traffic that exists only because the action said so, and `DontCare` on either side
-removes that traffic without changing what any shader reads inside the pass. Apple documents this
-model directly:
+tile memory, and it ends by storing the result back - "After the GPU finishes rendering each tile into
+tile memory, it writes the final result to device memory", in Apple's words, and tile memory is what
+"saves time and energy by avoiding accessing device memory as much as possible". An attachment in the
+ordinary private storage mode is *system memory*, and Apple states that plainly: "the `private` mode
+defines system memory that only the GPU can access", while only `memoryless` "defines tile memory
+within the GPU". So every `Load` and every `Store` is system-memory traffic that exists only because
+the action said so - unified memory included - and `DontCare` on either side removes that traffic
+without changing what any shader reads inside the pass. Apple documents this model directly:
 
 - Tailor your apps for Apple GPUs and tile-based deferred rendering:
   https://developer.apple.com/documentation/metal/tailor-your-apps-for-apple-gpus-and-tile-based-deferred-rendering
 - Render passes (the load and store actions are properties of a render pass attachment):
   https://developer.apple.com/documentation/metal/render-passes
+- Setting load and store actions (which action is for which case, and what each one costs):
+  https://developer.apple.com/documentation/metal/setting-load-and-store-actions
 - Resource fundamentals, for the storage modes that interact with this:
   https://developer.apple.com/documentation/metal/resource-fundamentals
+- Choosing a resource storage mode for Apple GPUs (unified memory, and what `memoryless` is for):
+  https://developer.apple.com/documentation/metal/choosing-a-resource-storage-mode-for-apple-gpus
 
 **Work.**
 
@@ -520,18 +528,40 @@ than free play. What is genuinely still owed, then, is the fixture, the second (
 and - now that the first phase has measured what it measured - a decision about whether P1's remaining
 work is worth its place ahead of P4 and P6.
 
-**On unified memory, and what that changes.** Apple Silicon puts the CPU and the GPU on one pool, and
-the tempting reading is that an attachment's load and store stop costing anything. They do not: tile
-memory is on-chip SRAM, so the store at the end of a pass writes the tile to the same DRAM the CPU is
-using and the next pass's load reads it back. Unified memory removes a transfer over a bus, which is
-what a discrete GPU pays for system-memory resources; it does not remove the transaction. What it does
-change is where the saving shows. The GPU is no longer the only client of that memory - chunk meshes
-are uploaded, sections are rebuilt, and the render thread's own work draws on the same bandwidth - so
-traffic removed from the frame is contention removed from the session, and contention is what a
-frame's tail is made of. The spread line one session printed reads `middle frame 28.25 ms, one in a
-hundred over 128.57 ms, 19 of the last 816 frames late`, and the comparison above read medians only:
-on this hardware a phase that removes bytes should be judged on the tail too, and that reading is one
-flag away - arm `-Dvitrail.passTimings` in both arms and compare the spread rather than the middle.
+**What unified memory does and does not change.** Apple documents the model in "Choosing a resource
+storage mode for Apple GPUs": Apple GPUs "have a unified memory model in which the CPU and the GPU
+share system memory"; the `private` mode "defines system memory that only the GPU can access"; and
+only the `memoryless` mode "defines tile memory within the GPU", which "has higher bandwidth, lower
+latency, and consumes less power than system memory". A render target in the ordinary private mode is
+therefore *system memory* under unification, and its load and store are made against system memory:
+what unification removes is the copy between pools, which is what a discrete GPU pays for a resource
+the CPU also uses, and not the transfer between tile memory and the pool. Apple's TBDR page says the
+same from the other side - "After the GPU finishes rendering each tile into tile memory, it writes the
+final result to device memory" - and describes tile memory as what "saves time and energy by avoiding
+accessing device memory as much as possible".
+
+What unification does change is *who is competing for that memory*: chunk meshes are uploaded, sections
+are rebuilt, and the render thread's own work draws on the same pool and the same bandwidth, so traffic
+removed from the frame is contention removed from the session - and contention is what a frame's tail
+is made of. One session's spread line reads `middle frame 28.25 ms, one in a hundred over 128.57 ms, 19
+of the last 816 frames late`, and the comparison above read medians only. On this hardware a phase that
+removes bytes should be judged on the tail as well, and that reading is one flag away: arm
+`-Dvitrail.passTimings` in both arms and compare the spread rather than the middle.
+
+**Apple prices the actions; only a measurement says whether the frame is paying them.** "Setting load
+and store actions" is explicit about the three loads and the two stores: `dontCare` "incurs no cost",
+`clear` "incurs the cost of writing the render target's clear value to each pixel", and `load` "incurs
+the cost of loading the previous values of each pixel from memory" and "is significantly slower" than
+either; `store` "incurs the cost of storing the values of each pixel to memory". The phase's two
+conditions are Apple's own. The load door is opened for an app that "renders all pixels of the render
+target" and does not need the previous contents, which is what `writesEveryPixelOfTheArea` tests,
+all-pixels half included. The store door is a decision "between render passes": "You don't need the
+previous contents of a render target in the next render pass. In the first render pass, choose
+`MTLStoreAction.dontCare`." So the mechanism implements the documented rule for the documented cases,
+and the measurement above is the part no page could supply: on this frame, removing 509 MiB a frame of
+the action Apple calls significantly slower bought 0.2 per cent of frame time. That is a fact about
+this frame and not about the API - the frame is bound in the fragment shader, and an action on a path
+the frame is not waiting for costs nothing to remove.
 
 **What is left to remove is smaller than what was removed for nothing.** The probe counts the depth
 attachment apart from the colour ones now, because the lifetime capability carries one flag an
@@ -555,6 +585,14 @@ store that the next operation on that depth overwrites or clears before anything
 load half already removed **509 MiB a frame and bought nothing**, and the entire remaining prize is
 smaller than that.
 
+Apple's guidance for that slot is worth reading against the current code: `storeAction.dontCare` is
+"[t]ypically the correct action for depth and stencil render targets", `loadAction`'s default for a
+depth target is `clear` rather than `load`, and the article's own example sets a depth attachment to
+`dontCare` on both sides. `MTLCommandBuffer` chooses a depth store of `store` unconditionally, which is
+the conservative end of that guidance. The pack is what makes Apple's typical case not this one: a
+depth target whose contents a later pass reads is exactly the case the store exists for, so wiring the
+slot would recover a fraction of the 444 MiB rather than all of it.
+
 The depth numbers also show a *tile round-trip* being paid rather than a byte count: eleven attachments
 a frame, but 24.7 MiB in an average store against 15.6 MiB in an average load, which is the shape of a
 4080x4080 shadow map (63.5 MiB) being stored by more than one pass while the main depth is what is
@@ -563,24 +601,41 @@ store between them instead of one each, and Metal allows it - a single encoder c
 state between draws. That is the part unified memory does not hand over, and `encoders` is the reading
 that says whether it is happening: 19575 over 600 frames is 32.6 a frame against 26 pack passes.
 
-**The phase's verdict on this hardware and this pack.** Both halves are wired, off by default, and
-measured. The load half removes a sixth of the frame's attachment traffic and no frame time at all; the
-store half removes nothing, because this chain reads almost everything it writes; the depth slot, the
-only attachment left, is worth less than the half that already measured zero; and the boundary switch
-moved no boundary. P1's mechanism stays - the lifetime facts are what P4's reachability work consumes,
-and the switch costs nothing when nothing is unread - but its place in the order is gone, and P4 and P6
-lead it. What would make it worth a default again is a frame that is bound on memory rather than on the
-fragment shader, and that is a property of the resolution and the pack rather than of the code: the
-deciding experiment is this same comparison at twice the pixels, or on a heavier pack, where the
-bandwidth demand grows and the elision has something to give back.
+**P1 is closed.** Both halves are wired, off by default, and measured on the pack and the hardware the
+plan was written for: the load half removes a sixth of the frame's attachment traffic and no frame time
+at all; the store half removes nothing, because this chain reads almost everything it writes; the depth
+slot, the only attachment left, is worth less than the half that already measured zero; and the boundary
+switch moved no boundary. The mechanism stays - the lifetime facts are what P4's reachability work
+consumes, and the switch costs nothing when nothing is unread - and the phase's place in the order does
+not.
+
+What would reopen it is a frame bound on memory rather than on the fragment shader, and that is a
+property of the resolution and the pack rather than of the code: the deciding experiment is this same
+comparison at twice the pixels, or on a heavier pack, where the bandwidth demand grows and the elision
+has something to give back. Above the action level Apple documents two levers for such a frame, and
+neither is a per-attachment flag:
+
+- `MTLStorageMode.memoryless`, for a texture "used only within a single pass and isn't needed in an
+  earlier or later rendering stage", which removes both directions at once by never letting the tile
+  reach system memory. The doc's own example is a depth or stencil target.
+- Tile shaders and imageblocks, which "allow your app to compute and save data to tile memory that's
+  persistent on the GPU between render passes" and so avoid "storing intermediate results out to device
+  memory" and loading them back.
+
+Neither applies to this pack's chain, whose targets are read across passes by construction - Photon's
+fifteen colour targets and its depth are each handed from one program to the next, which is what makes
+them targets rather than scratch. They are recorded because they are where the bytes would go if a
+future frame were memory-bound, and because a reader who finds the verdict above surprising should see
+what Apple's own answer to the same problem is.
 
 **Exit criterion.** Attachment bytes per frame fall on the P0 capture, the bindings and encoder counts
 do not regress, and the regression set in "Regression, not just frame rate" is unchanged, image for
-image. The counter alone does not close this phase. On the pack measured above the whole of that fall
-is the load half - the store half is worth what the chain is asked for, and this chain asks for
-nothing - and the third clause is the one that is open: the bytes fall, the counts do not regress,
-and the image has not yet been compared on a scene that repeats. It also costs a clause this phase
-did not have: what the bytes were worth. Both are taken by a deterministic fixture, not by free play.
+image. The counter alone does not close this phase. Two of the three are met on the pack measured above -
+the bytes fall and the counts do not regress - and the third is not: the image has not been compared on
+a scene that repeats, because two launches of one scene do not draw the same frame. The phase is closed
+on the verdict above and not on this criterion: what it was for is measured, the answer is that this
+frame does not pay it, and the comparison that would finish the criterion is owed to the deterministic
+fixture every later phase wants anyway.
 
 **Risk.** The failure mode is silent and looks like a pack defect, which is why the phase is
 entry-gated on P0 and exit-gated on the comparison rather than on the number.
