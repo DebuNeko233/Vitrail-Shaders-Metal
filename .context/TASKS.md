@@ -181,7 +181,17 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   `MetalRenderPass`, `MetalComputeBridge`, `MetalDepthMipmapBridge`, `MetalSurface` and the `Metal3*` seats
   the specification names) and `com.metallum.render.shared` for the version-neutral resource classes.
   **Shared layer done** (`com.metallum.render.shared`, eleven classes, public by design, verified on both
-  scenes). **Prerequisite ① has its first piece**: `MetalResourceBinding` (the neutral record describing one binding
+  scenes). **Prerequisite ①'s second piece is a finding, not an extraction: the pipeline identity does not exist.**
+  `MetalDevice`'s pipeline cache is an `IdentityHashMap<RenderPipeline, MetalCompiledRenderPipeline>` keyed
+  by the **game's own pipeline object**, and the argument-buffer state is a
+  `HashMap<ArgumentBufferLayout, MTLBuffer>` keyed by a Metal 3 layout inside `MetalRenderPass`. So the
+  migration table's "shared logical pipeline + generation-specific compile artifacts" has to *introduce* a
+  `MetalPipelineKey` rather than move one - which makes that piece a design step with its own evidence (the
+  key must be what two generations can both look up: pack program, stage, defines, profile, and the layout
+  mode), not a rename. `MetalResourceBinding` is out (previous commit); the remaining neutral part of
+  `ArgumentBufferLayout` (`stageMask`, `descriptorSet`, `bufferIndex`, `encodedLength`) can follow once the
+  key exists, with `MTLArgumentEncoder` staying on the generation side.
+**Prerequisite ① has its first piece**: `MetalResourceBinding` (the neutral record describing one binding
   a compiled pipeline declares) is in `com.metallum.render.shared`, with the generation-specific remainder -
   the argument-buffer encoder, the pipeline states, cull/fill/topology - still in the Metal 3 pipeline object.
   Both scenes unchanged. **Next pieces of ①: the pipeline's *key/identity* and the argument-buffer layout's
