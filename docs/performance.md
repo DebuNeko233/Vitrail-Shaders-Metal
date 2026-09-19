@@ -1215,30 +1215,28 @@ run comes up on MoltenVK with no Metal device, no pack and no probe window - and
 as an empty collection rather than as a wrong backend. The setting is `preferredGraphicsBackend` in the
 instance's `options.txt`.
 
-**Item 4's prize is sized, and on this chain it is one boundary a frame.** In a 600-frame window at 100 per
-cent the probe reads `encoders` 18210 and `passChanged` 17610, which is **30.35 boundaries and 29.35 pass
-changes a frame**, with `submit` at 600 - one command buffer a frame - so the engine's own steady overhead
-is **one boundary per frame** and the other twenty-nine are the pack chain's own passes. The frame the
-engine prints its reasons for shows where the engine's share goes while a pack is opening: ten of its
-thirteen boundaries are the engine's own, **seven of them pending clears** (six colour, one shadow), one a
-copy-back, against thirty-five textures cleared - so the clears are a *load-time* cost, and batching them
-(one clear pass per group of same-shape attachments) would shorten a load rather than a frame. That is the
-same shape as P2's result and it reorders this phase's two remaining items: what would move the boundary
-count is item 3 - the attachment map that lets one encoder carry "the same attachment set, and then a
-different one" - and it needs the Metal 4 path, while item 4's unified compute encoder has about one
-boundary a frame to absorb.
+**Item 4's prize is sized, and the first reading of it was wrong.** The probe counted encoder *ends that
+were given a reason* and reported 30.35 a frame, which was read as "one boundary of the engine's own and
+twenty-nine of the pack's". Counting where each encoder is *created* instead - render pass, blit, compute and
+materialised clear - says something else over the same 600 frames at 100 per cent:
 
-**And the clear batch that sizing suggested does not survive reading the code.** The proposal was to
-merge the seven pending-clear boundaries into one clear pass. `MetalCommandEncoder.flushPendingClear` shows
-why that is not the same thing: a clear is materialized lazily, at the moment something is about to read the
-target, and the encoder it opens **stays current** so the write or the read that follows continues in it -
-the clear already piggybacks wherever the attachment set allows. Its boundary is then forced by the next
-different attachment set, which is the pass structure rather than the clear, and clearing eagerly to batch
-them would pay for targets a later pass overwrites anyway, which is exactly what `clearIsRedundant` exists
-to avoid. So the engine's seven clears in that load frame are not seven removable boundaries, and the one
-boundary a frame that remains is the price of the encoder switch the Metal 4 attachment map is designed to
-remove. The honest next lever on this chain is therefore item 3 and its prerequisite - the Metal 4 path -
-and not a batching pass on the current one.
+| encoder opened for | in 600 frames | a frame |
+| --- | --- | --- |
+| a render pass | 22056 | 36.76 |
+| a blit | 9000 | **15.00** |
+| a compute pass | 1800 | 3.00 |
+| a materialised clear | 600 | 1.00 |
+| **all of them** | 33456 | **55.76** |
+
+So the frame opens **55.76 encoders and the engine's own work is 19 of them** - a third - and the blits are
+the largest single group by far. `encoders` reads 30.35 because an encoder ended without being given a
+reason (which every blit and compute encoder is, since the next one ends it) is not counted at all: the
+counter was measuring the ends it could name, not the boundaries that exist. That is the number P5's fourth
+item is aimed at - the unified compute encoder absorbs blit, compute and acceleration-structure encoding,
+which is 18 of those 19 a frame - and it is a far larger prize than the one boundary the first reading
+implied. The instrument carries the split now (`frame-probe openers renderPasses=... blitEncoders=...
+computeEncoders=... clearEncoders=...`), counted at each creation site, so a later reading can be compared
+against it rather than against a total whose meaning was assumed.
 
 **Apple documentation.**
 
