@@ -355,6 +355,13 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   `servicesSelected=metal3 ... referenceShell=false` (forced `-Dmetallum.execution=metal3`), both executing
   Metal 3 at 1.78 ms wallP50 with a picture difference of 0.03. The AUTO line is the evidence: before the fix
   that arm's services would have answered `metal3`.
+  **And the readiness seam nothing asks**: `framePathReady()` and `isReferenceShell()` have exactly one reader
+  in the whole source tree - the log line just added. `framePathReady()` is `!isReferenceShell() && selected()
+  == executing()`, `executing()` is a constant `METAL3`, and AUTO's `selected()` is `metal4`, so readiness is
+  structurally false and nobody notices because nobody asks. **The first M4 change is therefore not a Metal 4
+  command buffer but making `executing()` a property of the session rather than a literal** - the same fix
+  `selected()` just needed - so that a forced Metal 3 launch and an AUTO launch that chose Metal 4 stop being
+  indistinguishable where it decides which frame path runs.
 **Prerequisite ①'s last piece (`MetalPipelineKey`) is specified down to the lines it touches, and not
   started.** Where the identity material is: `MetalDevice.getOrCompilePipeline(RenderPipeline)` (line ~408)
   is the only place a compiled pipeline is made - `this.compiledPipelines.computeIfAbsent(pipeline, p ->
