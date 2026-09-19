@@ -1237,6 +1237,19 @@ which is 18 of those 19 a frame - and it is a far larger prize than the one boun
 implied. The instrument carries the split now (`frame-probe openers renderPasses=... blitEncoders=...
 computeEncoders=... clearEncoders=...`), counted at each creation site, so a later reading can be compared
 against it rather than against a total whose meaning was assumed.
+**And the accounting is complete enough to say what is left.** With the blit sharing in, a frame at the
+owner's window shape opens **44.65 to 45.76 encoders**: 36.8 of them render passes, **5 blits**, 3 compute
+dispatches - the depth mip and the two colour mip reductions the pack's lod reads ask for - and 1
+materialised clear. Every one of those has a reason, and the compute is the pack's own declared need rather
+than engine overhead. Measured beside it, the encoder work shows up as about three per cent of wall clock at
+55 per cent (12.27 ms before the sharing, 11.91 after) and nothing outside noise at 100 per cent, because
+**the frame is GPU-bound at every scale this instrument has measured** - `gpuMs` and `windowMs` agree to
+within 0.3 per cent - so fewer encoders buy back CPU time the frame was not waiting on. Current numbers at
+that window, 600 frames each: **55 per cent 11.91 ms (83.9 frames a second), 65 per cent 13.73 ms (72.8)**.
+What that means for the phases left is worth stating plainly: P4's dead passes and P5's unified encoder
+reduce *encoding*, and the only lever left that reduces *GPU work* on this chain is the upscale the seat
+already has.
+
 
 **And the first thing that split bought is ten encoders a frame.** Each of the engine's copy methods ended its
 blit encoder on the way out - `blit.copy...; endEncoder();` - so two copies in a row could never share one,
