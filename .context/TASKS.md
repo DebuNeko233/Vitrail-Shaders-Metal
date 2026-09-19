@@ -835,12 +835,21 @@ cent)** with `storedMiB` **132795.0 to 131199.7 (-1.2 per cent)** while `encoder
 `depthAttachments` stay identical and frame time moves +0.2 per cent, and the pictures differ by 4.05 - inside
 the same floor. `Error loading class` is 0 in every arm.
 
-### Batch 3 - compute/depth/close neutrality (metallum side is partly done)
+### Batch 3 - compute/depth/close neutrality - **done** (`83c19d40`, metallum `0d38f0f`, `b77b1bf`, `cced8dd`)
 
 `MetalFrameDepthMipmaps`, `MetalFrameComputeCommands`, `MetalComputeCompiler` and `MetalComputePipelineResource`
-exist and the Metal 3 encoder and execution state implement them; the flat compute and depth facades already
-route through them (`96ed4dd`). What is left is the cross-repo half: Vitrail's `MetallumComputeBridge` and
-`MetallumDepthMipmapBridge` calling the flat facades (they already do) and the fixtures that prove it.
+exist and the Metal 3 encoder and execution state implement them; the flat compute and depth facades route
+through them (`96ed4dd`). The cross-repo half was the fixtures that prove it. On this side the reach contract
+now closes the flat surface: every backend class name this repository resolves in a string must be one of ten -
+the nine flat facades plus `com.metallum.api.MetallumApi` - because a class reached by name is a runtime lookup
+and anything off the list is a class the other repository may move. It also gains the depth-bridge fixture, the
+one whose absence was visible as darker shadows: the answer arrives when the flat bridge is present, an older
+backend answers "not mine" rather than throwing, and the negative is cached. Both are proved by mutation.
+
+**What this fixture cannot see, recorded so it is not read as more than it is**: it compiles a synthetic class
+carrying the signature the adapter looks up, so it proves this half of the seam. Drift on the metallum side is
+closed by metallum's own pins and by its generation-reach ledger, and the pairing is a convention between the
+two repositories rather than a check either CI can run, because neither checkout can see the other.
 
 ### Verification, per batch
 
