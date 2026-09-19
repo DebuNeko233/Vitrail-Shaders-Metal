@@ -329,7 +329,14 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   **cold** first attempt (the flipping session was the first to touch Metal 4 argument tables in a while; the
   session that did not ran minutes after runs that had each presented 600 frames through them). The test needs
   a genuinely cold state - reboot, long idle, or the first run of the day - and **the `lastFailure()` plumbing
-  has not fired yet**, so its usefulness is unproven rather than proven. It stays ahead of M4.
+  has not fired yet**, so its usefulness is unproven rather than proven. It stays ahead of M4. **The
+  equivalence question in the sharp scene is answered, though**: no-pack, camera pinned, 600 frames each,
+  `plain` against `-Dmetallum.metal4Present=true` gives a picture difference of **mean 0.04, 0.08 per cent of
+  pixels differing at all** - the same number two runs of one configuration show in that scene (0.04-0.05) - so
+  **the Metal 4 present is equivalent to the Metal 3 road**, verified where the test is sharp, with `wallP50`
+  1.75 ms in both arms and counters differing only by the presentation itself (600 fewer viewport sets, the
+  present's GPU time accounted on the Metal 4 queue: `gpuM4Ms` 47.03). The pack scene stays unresolvable, and
+  that is now a statement about the test bed rather than about the road.
 **Prerequisite ①'s last piece (`MetalPipelineKey`) is specified down to the lines it touches, and not
   started.** Where the identity material is: `MetalDevice.getOrCompilePipeline(RenderPipeline)` (line ~408)
   is the only place a compiled pipeline is made - `this.compiledPipelines.computeIfAbsent(pipeline, p ->
