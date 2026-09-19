@@ -229,7 +229,7 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   that still names the frame path's concrete generation, and it requires the ledger and the tree to agree in
   both directions - a new coupling fails, and finishing one without deleting its line fails too. It prints
   the total on every run, so the number can only go down:
-  `the frame path's isolation still owes 21 couplings in 9 files` (the first one is already gone:
+  `the frame path's isolation still owes 20 couplings in 8 files` (the first one is already gone:
   `MetalTransientMemory` now takes the encoder's own `MetalDestructionQueue` instead of the encoder, so the
   shared layer stops naming the frame path's class - semantics identical by construction, verified at 7.31 ms
   against the same session's 7.31 ms baseline with every counter equal; the second line needed no
