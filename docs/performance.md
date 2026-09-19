@@ -482,6 +482,18 @@ acceptance test is two runs of **one configuration**, where any difference at al
 | pipelines | 41416 | 41599 | 0.44 per cent |
 | ms a frame of GPU time | 25.86 | 25.78 | **0.29 per cent** |
 
+**And the harness now writes the settings a frame is measured under, because a cap reads exactly like a
+slow engine.** The staged instance carried its own `maxFps` (120) and `enableVsync`, and neither was part
+of what the harness set - so a window that was 120 frames a second because the *game* limited it looked
+like a display doing it. Measured at 55 per cent in fullscreen (1920x1200, with 1056x660 of world): **120.2
+frames a second with the limiter in place and 137.4 with `maxFps` at 260**, same window, same scale, same
+GPU time (7.02 against 7.16 ms) - and turning vsync off changed nothing at all, which is what named the
+limiter rather than the display. Every profile key is written before every run now (`maxFps` 260, vsync
+off, windowed, vanilla clouds off) and the profile is echoed into the run's own output, with a contract
+refusing a launcher that does not write it. The vanilla cloud key is the one the game writes back itself,
+so it is the profile's single soft entry; the others hold. The owner's own instance already runs at
+`maxFps` 260, so their session was never limited by this.
+
 **And the world's entities come out of it.** A rule stops new mobs and does nothing about the ones
 already standing in a save, and one extra entity draws a family's pass: measured, `cutout_cull entity`
 appeared in one run of one configuration and not the other, which moved the depth attachments by a tenth
