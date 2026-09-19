@@ -77,10 +77,15 @@ final class BackendComputePass implements AutoCloseable {
 		this.textureStage = textureStage;
 	}
 
-	// The reusable-map candidate was reverted here: it removed every map allocation a dispatch (measured,
-	// 0 built against 3) and a picture symptom was reported in the same session. Correctness outranks a CPU
-	// allocation that buys no frame time on a GPU-bound frame, so a resolve builds its own maps again and
-	// the census counts them.
+	/**
+	 * The maps this program's dispatches fill, made once and reused.
+	 * <p>
+	 * Reapplied, and the reason the revert was made turned out not to be this: the picture symptom reported
+	 * beside it was the pack's own boundary fog switched off, and the arm that ran with this change on read the
+	 * reference scene intact (0 maps built a dispatch against 3, everything else equal). Kept here so phase 7's
+	 * before/after is a measurement rather than a plan.
+	 */
+	private final PackComputeBindings.Scratch scratch = PackComputeBindings.Scratch.of();
 
 	void dispatch(ComputeDeviceBackend deviceBackend, ComputeCommands commands, PackValues values,
 			ColorTargets targets, int width, int height, TargetSchedule.Bound step,
@@ -106,7 +111,8 @@ final class BackendComputePass implements AutoCloseable {
 				step,
 				depth,
 				distant,
-				transientBuffers());
+				transientBuffers(),
+				this.scratch);
 		int[] groups = this.compute.groupsAt(width, height);
 		if (!commands.vitrail$dispatchCompute(
 				this.pipeline,
