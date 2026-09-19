@@ -738,6 +738,36 @@ typed `MetalExecutionState`, naming no generation - and the contract records tha
 Phase D's condition ("delete it if no neutral caller needs it") is therefore not met, and the accessor is the
 seam the moved `Metal3ComputeBridge.compile` will use.
 
+## Long-run performance optimisation (plan from the owner, in chat; progress log here)
+
+The owner's plan: a data-driven optimisation pass over `perf/optimisation` with fixed protocol (Photon v1.3b,
+55 %, camera pinned, 25-frame warm-up, 600 frames, Unlimited FPS, unchanged present mode, resolution recorded),
+A/B discipline (one variable at a time, A-B-A where a restart is needed), a minimum meaningful threshold
+(<1 % noise, 1-2 % only with strong mechanism evidence, >=2 % keep, >=5 % high value), one commit per kept
+optimisation, revert when the gain is within noise or correctness is uncertain, and a final report table with
+`NOT MEASURED` wherever no run exists. It runs to a Definition of Done (measurement complete, target copy policy
+decided, feedback copies understood, attachment traffic decided, storage boundary decided, compute allocations
+handled, corpus correct, lifecycle clean, architecture clean) and stops there - not at zero overhead.
+
+**Phase 0 is not complete: there is no trustworthy pack baseline yet.** From 00:22 onward every harness arm with
+`--pack photon_v1.3b` counted a window that drew **no pack work** - `renderPasses` ~1 950 (3.2 a frame),
+`blits=0`, `computeEncoders=0`, `loadedMiB` ~11 000 - counter-identical to `--no-pack`, while the same invocation
+read 40.8 passes a frame with `blits=6600` at 00:19 (`run/gen-api2`). The pack loads (503 files, 339 programs),
+its first-full-frame line appears, and by `00:26:55` the log says `0 of the 0 pack modules walked`, with no error
+anywhere; the probe answers regardless. The `Saving and pausing game` / `Stopping worker threads` lines are in
+the **good** run too, so they do not mean "the level was left" - do not use them as the explanation.
+
+What is already done about it (metallum `1199f39`): `tools/run-vitrail-performance.sh` now **refuses** a pack run
+whose window did not draw the pack - under 10 render passes a frame **and** zero copy-backs - and fails the run
+the way it already refuses a non-Metal session. Verified: `gen-api2` 40 passes/6600 blits accepted;
+`pacing-pack` and `pacing-wait` 3 passes/0 blits refused.
+
+**Next action, exactly:** read every logger in `metallum/run/pacing-pack/plain/latest.log` between `00:26:48` and
+`00:26:55` (and the same offset from the first full frame in `run/gen-api2`) to find what unloads the pack or
+ends the scene before the window opens; then re-run the pack arm until the guard accepts it, and take the Phase 0
+baseline with `pass-census` and `passTimings` on. Nothing in the plan's Phase 1+ may be measured before that,
+because a menu frame reads as a very fast pack.
+
 ## Pre-M4 boundary cleanup (metallum docs/pre-m4-boundary-cleanup.md carries the long form)
 
 The `render.metal3` sealing is done (metallum `267f3b6`) and the generation-neutral capability vocabulary exists
