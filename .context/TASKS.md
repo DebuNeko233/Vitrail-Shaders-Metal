@@ -1132,6 +1132,30 @@ refuses a `sampler3D` with nothing behind it). It is not a shader-semantics chan
    and its ACL option stops being inert. Then check whether `WORLD_SPACE_REFLECTIONS` (same pack screen,
    `screen.ACT_FEATURES_SETTINGS`, carried by `composite6`) returns with it or has a second cause.
 
+**Correction to the above, from reading the pack's own guards (round 24).** The declarations are *not* guarded by
+`CUSTOM_IMAGES`; they sit under a pack option macro:
+
+```
+shaders/lib/uniforms.glsl   declares:  uniform usampler3D voxel_sampler;
+                                       uniform sampler3D floodfill_sampler;
+                                       uniform sampler3D floodfill_sampler_copy;   <- under #if COLORED_LIGHTING_INTERNAL > 0
+shaders/lib/voxelization/lightVoxelization.glsl   uses them (2)
+shaders/program/shadowcomp.glsl                   uses them (8)
+shaders/world0/composite6.fsh                     is a wrapper: #include "/program/composite6.glsl"
+```
+
+The pack tests features with `#if COLORED_LIGHTING_INTERNAL` (21 sites) and `#if WORLD_SPACE_REFLECTIONS_INTERNAL`
+(21 sites), and `CUSTOM_IMAGES` appears only in `iris.features.optional`. So the 56 "undeclared identifier" errors
+mean the **declaration was compiled out while the uses were not** - a preprocessor/include question first, and
+only then the volume question: `uniforms.glsl` must reach the failing program with `COLORED_LIGHTING_INTERNAL > 0`
+the same way the file that uses the samplers did. Reading `image.<name>` (the parser added in `f990ec31`) is still
+required for the volume to exist, but it is not by itself what makes the declaration appear.
+
+**Next:** read how `COLORED_LIGHTING_INTERNAL` is defined in the pack (likely a `settings.glsl` /
+`lib/settings.glsl` included early) and how this engine's include inlining carries macro definitions between an
+included file and its includer - the case to check is an include that defines the macro in one chain and not in
+the other. Then, in order: the guard, the volume, `iris.features.*` macros.
+
 ## Pre-M4 boundary cleanup (metallum docs/pre-m4-boundary-cleanup.md carries the long form)
 
 The `render.metal3` sealing is done (metallum `267f3b6`) and the generation-neutral capability vocabulary exists
