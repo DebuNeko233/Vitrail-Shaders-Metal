@@ -1353,6 +1353,32 @@ carried, 17.2 microseconds each) and the picture is the Metal 3 road's. The next
 the copy submission's completion is not seen: the allocator ring is shared by two submissions a frame, and
 the values each waits on are the thing to check first.
 
+**Apple's own sample settles what the present has to look like, and this path does not have that shape yet.**
+"Explore Metal 4 games" (WWDC25, 11:48) gives the order for a frame the new command structure presents:
+
+```objc
+id<MTLDrawable> drawable = [metalLayer nextDrawable];
+[queue waitForDrawable:drawable];
+// ... encode render commands to commandBuffer ...
+[queue commit:&commandBuffer count:1];
+[queue signalDrawable:drawable];
+[drawable present];
+```
+
+Two things in it are worth stating because this path got each of them wrong in turn. The wait for the
+drawable comes **before** anything is committed to it, and the signal and the present come **after** the
+commit - the queue's own operations are what synchronise the drawable, and a path that skips the wait takes
+the picture and never draws it, which is measured: 0.18 ms a frame and nothing presented. And the whole
+frame is **one command buffer and one commit**; this path makes two submissions a frame - the frame-shaped
+one and the copy that presents - and its allocator ring accounts for neither correctly, which is the other
+thing measured (the ring gives up waiting for a slot that a never-completing submission holds).
+
+The restructure that follows the sample - the scratch pass and the present copy inside one submission,
+committed after the frame's own commit, with `waitForDrawable` before and `signalDrawable` plus `present`
+after - is written and parked unverified on `wip/metal4-one-submission`, because its first run collected no
+probe window from either arm. What is default and verified is the submission itself: 600 frames of 600
+carried, 15 to 19 microseconds each, no frame-time effect.
+
 **Apple documentation.**
 
 - Understanding the Metal 4 core API:
