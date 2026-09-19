@@ -418,21 +418,39 @@ first is in P6: over four window sizes the frame's GPU time is a straight line i
 do not scale with them and 2.726 ms a megapixel that do, and the wall clock agrees with the GPU at every
 one of the four.
 
-**A comparison needs a scene that repeats, and this one does not.** Every measurement above compares
-two launches of the game, and two launches of this world do not draw the same frame. The first evidence
-was the picture: two runs of one configuration differ in ten per cent of their pixels, because the
-world's clock runs while a session is loaded and the sun has moved by the time the second run's window
-opens. That is fixed at the harness: the staged world holds one time of day and one player position, and
-it is copied in again before every run, unless `--continue-world` asks otherwise. What the fix does not
-give is a scene that repeats *structurally*. With the world starting fresh, the two arms of one A/B still
-differ by **eleven per cent in pipelines and nineteen in depth attachments** - ten passes a frame
-attaching depth against eleven - which is a different frame rather than a switch, and it is why that
-run's four per cent of frame time could not be attributed to anything. Chunk loading, entities and
-weather are not ours to pin by a copy, so what a small effect needs is a **deterministic fixture**: a
-scene the harness controls, which is what the companion repository's smoke fixtures already build for
-its smoke tests, and what the picture half of P1 and the copy half of P4 are both waiting on. Until then the
-resolution of a comparison is a few per cent of frame time, and a claim below that is not measurable
-however many decimal places it is printed to.
+**A comparison needs a scene that repeats, and one now exists.** Every measurement above compares two
+launches of the game, and two launches of a live world do not draw the same frame. The picture showed it
+first: two runs of one configuration differ in ten per cent of their pixels, because the world's clock
+runs while a session is loaded and the sun has moved by the time the second run's window opens. The
+counters showed it worse. Restaging the save before every run fixes where the clock starts and nothing
+else - the two arms of one comparison still differed by **eleven per cent in pipelines and nineteen in
+depth attachments**, which is a different frame rather than a switch, and it is why that run's four per
+cent of frame time could not be attributed to anything.
+
+The companion backend's `tools/freeze-world.py` closes that: it rewrites the staged world's `level.dat`
+- gzipped NBT, losslessly, with a self-test that round-trips a document carrying every tag type before it
+is trusted with a real save - pinning `Time` to noon and setting the game rules that let a world change
+on its own (the daylight and weather cycles off, mob spawning and its patrols and traders off, random
+ticks and fire spread off). On a real save it is verified to change those values and nothing else. The
+acceptance test is two runs of **one configuration**, where any difference at all is irreproducibility:
+
+| counter | run one | run two | difference |
+| --- | --- | --- | --- |
+| depth attachments | 6600 | 6600 | 0 |
+| blits, and the mebibytes they move | 6600 / 135186.8 | 6600 / 135186.8 | 0 |
+| depth loaded and stored | 103163.0 / 163140.8 | 103163.0 / 163140.8 | 0 |
+| loadedMiB | 934678.7 | 934636.1 | 0.005 per cent |
+| encoders | 19545 | 19528 | 0.09 per cent |
+| pipelines | 41416 | 41599 | 0.44 per cent |
+| ms a frame of GPU time | 25.86 | 25.78 | **0.29 per cent** |
+
+So the resolution of a comparison is now **a few tenths of a per cent**, against the three to nineteen
+per cent it was, and every claim from here on can be read against that. What the fixture does not give
+is identical pixels: particles respawn and the idle arm is in another position, so thirty per cent of
+pixels still differ between two runs of one configuration. **An image verdict therefore needs a scene
+without them** - the companion repository's own smoke fixtures, which already compare screenshots - and
+that is what the picture half of P1 and the copy half of P4 are still waiting on. The counter half, which
+is what a frame-time comparison needs, is closed.
 
 ---
 
