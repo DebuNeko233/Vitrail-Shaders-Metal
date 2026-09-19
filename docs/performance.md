@@ -1320,6 +1320,24 @@ difference of one per cent, with the path's own cost measured at **16.6 microsec
 55 it costs with a pack loaded. So the ceiling the migration has to be judged against is 566 frames a
 second, and the new path's own overhead in that frame is under two per cent of it.
 
+**And the picture cannot move to it on this machine, for a reason the driver owns.** A Metal 4 render
+encoder has no per-resource binding methods at all: what it is given is an `MTL4ArgumentTable`, filled by
+resource id, and the SDK declares `- (nullable id<MTL4ArgumentTable>)newArgumentTableWithDescriptor:` on
+`MTLDevice` for making one. Measured on this M5 Pro with macOS 27.0, the device answers **yes** to the
+Metal 4 family, makes a command queue, a command allocator and a command buffer, takes a committed
+submission and signals its completion - and answers **no** to `newArgumentTableWithDescriptor:`. Without a
+table nothing can be bound, and without bindings no draw that reads a texture or a buffer can be encoded,
+so **the pack's passes cannot move to the new path here** however much of the rest of Metal 4 is present.
+That is the same lesson as `newCommandAllocatorWithDescriptor:` and the spatial scaler's content origin, in
+its largest form: a device implements a subset of the surface its own headers describe, and the subset has
+to be asked for rather than assumed.
+
+The path says so out loud and keeps carrying what it can - the submission needs no bindings - rather than
+failing closed on something the rest of the engine does not depend on: **600 frames of 600 carried, 14.8
+microseconds each, and no draw**, with a warning naming the missing selector once at device creation. What
+would change the answer is a driver that implements the table; the check for it is one
+`respondsToSelector:`, and the draw is written and waiting behind it.
+
 **Apple documentation.**
 
 - Understanding the Metal 4 core API:
