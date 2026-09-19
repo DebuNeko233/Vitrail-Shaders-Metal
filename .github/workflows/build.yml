@@ -103,6 +103,7 @@ jobs:
           python3 tests/test_kept_pack_diagnostic.py
           python3 tests/test_load_page_contract.py
           python3 tests/test_pack_pass_writes_every_pixel.py
+          python3 tests/test_custom_images.py
           python3 tests/test_pack_chain_unread_copies.py
           python3 tests/test_backend_capability_reach.py
           python3 tests/test_entity_reference_default.py
