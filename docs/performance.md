@@ -1238,6 +1238,24 @@ implied. The instrument carries the split now (`frame-probe openers renderPasses
 computeEncoders=... clearEncoders=...`), counted at each creation site, so a later reading can be compared
 against it rather than against a total whose meaning was assumed.
 
+**And the first thing that split bought is ten encoders a frame.** Each of the engine's copy methods ended its
+blit encoder on the way out - `blit.copy...; endEncoder();` - so two copies in a row could never share one,
+which is fifteen blit encoders a frame on this pack. A blit already open is now where the next blit goes:
+Metal orders the commands inside one encoder, and the fence that the following encoder waits on is updated
+when this one ends either way, so nothing is given up. Measured over 600 frames at 100 per cent:
+
+| | before | after |
+| --- | --- | --- |
+| blit encoders | 9000 | **3000** |
+| every encoder opened | 33456 (55.76 a frame) | **27456 (45.76 a frame)** |
+| blits, and the mebibytes they move | 6600 / 135186.8 | **6600 / 135186.8** |
+| ms a frame of GPU time | 23.03 | 22.98 |
+
+The bytes are identical, which is what says the same work moved, and the frame is **eighteen per cent fewer
+encoders**. One detail worth keeping: the old `encoders` counter went *up* over the same change (18180 to
+21180), because fewer blits now end silently and more are ended by the render pass that follows them - which
+is the whole reason the counter that counts creations is the one to read.
+
 **Apple documentation.**
 
 - Understanding the Metal 4 core API:
