@@ -520,6 +520,60 @@ than free play. What is genuinely still owed, then, is the fixture, the second (
 and - now that the first phase has measured what it measured - a decision about whether P1's remaining
 work is worth its place ahead of P4 and P6.
 
+**On unified memory, and what that changes.** Apple Silicon puts the CPU and the GPU on one pool, and
+the tempting reading is that an attachment's load and store stop costing anything. They do not: tile
+memory is on-chip SRAM, so the store at the end of a pass writes the tile to the same DRAM the CPU is
+using and the next pass's load reads it back. Unified memory removes a transfer over a bus, which is
+what a discrete GPU pays for system-memory resources; it does not remove the transaction. What it does
+change is where the saving shows. The GPU is no longer the only client of that memory - chunk meshes
+are uploaded, sections are rebuilt, and the render thread's own work draws on the same bandwidth - so
+traffic removed from the frame is contention removed from the session, and contention is what a
+frame's tail is made of. The spread line one session printed reads `middle frame 28.25 ms, one in a
+hundred over 128.57 ms, 19 of the last 816 frames late`, and the comparison above read medians only:
+on this hardware a phase that removes bytes should be judged on the tail too, and that reading is one
+flag away - arm `-Dvitrail.passTimings` in both arms and compare the spread rather than the middle.
+
+**What is left to remove is smaller than what was removed for nothing.** The probe counts the depth
+attachment apart from the colour ones now, because the lifetime capability carries one flag an
+attachment slot and the depth slot is not one of them: `metallum/mtl/MTLCommandBuffer.java:190-201`
+chooses a depth load as clear-or-load and a depth store as `STORE_ACTION_STORE` unconditionally, so no
+answer of a pack's can reach it. Measured over 600 frames of the same scene:
+
+| | per frame | share of its side |
+| --- | --- | --- |
+| attachment loads | 1558 MiB | - |
+| attachment stores | 1870 MiB | - |
+| depth loaded | 172 MiB | 11.0% of the loads |
+| depth stored | 272 MiB | 14.5% of the stores |
+| depth attachments | 11 a frame | - |
+
+So the whole of the depth attachment - both directions, the one slot no lifetime fact can currently
+reach - is **444 MiB a frame, 13.0% of the frame's attachment traffic**. Wiring its two doors could not
+recover all of that even if they were free, and they are not: depth accumulates, so a pass that
+depth-tests against what is already there needs its result visible to the pass after it, and only a
+store that the next operation on that depth overwrites or clears before anything reads it can go. The
+load half already removed **509 MiB a frame and bought nothing**, and the entire remaining prize is
+smaller than that.
+
+The depth numbers also show a *tile round-trip* being paid rather than a byte count: eleven attachments
+a frame, but 24.7 MiB in an average store against 15.6 MiB in an average load, which is the shape of a
+4080x4080 shadow map (63.5 MiB) being stored by more than one pass while the main depth is what is
+loaded. Passes that share an attachment set with no reader between them could pay one load and one
+store between them instead of one each, and Metal allows it - a single encoder can change pipeline
+state between draws. That is the part unified memory does not hand over, and `encoders` is the reading
+that says whether it is happening: 19575 over 600 frames is 32.6 a frame against 26 pack passes.
+
+**The phase's verdict on this hardware and this pack.** Both halves are wired, off by default, and
+measured. The load half removes a sixth of the frame's attachment traffic and no frame time at all; the
+store half removes nothing, because this chain reads almost everything it writes; the depth slot, the
+only attachment left, is worth less than the half that already measured zero; and the boundary switch
+moved no boundary. P1's mechanism stays - the lifetime facts are what P4's reachability work consumes,
+and the switch costs nothing when nothing is unread - but its place in the order is gone, and P4 and P6
+lead it. What would make it worth a default again is a frame that is bound on memory rather than on the
+fragment shader, and that is a property of the resolution and the pack rather than of the code: the
+deciding experiment is this same comparison at twice the pixels, or on a heavier pack, where the
+bandwidth demand grows and the elision has something to give back.
+
 **Exit criterion.** Attachment bytes per frame fall on the P0 capture, the bindings and encoder counts
 do not regress, and the regression set in "Regression, not just frame rate" is unchanged, image for
 image. The counter alone does not close this phase. On the pack measured above the whole of that fall
