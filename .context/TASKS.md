@@ -177,8 +177,8 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   the P0 numbers, the fallback is exercised deliberately at least once, and no Metal 4 type appears
   anywhere under `common/`.
 
-  - **The skeleton is done, submission included: the objects are made and one is committed on device** (`MTL4Probe`, one queue, one
-    allocator and a begun-and-ended command buffer, made and released at device creation, nothing in a frame path; the queue signals a shared event after the committed work and the event's
+  - **The skeleton is done, submission included: the objects are made and one is committed on device** (`MTL4Probe`: one queue, one
+    allocator and a command buffer carrying a 64x64 colour-target render pass, encoded, committed and released at device creation, nothing in a frame path; the queue signals a shared event after the committed work and the event's
     CPU wait is what proves the GPU ran it). What it taught is a rule for the rest of the path: **a device implements a
     subset of the factory surface its header declares** - `newCommandAllocatorWithDescriptor:` is
     declared in this machine's SDK and is not implemented by the device, and sending it is an

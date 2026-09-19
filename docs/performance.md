@@ -1180,7 +1180,15 @@ that allocator and ended - and releases them. Nothing in a frame path creates on
 Pro carries the three lines together, the two MetalFX ones and this:
 
     Metal 4 core API: available, the device has the family, answers to newMTL4CommandQueue, and a queue,
-    an allocator and a command buffer were made, submitted and released
+    an allocator and a command buffer carrying a render pass were made, encoded, submitted and released
+
+**And a real render pass goes through it.** The buffer is not submitted empty: the probe makes a 64x64
+colour target, builds an `MTL4RenderPassDescriptor` for it - Metal 4's descriptor class, whose attachments
+are Metal 3's own, so the load and store actions here are the ones the engine already sets on its own
+passes - encodes a render pass with it through `renderCommandEncoderWithDescriptor:`, ends the encoding,
+and only then commits. What is proven is therefore the whole chain of the new command structure short of a
+frame: allocator, buffer, pass, encoder, submission, and a GPU that answered. Nothing in a frame path uses
+any of it, and the frame beside it reads the same 23.0 ms it did before.
 
 **And the submission is proven, not assumed.** A buffer that can be begun is not yet one a queue takes, so
 the probe also commits it - `commit:count:` on the queue - and then has the queue signal a shared event
