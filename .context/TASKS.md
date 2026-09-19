@@ -1156,6 +1156,33 @@ required for the volume to exist, but it is not by itself what makes the declara
 included file and its includer - the case to check is an include that defines the macro in one chain and not in
 the other. Then, in order: the guard, the volume, `iris.features.*` macros.
 
+**The missing macro has a name: `IRIS_FEATURE_CUSTOM_IMAGES`.** `shaders/lib/common.glsl`, which both failing
+programs include first (`program/shadowcomp.glsl:6`, `program/composite6.glsl:6`), opens with:
+
+```
+lib/common.glsl:33   #if defined IRIS_FEATURE_CUSTOM_IMAGES && SHADOW_QUALITY > -1 && !defined ...
+lib/common.glsl:35       #if COLORED_LIGHTING_INTERNAL > 0
+lib/common.glsl:39           #if WORLD_SPACE_REFLECTIONS > 0
+lib/common.glsl:49           #ifndef IRIS_HAS_CONNECTED_TEXTURES
+```
+
+So the custom-image block - the volumes, and the `uniform sampler3D floodfill_sampler` declarations with them -
+sits inside `#if defined IRIS_FEATURE_CUSTOM_IMAGES`, which is the macro Iris defines from the pack's own
+`iris.features.optional = CUSTOM_IMAGES ...`. The inner `COLORED_LIGHTING_INTERNAL` is the pack's own option and
+was never the blocker; the outer feature test is, and this engine reads neither `iris.features.*` nor defines any
+`IRIS_FEATURE_*`/`IRIS_HAS_*` macro. That single skip removes the declarations while the uses in
+`lib/voxelization/lightVoxelization.glsl` and `program/shadowcomp.glsl` (guarded only by
+`COLORED_LIGHTING_INTERNAL`) still compile - the "undeclared identifier" pair, and the `GetLight*` overloads
+falling with them. The round-24 correction was itself incomplete: **both** guards matter, and the missing one is
+the feature macro.
+
+**The two must land together, and in this order:** materialise the custom images first (`CustomImages` reads the
+directive; the volume must be allocated at 128x64x128 and bound under `floodfill_sampler` /
+`floodfill_sampler_copy` / `voxel_sampler`), and only then define `IRIS_FEATURE_CUSTOM_IMAGES` - a feature macro
+the engine defines is a promise it provides the feature, and defining it while the volumes do not exist would
+enter the block and fail on sampling them instead. The same reading covers `SSBO`, `BLOCK_EMISSION_ATTRIBUTE`,
+`FADE_VARIABLE` and `IRIS_HAS_CONNECTED_TEXTURES`, each only where the engine really provides it.
+
 ## Pre-M4 boundary cleanup (metallum docs/pre-m4-boundary-cleanup.md carries the long form)
 
 The `render.metal3` sealing is done (metallum `267f3b6`) and the generation-neutral capability vocabulary exists
