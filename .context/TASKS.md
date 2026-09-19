@@ -181,7 +181,12 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   `MetalRenderPass`, `MetalComputeBridge`, `MetalDepthMipmapBridge`, `MetalSurface` and the `Metal3*` seats
   the specification names) and `com.metallum.render.shared` for the version-neutral resource classes.
   **Shared layer done** (`com.metallum.render.shared`, eleven classes, public by design, verified on both
-  scenes). **The frame-path move was tried again, now that the shared layer exists, and it produced 118 visibility
+  scenes). **Started the facade route instead**: `com.metallum.render.metal3` now exists with `MetalFence` (two
+  members opened, vs 118 for a move), which is the `Metal3Synchronization` seat. **Next: the facade for
+  `MetalCommandEncoder`** - define its outward shape (it already implements `CommandEncoderBackend`), rename
+  the implementation to `Metal3CommandEncoder` in the same package as the fence, and delegate method by
+  method, starting with one method and a real run before the rest.
+**The frame-path move was tried again, now that the shared layer exists, and it produced 118 visibility
   crossings** (`MetalCommandEncoder` 的构造器/`close`/`renderCommandEncoder`/`presentTextureToDrawable`/
   `flushPendingClear`、`MetalDevice.getOrCompilePipeline`/`metalDeviceHandle`、`MetalCompiledRenderPipeline`
   本身，等等)。结论比上次更清楚：**帧路径不是"移动"能隔离的，必须先把 facade 写出来**——把
