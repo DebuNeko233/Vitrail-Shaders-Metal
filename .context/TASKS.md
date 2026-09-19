@@ -1272,6 +1272,23 @@ Metal allows only sixteen `[[sampler(N)]]` attributes in one argument set, and A
 pipelines are still refused at MSL compile. That is the next fix, on the metallum/MSL side of the seam, and it is
 not a shader-pack-semantics question.
 
+**Where the remaining fault lives, and why it is not a small patch.** The MSL comes from SPIRV-Cross through
+FFM: `com.metallum.render.shared.MetalCrossShaderTranslator` drives the `Spvc` bindings
+(`SPVC_RESOURCE_TYPE_SAMPLED_IMAGE`, `SPVC_RESOURCE_TYPE_SEPARATE_SAMPLERS`, …), and the `[[sampler(N)]]`
+attributes in its output are what Metal caps at sixteen per stage. A program ACL needs samples twenty-five
+samplers, so the fix is **argument buffers** (SPIRV-Cross can place samplers inside a buffer, which removes the
+attribute ceiling) - and that changes the binding model for *every* program, not just this pack's, including how
+the encoder feeds resources and how the Metal 4 path's argument tables line up with it.
+
+That is a piece of work to size and decide deliberately rather than fold into this goal:
+- it touches the shared translator and both generations' binding code;
+- it is not a shader-pack-semantics change, but it is an architecture-adjacent one;
+- the acceptance test is already in place and cheap: the same Complementary arm, `compiles`/`error:` counts in
+  `metallum/run/comp-acl`, and the picture.
+
+Until it is done, ACL and WSR are compiled in and bound but their pipelines are refused, which is where the goal
+stands: **usable - no; compiling and bound where they never were - yes.**
+
 ## Pre-M4 boundary cleanup (metallum docs/pre-m4-boundary-cleanup.md carries the long form)
 
 The `render.metal3` sealing is done (metallum `267f3b6`) and the generation-neutral capability vocabulary exists
