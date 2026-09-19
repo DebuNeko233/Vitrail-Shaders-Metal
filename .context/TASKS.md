@@ -631,3 +631,15 @@ outside its package.
 **M2 follow-up, non-blocking**: the pipeline cache is validate-on-hit today; the better long-term shape is for the
 cache identity itself to contain generation + MSL profile (ahead of concurrent precompile, `MTL4Compiler`, binary
 archives). Not in this phase's scope.
+
+**The step-5/6 move was attempted and stopped, and it found the seam.** `git mv` of `MetalCommandEncoder` and
+`MetalRenderPass` into `render/metal3` (package lines plus generated imports) produced **82 compile errors, 26 of
+them one symbol: `MetalCompiledRenderPipeline` is not public in `com.metallum.render`** - the pipeline record both
+classes hold, which is not in the moved cluster. The rest are same-package references the generator missed
+(nested types like `MetalCompiledRenderPipeline.ArgumentBufferLayout`, `mtl`/`objc` types). Reverted under the
+rule "dozens of not-public errors means stop and re-examine the seam": `./gradlew build` is clean again and the
+ledger is unchanged at 15 couplings in 6 files.
+**What it settles**: the frame path's cluster is bigger than its two biggest files (at least the encoder, the
+render pass and `MetalCompiledRenderPipeline` with its nested layout), and a mechanical move needs a reference
+fixer that understands nested and `mtl`/`objc` types. **Next attempt is a decision, not a move**: does
+`MetalCompiledRenderPipeline` become a `render.shared` contract, or does it move with the frame path?
