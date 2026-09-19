@@ -1234,10 +1234,21 @@ since it reaches Objective-C through `objc_getClass` and that sees only the imag
 Metal, Foundation and QuartzCore - and the companion backend now loads MetalFX through an optional road
 that answers rather than throwing, asks `+[MTLFXSpatialScalerDescriptor supportsDevice:]` once at device
 creation and keeps the answer. On the machine this plan is measured on that line reads **"MetalFX spatial
-scaling: available, the device supports it"**. Availability is therefore asked of Apple's own question per
-device and never of a version number, which is a stronger test and one that cannot go stale; the contract
-in the companion repository refuses a version table and refuses a load that would throw on a system
-without the framework.
+scaling: available, the device supports it, factory newSpatialScalerWithDevice:"**. Availability is
+therefore asked of Apple's own question per device and never of a version number, which is a stronger
+test and one that cannot go stale; the contract in the companion repository refuses a version table and
+refuses a load that would throw on a system without the framework.
+
+**And a scaler can be made.** The descriptor and the scaler are bound, both reached entirely by selector
+as a protocol rather than a class costs, and at device creation one is made for a plain colour pair,
+reported and released - so the binding is proven before any frame depends on it. Two details from that
+are worth keeping: the factory's Objective-C selector is **`newSpatialScalerWithDevice:`**, which the
+documentation does not say because it names the call in Swift, and the question had to be asked of the
+descriptor *instance* rather than its class - asking the class is a question about class methods, and the
+answer was no for both spellings. A wrong selector is a nil scaler with no error anywhere, which is why
+the log carries the answer rather than an assumption. Making a scaler compiles its own pipeline, so the
+backend keeps one per configuration - both sizes, both formats and the colour processing mode - and
+remembers a configuration the device refused instead of retrying it every frame.
 
 **Two risks worth writing down before the code exists.** MetalFX's spatial scaler has **no temporal
 component**, where this seat's own path can be paired with Temporal Fold; so at low scales MetalFX may
