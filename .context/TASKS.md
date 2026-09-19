@@ -663,3 +663,11 @@ render pass means the record is a **collaborator of the frame path, not a value 
 `MetalCommandEncoder` + `MetalRenderPass` + `MetalCompiledRenderPipeline`**, and what stays behind (the device's
 cache and its profile guard, which reads `pipelineKey()`) needs a contract for the artifact, exactly as the
 encoder now talks to the device through `MetalDeviceFacts`. Reverted; build clean; ledger 15 in 6 files.
+
+**Fourth attempt (artifact moved with the cluster): 94 errors, and the deepest layer is the device's caches.**
+80 are import-fixer `cannot find symbol`, and four are **more of `MetalDevice`'s package-private members**:
+`getOrCompileFunction`, `getOrCompilePipeline`, `executionServices`, `depthStencilState`. **The device is not only
+a facade - it owns the Metal 3 shader/function/pipeline caches and the depth-stencil factory the frame path calls
+directly.** So the finished move is: the generation owns its caches, the device asks it through contracts
+(`MetalDeviceFacts`, `MetalCompiledArtifact` - both in place), `executionServices()` becomes a public facade fact,
+and the import fixer resolves nested and `mtl`/`objc` types. Reverted; build clean; ledger 15 in 6 files.
