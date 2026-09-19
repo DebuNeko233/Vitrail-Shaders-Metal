@@ -70,7 +70,14 @@ class CompositeContractTest(unittest.TestCase):
         self.assertIn('TargetSurface alt = this.altSide.get(index);', targets)
         self.assertIn('TargetSurface main = this.mainSide.get(index);', targets)
         self.assertIn('encoder.copyTextureToTexture(from, to, 0, 0, 0, 0, 0, main.width(), main.height());', targets)
-        self.assertIn('this.targets.copyBack(device.createCommandEncoder(), this.chain.chain().swapBack());', pack_chain)
+        # The call goes through copiesBack() rather than handing the plan's list straight to the copy,
+        # because the switch that may leave an unread target where the chain put it is answered there.
+        # What this test guards is unchanged while that switch is off, which is its default and which
+        # test_pack_chain_unread_copies.py pins: copiesBack() returns the plan's own swapBack() list.
+        self.assertIn('this.targets.copyBack(device.createCommandEncoder(), copiesBack());', pack_chain)
+        self.assertIn('List<Integer> back = this.chain.chain().swapBack();', pack_chain)
+        self.assertIn('private static final boolean ELIDE_TARGET_COPIES = '
+                      'Boolean.getBoolean("vitrail.elideTargetCopies");', pack_chain)
         self.assertIn('the pack keeps that target between frames', chain)
 
 if __name__ == '__main__':

@@ -2390,6 +2390,43 @@ public final class PackChain {
 		return Math.min(this.chain.chain().beginEnd(), this.programs.size());
 	}
 
+	/**
+	 * Whether a target whose far half nothing in the frame reads is left where the chain put it.
+	 * <p>
+	 * At the end of every frame this engine copies each target the pack keeps between frames back from
+	 * the half the chain left it on, because the next frame walks from an empty flipped set and would
+	 * otherwise be handed what was written two frames ago. A target that nothing in the frame reads has
+	 * no next reader to be handed anything: the walk that decides the copies already computes this, and
+	 * the same walk is what the announcement beside {@link ChainPlan#readInFrame()} prints as work
+	 * nothing asked for.
+	 * Off unless asked for, because the copy is part of what the image is - a wrong answer is a wrong
+	 * picture rather than a slower frame.
+	 */
+	private static final boolean ELIDE_TARGET_COPIES = Boolean.getBoolean("vitrail.elideTargetCopies");
+
+	/**
+	 * The targets to copy back this frame: every one the chain left on the far half, or - under the
+	 * switch above - only those the frame reads, which are the only ones with a next reader to be
+	 * handed anything. The walk that finds them is the one the plan already made, and the answer is
+	 * the same one the announcement beside {@code readInFrame} prints.
+	 */
+	private List<Integer> copiesBack() {
+		List<Integer> back = this.chain.chain().swapBack();
+		if (!ELIDE_TARGET_COPIES || back.isEmpty()) {
+			return back;
+		}
+
+		Set<ChainPlan.Attachment> read = this.chain.chain().readInFrame();
+		List<Integer> moving = new ArrayList<>(back.size());
+		for (int index : back) {
+			if (read.contains(new ChainPlan.Attachment(index, TargetSchedule.Side.MAIN))) {
+				moving.add(index);
+			}
+		}
+
+		return moving;
+	}
+
 	private void run() {
 		GpuDevice device = RenderSystem.tryGetDevice();
 		if (device == null) {
@@ -2444,7 +2481,7 @@ public final class PackChain {
 		// Outside any pass, and after the last one. Only the targets the pack keeps between frames
 		// and that the chain left on the far half are copied: the next frame walks from an empty
 		// flipped set and would otherwise be handed what was written two frames ago.
-		this.targets.copyBack(device.createCommandEncoder(), this.chain.chain().swapBack());
+		this.targets.copyBack(device.createCommandEncoder(), copiesBack());
 	}
 
 	/**
@@ -3126,6 +3163,9 @@ public final class PackChain {
 		announceFeatures();
 		announceResting(seeding);
 
+		// The list of targets that could have been left where they are, and whether the switch that
+		// leaves them was on. Both are said here because this is the one place the walk's answer is
+		// already in hand.
 		List<Integer> back = unfolded.swapBack();
 		if (!back.isEmpty()) {
 			long unread = back.stream()
@@ -3133,10 +3173,14 @@ public final class PackChain {
 							new ChainPlan.Attachment(index, TargetSchedule.Side.MAIN)))
 					.count();
 			Vitrail.logger().info("{} targets are copied back from their far half at the end of every "
-					+ "frame, because the pack keeps them and the chain left them there: {}{}",
+					+ "frame, because the pack keeps them and the chain left them there: {}{}{}",
 					back.size(), back, unread == 0 ? ""
 							: ", and " + unread + " of those are read by nothing in the frame, so "
-									+ "moving them is work nothing asked for");
+									+ "moving them is work nothing asked for",
+					unread == 0 ? "" : ELIDE_TARGET_COPIES
+							? ", and elideTargetCopies is on, so those " + unread + " are left where "
+									+ "the chain put them and only " + (back.size() - unread) + " move"
+							: ", and elideTargetCopies is off, so all of them move anyway");
 		}
 
 		// Beside the copy above, which is the other half of the same subject: what this pack carries
