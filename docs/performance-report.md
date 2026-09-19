@@ -76,6 +76,36 @@ The arm is the reference scene exactly (`encoders` 21435, `loadedMiB` 93922.0, `
 counting costs nothing measurable. Nothing was optimised here: the code already skips a valid chain, and the only
 candidate left is invalidating less often, which needs a semantic proof before a line of it is touched.
 
+
+## The two open gates, and exactly what each needs
+
+### 57.9 Cross-pack corpus
+
+The harness can reach the *load* and *one pinned window* for any pack handed to it:
+`tools/run-vitrail-performance.sh --pack <zip> --fixture|--fullscreen ...`, with the two scene guards added this
+pass refusing a window that did not draw the pack. That covers "load" for Photon (done), Complementary
+(staged at `.perfstage/ComplementaryReimagined_r5.9.1.zip`, loaded and run once during the ACL work) and
+MakeUp-UltraFast (staged). NOT MEASURED in this pass for BSL-family, a compute/storage-heavy pack, a
+shadow-mipmap pack and a translucent feedback pack, because none of them is in this machine's staging folder.
+
+What the harness cannot do, for any of them: **walk around, look at water or translucency, change dimension,
+reload with F3+T, or resize the window.** Those are section 51's other four checks and section 52's visual
+checklist, and they need either a session with a person at the keyboard or a new harness capability that drives
+them. This report does not claim them.
+
+### 57.10 Reload and lifecycle
+
+NOT MEASURED, and it is not reachable from the harness as it stands: one arm is one launch, one world, one pack
+and one window. The checks the plan asks for - F3+T, pack switch, world leave and join, dimension change, resize,
+shutdown, each watched for a stale texture, an old ping-pong half, a use-after-close, a lost target or an old
+shadow map - are hand-run session work.
+
+**What to look for, so the check is worth something when it is run.** After each of those six events, the frame
+must still be the pack's picture and the log must not carry a refusal, a lost target or a texture error; the
+steady-state counters should return to the reference band (`renderPasses` about 20900, `blits` 6600,
+`loadedMiB` about 93900) rather than drifting across the event. A pack switch and a world join are the two where
+a lost target would show; F3+T and a resize are the two where a stale ping-pong half would.
+
 ## Remaining cost, and why work stopped there
 
 The frame is GPU-bound (gpuP50 7.34 against wallP50 7.29) on the pack's own work: the pass-timings ranking puts
