@@ -2,8 +2,16 @@ package dev.vitrail.render;
 
 import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.CommandEncoderBackend;
+import dev.vitrail.compat.metallum.MetallumEncoderCapabilities;
+import dev.vitrail.compat.metallum.MetallumFrameBridge;
 import dev.vitrail.mixin.access.CommandEncoderAccessor;
+import dev.vitrail.render.compute.ComputeCommands;
+import dev.vitrail.render.storage.StorageImageCommands;
 import org.jspecify.annotations.Nullable;
+
+import java.util.Collections;
+import java.util.Map;
+import java.util.WeakHashMap;
 
 /**
  * The backend object behind one of the game's encoder wrappers.
@@ -32,5 +40,54 @@ public final class Backends {
 	 */
 	public static @Nullable CommandEncoderBackend encoder(@Nullable Object encoder) {
 		return encoder instanceof CommandEncoderAccessor accessor ? accessor.vitrail$backend() : null;
+	}
+
+	/**
+	 * The object that answers this engine's capabilities for this encoder, or null where there is none.
+	 * <p>
+	 * {@link #encoder} answers "which backend is this", which is not the same question: a backend may carry
+	 * the capabilities itself, may be one the optional Metallum adapter can speak for, or may be neither. A
+	 * caller that means to <em>use</em> a capability asks here; a caller that needs backend identity still
+	 * asks {@link #encoder}. The distinction is the whole point: asking the wrapper was the bug this class
+	 * exists to prevent, and asking the raw backend is the next one - it silently answers no for every
+	 * backend that does not happen to carry them.
+	 */
+	public static @Nullable Object capabilities(@Nullable Object encoder) {
+		CommandEncoderBackend backend = encoder(encoder);
+		if (backend == null) {
+			return null;
+		}
+
+		if (carriesCapabilities(backend)) {
+			return backend;
+		}
+
+		if (MetallumFrameBridge.supports(backend)) {
+			return adapterFor(backend);
+		}
+
+		return backend;
+	}
+
+	private static boolean carriesCapabilities(CommandEncoderBackend backend) {
+		return backend instanceof MipmapCommands
+				|| backend instanceof StorageImageCommands
+				|| backend instanceof ComputeCommands
+				|| backend instanceof AttachmentCommands
+				|| backend instanceof ScaleCommands;
+	}
+
+	/**
+	 * One adapter per backend, weakly held: the capability query is on the frame path, and an adapter made per
+	 * call would be an allocation per pass. Weak keys so a backend the game has released is not kept alive by
+	 * this cache.
+	 */
+	private static final Map<CommandEncoderBackend, MetallumEncoderCapabilities> METALLUM =
+			Collections.synchronizedMap(new WeakHashMap<>());
+
+	private static MetallumEncoderCapabilities adapterFor(CommandEncoderBackend backend) {
+		synchronized (METALLUM) {
+			return METALLUM.computeIfAbsent(backend, MetallumEncoderCapabilities::new);
+		}
 	}
 }
