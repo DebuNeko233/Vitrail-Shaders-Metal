@@ -996,6 +996,24 @@ shows it removing three blits a frame where nothing does.
 **Verdict: not made the default, with a measured reason** - it removes 3 blits and 1.5 MiB a frame and moves no
 time inside the scene's own floor. Section 57.3 is answered for it.
 
+### Phase 5 verdict on `narrowStorageBoundary`: zero boundaries merged on this pack, and that is the rule working
+
+`run/b2-attach` (plain against `-Dvitrail.narrowStorageBoundary=true`, reference scene): every counter identical
+between the arms - `encoders` **21445**, `passChanged` **20845**, `submit` 600, `loadedMiB` 93964.6, `storedMiB`
+132795.0, `depthAttachments` 4800, `blits` 6600. Zero encoder boundaries were merged in 600 frames. The engine
+prints no line about the boundary in either arm, so the two counters are the evidence and they are enough: a
+narrowed boundary would show as one fewer encoder end and one fewer `passChanged`.
+
+The reason is the rule rather than a fault: `readsStorageImage` is `!this.storageImages.isEmpty() || samplers
+naming an image the chain writes`, so a pass that writes or samples any storage image answers "may read" - and
+on this pack's chain that is nearly every pass. Section 24's rule ("unknown dependency -> boundary") is exactly
+what makes the switch a no-op here, which is the correct behaviour and not a defect. The earlier record of 14
+merged boundaries in 600 frames came from a scene where some pass could prove it read nothing, which is what
+"14 in 600" always meant.
+
+**Verdict: rejected as a production default, with a measured reason** - it merges nothing on the reference
+configuration because the conservative answer dominates there. Section 57.6 is answered.
+
 ## Pre-M4 boundary cleanup (metallum docs/pre-m4-boundary-cleanup.md carries the long form)
 
 The `render.metal3` sealing is done (metallum `267f3b6`) and the generation-neutral capability vocabulary exists
