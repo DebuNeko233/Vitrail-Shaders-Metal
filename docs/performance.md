@@ -1338,6 +1338,21 @@ microseconds each, and no draw**, with a warning naming the missing selector onc
 would change the answer is a driver that implements the table; the check for it is one
 `respondsToSelector:`, and the draw is written and waiting behind it.
 
+**And one road to the picture does not need a table at all - which is the one this turned out to take, and it
+is not finished.** Metal 4's compute encoder kept the blit it absorbed, and its whole-texture copy
+(`copyFromTexture:toTexture:`) takes two objects and no structures: so a frame's finished picture can be
+copied into the drawable by the new queue with **no binding anywhere**. That path is written - the frame's
+own command buffer signals a shared event (`encodeSignalEvent:value:`) that the new queue waits on
+(`waitForEvent:value:`), the copy is committed, the queue signals the drawable (`signalDrawable:`) and the
+drawable presents itself - and **it does not work yet**: turned on, it carries for a while and then the
+submission ring gives up, measured as *"the GPU did not signal slot 2 within 1000 ms"*, which means the
+ordering or the lifetime of the second submission per frame is wrong in there. It therefore sits behind
+`-Dmetallum.metal4Present=true` and is **off by default**, because a path that takes the picture and then
+stalls is worse than one that never takes it; with it off the ring is healthy again (300 of 300 frames
+carried, 17.2 microseconds each) and the picture is the Metal 3 road's. The next step on it is to find why
+the copy submission's completion is not seen: the allocator ring is shared by two submissions a frame, and
+the values each waits on are the thing to check first.
+
 **Apple documentation.**
 
 - Understanding the Metal 4 core API:
