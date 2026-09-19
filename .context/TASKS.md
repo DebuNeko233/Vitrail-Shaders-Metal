@@ -653,3 +653,13 @@ widening is what produced the original 100/118/144. Reverted; build clean; ledge
 **Next attempt must first make those two contracts**: what a generation's encoder may ask the device (labels, the
 native device handle) and the artifact's nested surface (stages, layout record). No ordering of `git mv` fixes
 this.
+
+**Third attempt: 96 errors, and the compiled artifact is a collaborator.** After contracting the device facts and
+opening `MetalCompiledRenderPipeline`, the move gave **96 errors** - and the remaining ones are its **accessors**
+(`stageMask()` 18, `descriptorSet()`/`bufferIndex()`/`argumentBuffers()` 4 each, `vertexBufferCount()`,
+`firstAvailableVertexBufferSlot()`, `executionServices()` 4). Thirteen-odd package-private accessors read by the
+render pass means the record is a **collaborator of the frame path, not a value it carries** - so keeping it in
+`render` and opening its surface one member at a time is the forbidden widening. **The cluster is at least
+`MetalCommandEncoder` + `MetalRenderPass` + `MetalCompiledRenderPipeline`**, and what stays behind (the device's
+cache and its profile guard, which reads `pipelineKey()`) needs a contract for the artifact, exactly as the
+encoder now talks to the device through `MetalDeviceFacts`. Reverted; build clean; ledger 15 in 6 files.
