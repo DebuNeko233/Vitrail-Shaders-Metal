@@ -390,14 +390,17 @@ change what the table means by accident.
 Apple's API for the real thing is a counter sample buffer: `sampleCounters(sampleBuffer:sampleIndex:barrier:)`
 on the encoders, "A barrier ensures that the commands you encode before this one complete before the GPU
 samples the hardware counters", with a descriptor carrying a counter set, a sample count and a storage
-mode, and `resolveCounters` on the command buffer to get the values out after it completes. Two things
-make it more than a flag flip, and both are worth knowing before anybody tries:
+mode; and `resolveCounters`, which lives on a **blit encoder** rather than on the command buffer, to get
+the values out into a buffer that is read once the command buffer completes. Two things make it more
+than a flag flip, and both are worth knowing before anybody tries:
 
 - **There is no encoder to sample on when a pass opens.** `PassTimings.open` runs before the backend
   records the pass, and at that moment the previous render pass has ended, so the "start of this pass"
   sample has no encoder of its own. The two boundaries of a pass are the same instant, which means one
   sample per pass boundary is enough - but it has to be taken on the *closing* side, on the render pass's
-  own encoder, and each pass's duration becomes its boundary minus the previous one's.
+  own encoder, and each pass's duration becomes its boundary minus the previous one's. Where no pass
+  encoder is open, a blit encoder can take the sample instead: it has the same sampling command, and its
+  barrier drains everything encoded before it, which is exactly the boundary being asked for.
 - **A barrier per boundary serialises the frame.** That is what makes the number precise and it is also
   why an armed run is not a run to compare frame rates with. The existing switch already keeps this off
   by default, which is the right place for it.
@@ -410,7 +413,10 @@ of photon v1.3b at 1800x1019 the two readings are **25.25 ms of GPU time a frame
 frame of wall-clock**, which is the check that says both are the same thing: this frame is GPU-bound
 with no measurable CPU or presentation slack, and the pass table taken in the same session claims
 1.188 ms of it, or 4.7 per cent. So P4 and P6 have a yardstick - `gpuMs` a frame - and the per-pass
-attribution is still owed, now with a known cause and a known design.
+attribution is still owed, now with a known cause and a known design. What that yardstick measured
+first is in P6: over four window sizes the frame's GPU time is a straight line in pixels, 6.92 ms that
+do not scale with them and 2.726 ms a megapixel that do, and the wall clock agrees with the GPU at every
+one of the four.
 
 ---
 
@@ -915,6 +921,34 @@ chain, which frequently contains its own temporal accumulation.
 
 **Needs first.** Nothing technically, but it needs two decisions recorded in this repository first,
 because both are pack-semantics questions and neither is answerable from the Metal documentation.
+
+**What it is worth, measured rather than assumed.** The probe now reads the driver's own GPU time for a
+frame (`gpuMs`), so the question "how much of this frame is the number of pixels" is answerable by
+drawing the same scene at four sizes. Photon v1.3b, one world, 600 frames each, window in logical points
+with a drawable twice that:
+
+| window | drawable | megapixels | ms a frame of wall-clock | ms a frame of GPU time |
+| --- | --- | --- | --- | --- |
+| 600x339 | 1200x678 | 0.81 | 9.04 | 8.96 |
+| 900x509 | 1800x1018 | 1.83 | 11.93 | 11.95 |
+| 1280x724 | 2560x1448 | 3.71 | 17.28 | 17.31 |
+| 1800x1019 | 3600x2038 | 7.34 | 26.75 | 26.80 |
+
+Two things fall out of it. The wall clock and the GPU's own time agree at **every** size - never more
+than 0.3 per cent apart - so there is no CPU or presentation wall anywhere in this range: the frame is
+GPU-bound at 0.8 megapixels as much as at 7.3, and the 34.9 frames a second the pack reaches is the GPU
+and nothing else. And the GPU time is a straight line in pixels:
+
+    gpu ms a frame = 6.92 + 2.726 x megapixels      (R2 = 0.9993)
+
+So at 1800x1019 the 26.80 ms frame is **20.00 ms that scales with pixels and 6.92 ms that does not**, and
+the second number is GPU work that a resolution change cannot touch at all - it is geometry, shadow and
+compute work, not fill. What an upscaler buys is therefore bounded and now known: rendering at 70 per
+cent of the linear scale (49 per cent of the pixels) is 16.73 ms, or **1.60 times the frames**; at 60 per
+cent it is 14.13 ms (**1.90 times**); at 50 per cent, 11.93 ms (**2.25 times**) - before the upscale's own
+cost, and with the picture quality question that P6's placement section is about. It also bounds every
+other phase on this list: P4 can only remove work inside the 20 ms, and P1's verdict is consistent with
+the fit, because attachment traffic is not what the 20 ms is made of.
 
 **Apple documentation.**
 
