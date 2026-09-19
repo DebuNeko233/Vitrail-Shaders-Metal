@@ -160,6 +160,23 @@ A pack compile holds the world back, so the screen used to be the frame from bef
 
 ## P1 - Performance, Metal 4 and MetalFX (see `docs/performance.md`)
 
+- [ ] P5 (item 3) - **The Metal 4 path, and the first bounded step of it.** Detection and advertisement are
+  done (ask the device, cache the negative, `MetallumApi.supportsMetal4CoreApi()`); the path itself is
+  unwritten. Two things it must not be: a migration (item 1 keeps the `MTLCommandQueue` path as the
+  fallback, the opt-in is a runtime choice) and a rewrite (item 2 - a Metal 4 type name reaching `common/`
+  breaks the seam the same way a native handle does, and `AGENTS.md` already forbids that). What it has to
+  express first is **"the same attachment set, and then a different one"**, with the backend free to decide
+  whether that is a new encoder - because the platform's own attachment map is the answer to the
+  encoder-merging question this plan started from, and the boundary count is where the phase's exit
+  criterion lives. Size it against the measurement recorded in `docs/performance.md`: the engine's own
+  steady overhead is **one boundary a frame** against the pack chain's twenty-nine, so what this path can
+  move is encoder switching and not the chain's shape. Item 6 says what the ordering is built from: under
+  Metal 4 every resource is untracked and ordering is explicit, so P1's per-pass reads and writes
+  (`AttachmentContents`, `setNextPassContents`) stop being documentation and become barriers. Exit: both
+  paths run one session with the same images, the new path shows fewer boundaries or lower store traffic on
+  the P0 numbers, the fallback is exercised deliberately at least once, and no Metal 4 type appears
+  anywhere under `common/`.
+
 The roadmap is a page rather than this list: it records what is already implemented so it is not built twice, what is actually absent, the phases, and their exit criteria. What this list owns is the intent and the order.
 
 - [ ] P0 - Instrument. Three counters behind a marker: render encoders per frame, bytes stored and loaded per attachment, bindings per frame split by kind. A phase whose number was never captured does not proceed.
