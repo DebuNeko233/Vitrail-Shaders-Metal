@@ -1256,6 +1256,16 @@ encoders**. One detail worth keeping: the old `encoders` counter went *up* over 
 21180), because fewer blits now end silently and more are ended by the render pass that follows them - which
 is the whole reason the counter that counts creations is the one to read.
 
+**The same sharing applied to compute is a measured no-op, and the reason is the chain's shape.** A dispatch
+now shares an encoder the way a blit does, and over the same 600 frames the count did not move at all -
+1800, three a frame, before and after. The chain explains it: this pack's compute programs are dispatched
+*before* the pass they hang off (`compute programs dispatched before the pass they hang off: [deferred4_a]`
+in the session's own report), so a render pass always sits between two dispatches and there is never an
+adjacent pair to merge. The change stays because it is the same rule the blits needed and costs nothing when
+there is nothing to share - and it is recorded as a no-op rather than as a win. The counter that counts named
+ends rose again over it (21180 to 22375), for the same reason as before: an encoder that is no longer ended
+by its own caller is ended by the pass that follows, which is counted.
+
 **Apple documentation.**
 
 - Understanding the Metal 4 core API:
