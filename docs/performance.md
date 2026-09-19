@@ -919,8 +919,11 @@ anywhere under `common/`.
 but the placement: it operates on an image, and this engine's image is owned by a shader pack's own
 chain, which frequently contains its own temporal accumulation.
 
-**Needs first.** Nothing technically, but it needs two decisions recorded in this repository first,
-because both are pack-semantics questions and neither is answerable from the Metal documentation.
+**Needs first.** Nothing technically. The two pack-semantics decisions this phase was waiting on are
+recorded below, and the thing to know before reading them is that **the seat already exists**: the
+engine has its own render scale, an FSR 1.0 upscale, a contrast-adaptive sharpen and an optional
+Temporal Fold, all on its own Video Settings page and all described in [render-scale.md](render-scale.md).
+P6 is therefore not "add an upscaler" but "put a different one in the seat the frame already has".
 
 **What it is worth, measured rather than assumed.** The probe now reads the driver's own GPU time for a
 frame (`gpuMs`), so the question "how much of this frame is the number of pixels" is answerable by
@@ -958,7 +961,7 @@ the fit, because attachment traffic is not what the 20 ms is made of.
 - Metal, What's New (the source for what the upscaler and frame interpolation now do):
   https://developer.apple.com/metal/whats-new/
 
-**The three questions, in the order they have to be answered.**
+**The three questions the phase was gated on, and why each one is a pack question.**
 
 1. **Where does it sit relative to the pack's chain?** A pack's final pass owns the image, and large
    packs already accumulate temporally: Photon ships its own temporal antialiasing enabled by
@@ -975,11 +978,40 @@ the fit, because attachment traffic is not what the 20 ms is made of.
    [`phase17-compatibility.md`](phase17-compatibility.md) like any other compatibility statement:
    per pack, with reviewed visual evidence, not a switch that defaults to on.
 
-**Work, once those are answered.**
+**Decided** (owner-approved, 2026-09-19), with what each answer rests on:
 
-1. Write the decision down, with the pack-visible quantities it changes, before implementing.
-2. Implement it as an engine-level, post-final, opt-in path with an off switch that restores exactly
-   today's image.
+1. **Placement: engine level, after the pack's final pass, off by default, never inside the chain.**
+   This is not a new seat. It is where FSR 1.0 already sits - the scaled picture is drawn up "onto the
+   window-sized colour texture before any widget lands on it" - and it is the only placement that does
+   not change what the pack's own chain is handed.
+2. **One upscaler, chosen deliberately.** Below 100 per cent the frame already pays the current
+   upscale's fixed cost, which `render-scale.md` describes in passes rather than milliseconds: two
+   passes that "run at the window's resolution, not at the scaled one", writing "every pixel of the
+   window whatever the slider says". MetalFX takes that seat or it does not run - two upscalers in one
+   frame is a bug with a good frame rate - so the settings page has to present it as one choice, and
+   Temporal Fold belongs to the FSR 1.0 side of that choice.
+3. **Nothing pack-visible changes.** A pack is told `viewWidth` and `viewHeight`, which follow the
+   render scale today, and MetalFX runs after the chain has finished, so a pack sees exactly what it
+   sees now. Changing the resolution a pack is told would be a separate decision, made per pack under
+   the compatibility evidence policy, and this phase does not make one.
+
+**What the decision is worth, and what it is not.** The measured headroom above was taken at
+`renderscale=100`, where the upscale does not run at all: the 1.60, 1.90 and 2.25 times are what the
+world costs *less* before anybody pays to bring it back up, and the 6.92 ms that does not scale is
+exactly the per-pass, per-uniform and geometry work `render-scale.md` already says a smaller picture
+does not make cheaper. So MetalFX's own fixed cost comes out of that gain, and the honest reason to
+reach for it is quality and cost *against the upscaler it replaces*, not against no upscaler at all.
+The prototype's acceptance is therefore three things: with the option off, the path and the image are
+exactly today's; with it on at the same render scale, the frame is not slower than the upscaler it
+replaced, read as `gpuMs` from the probe; and the picture is reviewed per pack under the compatibility
+policy rather than per engine.
+
+**Work.**
+
+1. Measure the seat as it stands: the FSR 1.0 upscale's and the sharpen's own `gpuMs` at a few scales,
+   so that "not slower than what it replaced" has a number rather than an opinion.
+2. Implement MetalFX as the second occupant of that seat, engine level and post-final, with the off
+   switch restoring exactly today's path.
 3. Verify it per pack, under the compatibility evidence policy, rather than per engine.
 
 **Exit criterion.** A recorded decision, and either an implementation that meets the regression set
