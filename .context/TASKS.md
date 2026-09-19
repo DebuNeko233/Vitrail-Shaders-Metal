@@ -181,7 +181,17 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   `MetalRenderPass`, `MetalComputeBridge`, `MetalDepthMipmapBridge`, `MetalSurface` and the `Metal3*` seats
   the specification names) and `com.metallum.render.shared` for the version-neutral resource classes.
   **Shared layer done** (`com.metallum.render.shared`, eleven classes, public by design, verified on both
-  scenes). **The facade's shape is now measured, not guessed** (from the game's own interface and the actual call
+  scenes). **The facade was started and stopped on a third measurement: the 17-method surface is not the problem.**
+  Renaming the implementation to `Metal3CommandEncoder`, moving `MetalRenderPass` beside it and letting the
+  compiler name what crosses produced **144 errors**, and their *content* is the finding: not the encoder's
+  own API but its coupling into **`MetalDevice`'s pipeline cache** (`getOrCompilePipeline`,
+  `metalDeviceHandle`, `useLabels`), **`MetalCompiledRenderPipeline`** (itself package-private and, per the
+  migration table, still needing its shared-logical / generation-artifact split) and the bridges. So the
+  order is the migration table's, read literally: **split `MetalCompiledRenderPipeline` and give
+  `MetalDevice` its facade plus the execution services first**, and only then can the frame path move
+  without the engine's internals being opened to satisfy a move. All three attempts are recorded with their
+  numbers (100, 118, 144) so none is repeated; the tree is green at the fence milestone.
+**The facade's shape is now measured, not guessed** (from the game's own interface and the actual call
   sites, so the next session does not re-derive it): `CommandEncoderBackend` declares **17 methods** -
   `submit`, `transientMemory`, `createRenderPass`, `submitRenderPass`, `clearColorTexture`,
   `clearColorAndDepthTextures` (two overloads), `clearDepthTexture`, `writeToBuffer`, `copyToBuffer`,
