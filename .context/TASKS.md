@@ -1014,6 +1014,25 @@ merged boundaries in 600 frames came from a scene where some pass could prove it
 **Verdict: rejected as a production default, with a measured reason** - it merges nothing on the reference
 configuration because the conservative answer dominates there. Section 57.6 is answered.
 
+### Phase 3 answer on the reference configuration: no feedback copies are taken at all
+
+The census prints only when `take` actually copies something, and on Photon (`run/photon-feedback`, 01:18,
+reference configuration) the line **never appears** - `Feedback copies:` count 0 over the whole session, while
+the probe reads the reference scene exactly (`renderPasses` 20922, `blits` 6600, `blittedMiB` 22159.3,
+`loadedMiB` 93922.0).
+
+The site is live, so this is a fact about the pack rather than about the instrumentation: `PackChain:2066` calls
+`targets.copies().take(encoder)` at the boundary every frame, so an empty map means nothing registered a
+feedback target. `TargetCopies` exists for a program that samples a target it writes *in the same pass*, and
+this pack's chain does not do that - the copies the frame does pay for are the 6600 blits (11 a frame) of the
+frame-end copy-backs, which is the different mechanism Phase 2 measured and decided.
+
+**Section 57.4 for this corpus: which targets - none; how often - never; how many bytes - zero.** The mechanism
+costs nothing on the reference scene, so there is nothing to reduce and nothing to default. **One residual
+doubt, named rather than papered over**: the counter proves `take` copied nothing; it does not directly observe
+`ask` never being called, that inference resting on the map being empty. Counting `ask` itself is the airtight
+version and is a small addition if this verdict ever needs to carry weight.
+
 ## Pre-M4 boundary cleanup (metallum docs/pre-m4-boundary-cleanup.md carries the long form)
 
 The `render.metal3` sealing is done (metallum `267f3b6`) and the generation-neutral capability vocabulary exists
