@@ -160,6 +160,13 @@ A pack compile holds the world back, so the screen used to be the frame from bef
 
 ## P1 - Performance, Metal 4 and MetalFX (see `docs/performance.md`)
 
+- [ ] **M1 of the dual-execution plan: runtime selector + capability record (done, not yet merged).**
+  `render/execution/` holds `MetalApiGeneration`, `MetalExecutionPreference` (`-Dmetallum.execution`),
+  `MetalSystemProfile`, `MetalDeviceCapabilities`, `MetalExecutionSelector`, `MetalExecutionServices`,
+  `MetalShaderLanguageProfile`. AUTO prefers Metal 4 on this device and forced preferences fail loudly; the
+  executing generation is still Metal 3 and the services say so. **Next: M2 (shader language profiles: the
+  MSL target must be chosen with the generation instead of the single hardcoded profile the capabilities
+  record now reports).**
 - [ ] **M0 of the dual-execution plan: architecture guard + measurement readiness (done, not yet merged).**
   The guard is `metallum/tools/ci-architecture.py` (shared/metal3/metal4 import rules, plus "one file never
   names both command generations", mutation-proven) and Vitrail's
