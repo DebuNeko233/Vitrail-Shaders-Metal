@@ -1,4 +1,4 @@
-# Vitrail performance optimisation — status report
+# Vitrail performance optimisation  -  status report
 
 Measured on the reference configuration unless a line says otherwise: Photon v1.3b, render scale 55, shadow map
 scale 100, fullscreen at the display's own 1920x1200, camera pinned at `548.5,63,-248.5 yaw 0 pitch 7.8`, 600
@@ -32,12 +32,12 @@ per launch.
 | Optimisation | Baseline ms | New ms | Gain | Copies Δ | Passes Δ | Submits Δ | Default? |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | Shadow reuse | NOT MEASURED | - | - | - | - | - | no (pack refuses reuse: it voxelises) |
-| Target copy elision | 7.31 | 7.25 | -0.8 % (inside the floor) | blits 6600 → 4800, blittedMiB 22159.3 → 21260.2 | 0 | 0 | no — rejected, measured |
-| Feedback copies | NOT MEASURED | - | - | - | - | - | no — zero copies taken on this pack |
-| Attachment traffic | 7.22 | 7.30 | +1.1 % (inside the floor) | loadedMiB 93943.3 → 65229.4 (-30.6 %), storedMiB -1.2 % | 0 | 0 | no — rejected, measured |
-| Storage boundary | 7.31 | 7.31 | 0 | 0 | 0 | 0 | no — rejected, measured (zero boundaries merged) |
+| Target copy elision | 7.31 | 7.25 | -0.8 % (inside the floor) | blits 6600 → 4800, blittedMiB 22159.3 → 21260.2 | 0 | 0 | no  -  rejected, measured |
+| Feedback copies | NOT MEASURED | - | - | - | - | - | no  -  zero copies taken on this pack |
+| Attachment traffic | 7.22 | 7.30 | +1.1 % (inside the floor) | loadedMiB 93943.3 → 65229.4 (-30.6 %), storedMiB -1.2 % | 0 | 0 | no  -  rejected, measured |
+| Storage boundary | 7.31 | 7.31 | 0 | 0 | 0 | 0 | no  -  rejected, measured (zero boundaries merged) |
 | Mipmap planning | NOT MEASURED | - | - | - | - | - | no change made |
-| Compute bindings | 7.27 | 7.26 | 0 (CPU change) | 0 | 0 | 0 | **YES** — maps/dispatch 3 → 0 |
+| Compute bindings | 7.27 | 7.26 | 0 (CPU change) | 0 | 0 | 0 | **YES**  -  maps/dispatch 3 → 0 |
 | Capability lookup | NOT MEASURED | - | - | - | - | - | no change made |
 
 ## Definition of Done (§57)
@@ -67,5 +67,5 @@ the CPU-side hot paths (§34/§37/§39), none of which has profiling evidence of
 
 ## Vitrail performance optimisation complete?
 
-**NO** — §57.2's mipmap count, §57.9's corpus and §57.10's lifecycle items are open, and the plan's own stop
+**NO**  -  §57.2's mipmap count, §57.9's corpus and §57.10's lifecycle items are open, and the plan's own stop
 condition (§58) is not met.
