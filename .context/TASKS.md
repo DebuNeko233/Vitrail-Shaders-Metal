@@ -224,21 +224,49 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   inside the configuration's settled band, so the instrument did not move the number it measures. The
   behaviour question ("may two semantically equal pipeline objects share one artifact?") is moot for the
   cache and stays open for the Metal 4 path, where argument tables are per-pipeline objects.
-**Prerequisite ②'s remaining cost is now counted by a contract rather than estimated.** The architecture
-  guard (`metallum/tools/ci-architecture.py`) carries a ledger of every file outside the generation packages
-  that still names the frame path's concrete generation, and it requires the ledger and the tree to agree in
-  both directions - a new coupling fails, and finishing one without deleting its line fails too. It prints
-  the total on every run, so the number can only go down:
-  `the frame path's isolation still owes 17 couplings in 6 files, and 1 the other way` (the first one is already gone:
-  `MetalTransientMemory` now takes the encoder's own `MetalDestructionQueue` instead of the encoder, so the
-  shared layer stops naming the frame path's class - semantics identical by construction, verified at 7.31 ms
-  against the same session's 7.31 ms baseline with every counter equal; the second line needed no
-  abstraction at all - `mtl/MTLDevice.newCommandQueue()` named `MTLCommandQueue` from dead code, because the
-  services build the queue from the device handle, so the method, its `Msg` and its import simply went). **The 17/10 shape in this file was an
-  undercount of where the work is**: `render/shared/MetalTransientMemory.java` names `MetalCommandEncoder` -
-  a shared-layer file reaching into the future Metal 3 package - and `mtl/MTLDevice.java` names
-  `MTLCommandQueue`, with `MTLBuiltinPipelines` and `MTLStorageTexturePipelines` naming Metal 3 encoders from
-  the bindings side. Those are the couplings the facade has to remove, and the ledger is the checklist.
+**Prerequisite ②'s remaining cost is counted by a contract, and the count says design from debt.** The
+  architecture guard (`metallum/tools/ci-architecture.py`) carries a ledger of every file outside the
+  generation packages that still names the frame path's concrete generation, requiring ledger and tree to
+  agree in **both** directions: a new coupling fails, and finishing one without deleting its line fails too.
+  It also holds a second ledger for the couplings that must stay the direction they are, and checks that
+  direction (the neutral class has to be called from inside a generation package). Current reading:
+  `the frame path's isolation still owes 17 couplings in 6 files, and 1 the other way` - the one the other
+  way is `MTLBuiltinPipelines`, the neutral home of the built-in pipelines, which the Metal 3 wrappers call
+  **into**; counting it as debt argued for pulling encode bodies into the wrappers, which is the opposite of
+  the split, so it is listed separately. `MTLStorageTexturePipelines` stays in debt because its caller is
+  still `render`; it becomes a delegation the day the encoder moves.
+**What has been removed so far, in the order it was removed.** (1) `MetalTransientMemory` took the encoder
+  only to retire its rotated blocks, so it now takes the encoder's own `MetalDestructionQueue` - same
+  instance, so the semantics hold by construction - and the shared layer stops naming the frame path's class
+  (7.31 ms against the same session's 7.31 ms baseline, every counter equal). (2)
+  `mtl/MTLDevice.newCommandQueue()` was dead code: the services build the queue from the device handle, so the
+  method, its `Msg` and its import simply went - a generation name carried by dead code is the cheapest line
+  in the ledger. (3) **The bridge step split in two, and the code decided which way.**
+  `MetalAttachmentBridge` and `MetalScaleBridge` only *ask* the encoder things, so those questions became
+  `render/shared/MetalFrameExtras` (four methods on shared and game types), implemented by the encoder and
+  dispatched on by both bridges. `MetalComputeBridge` and `MetalDepthMipmapBridge` **cannot** be abstracted:
+  they encode, driving `MTLComputeCommandEncoder`/`MTLRenderCommandEncoder` directly, so an interface able to
+  express them would hand a generation's encoder out of the neutral layer. They move to `render.metal3` with
+  the encoder and keep `instanceof` as their seam - this corrects the plan in this file, which had all four
+  bridges going behind one interface. (4) **The sodium draw path followed the same recipe**:
+  `MetalDrawContext` named `MetalRenderPass` for two members (transient memory and a uniform binding), so
+  those became `render/shared/MetalPassUniformWriter`; a backend that is not one now gets an
+  `IllegalArgumentException` naming its class instead of an unchecked cast, and `allocateTransient` became
+  `public` because the interface needs it - opened **by contract**, which is what the three failed moves did
+  by hand. (5) **The surface asks a presentation contract too**: `render/shared/MetalFramePresentation` (the
+  take and the submit), kept separate from `MetalFrameExtras` because scaling and presenting are different
+  capabilities. **The seam it does not yet decide**: whether the frame presents through Metal 3 or Metal 4 is
+  still asked *inside* the Metal 3 encoder (`Metal4Path.presenting(...)`), so the present-only Metal 4 path
+  is reachable only by the Metal 3 path asking for it.
+**That next step is two decisions, not one** - established by reading the condition rather than by moving
+  it. `Metal4Path.presenting(...)` conjoins **policy** (today the system property `metallum.metal4Present`,
+  standing in for a question the selector should answer) with **readiness** (`carrying`, queue, command
+  buffer, frame event and its value, argument table, four consulted selectors, non-nil layer and picture).
+  Policy goes to `MetalExecutionServices`; readiness stays with the Metal 4 objects. The step therefore
+  **does not shrink the ledger** - the encoder keeps naming the present path to ask whether it is ready - and
+  it moves a **safety interlock**, so it needs a two-arm session on the settled scene (property on and off
+  against the same baseline) plus the picture check, not a single run. That pair is why it was not started at
+  the end of a session; it is the next thing to do.
 **Prerequisite ①'s last piece (`MetalPipelineKey`) is specified down to the lines it touches, and not
   started.** Where the identity material is: `MetalDevice.getOrCompilePipeline(RenderPipeline)` (line ~408)
   is the only place a compiled pipeline is made - `this.compiledPipelines.computeIfAbsent(pipeline, p ->
