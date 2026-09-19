@@ -749,24 +749,60 @@ optimisation, revert when the gain is within noise or correctness is uncertain, 
 decided, feedback copies understood, attachment traffic decided, storage boundary decided, compute allocations
 handled, corpus correct, lifecycle clean, architecture clean) and stops there - not at zero overhead.
 
-**Phase 0 is not complete: there is no trustworthy pack baseline yet.** From 00:22 onward every harness arm with
-`--pack photon_v1.3b` counted a window that drew **no pack work** - `renderPasses` ~1 950 (3.2 a frame),
-`blits=0`, `computeEncoders=0`, `loadedMiB` ~11 000 - counter-identical to `--no-pack`, while the same invocation
-read 40.8 passes a frame with `blits=6600` at 00:19 (`run/gen-api2`). The pack loads (503 files, 339 programs),
-its first-full-frame line appears, and by `00:26:55` the log says `0 of the 0 pack modules walked`, with no error
-anywhere; the probe answers regardless. The `Saving and pausing game` / `Stopping worker threads` lines are in
-the **good** run too, so they do not mean "the level was left" - do not use them as the explanation.
+**Why the first arms of this plan measured nothing, kept because the shape recurs.** From 00:22 onward three
+harness arms with `--pack photon_v1.3b` counted a window that drew **no pack work** - `renderPasses` ~1 950
+(3.2 a frame), `blits=0`, `computeEncoders=0`, `loadedMiB` ~11 000 - counter-identical to `--no-pack`, while the
+same invocation read 40.8 passes a frame with `blits=6600` at 00:19 (`run/gen-api2`). The pack loads (503 files,
+339 programs) and its first-full-frame line appears, then the log says `0 of the 0 pack modules walked` with no
+error anywhere, and the probe answers regardless. The `Saving and pausing game` / `Stopping worker threads`
+lines are in the **good** run too, so they do not mean "the level was left" - do not use them as the
+explanation; the cause is the pack-selection file, below.
 
-What is already done about it (metallum `1199f39`): `tools/run-vitrail-performance.sh` now **refuses** a pack run
-whose window did not draw the pack - under 10 render passes a frame **and** zero copy-backs - and fails the run
-the way it already refuses a non-Metal session. Verified: `gen-api2` 40 passes/6600 blits accepted;
-`pacing-pack` and `pacing-wait` 3 passes/0 blits refused.
+The two harness guards that now refuse this shape (metallum `1199f39`, `905d315`): a pack window under 10 render
+passes a frame **and** with zero copy-backs is refused (exit 4), and the fingerprint of the `pack.txt` the run
+wrote is compared afterwards, so a selection changed by another writer is named instead of left to a pass count.
+Verified against the runs it has to tell apart: `gen-api2` 40 passes / 6600 blits accepted, `pacing-pack` and
+`pacing-wait` 3 passes / 0 blits refused.
 
-**Next action, exactly:** read every logger in `metallum/run/pacing-pack/plain/latest.log` between `00:26:48` and
-`00:26:55` (and the same offset from the first full frame in `run/gen-api2`) to find what unloads the pack or
-ends the scene before the window opens; then re-run the pack arm until the guard accepts it, and take the Phase 0
-baseline with `pass-census` and `passTimings` on. Nothing in the plan's Phase 1+ may be measured before that,
-because a menu frame reads as a very fast pack.
+**Phase 0 baseline is taken** (`metallum/run/p0-base`, 2026-09-20 00:51, and the guards accepted it): Photon
+v1.3b, renderscale 55, shadowmapscale 100, 1920x1200 fullscreen, camera pinned at `548.5,63,-248.5 yaw 0 pitch
+7.8`, 600 frames, Unlimited (maxFps 260), vsync off, MAILBOX with `displaySyncEnabled=false`, no pass switch on.
+
+```
+wallP50 7.29   wallP95 8.42   wallP99 9.00   wallMax 9.93        (ms)
+gpuP50  7.34   gpuP95  7.41   gpuP99  7.43   gpuMax  7.46        gpuMs 4395.30 / 600
+renderPasses 20928 (34.9 a frame)   encoders 21440   passChanged 20840   submit 600
+blit 3000 + compute 1800 + clear 600 openers
+blits 6600   blittedMiB 22159.3   depthAttachments 4800
+loadedMiB 93943.3   storedMiB 132773.6   pipeline 29228   texture 75505   sampler 73705
+compiles 0   compileMs 0.00   pipelineIdentities == pipelineKeys 345
+drawable wait    calls 600  p50 0.05 ms  p95 0.78 ms  max 2.35 ms  total 84.46 ms
+submit-window    calls 1200 p50 0.00 ms  p95 5.92 ms  max 6.15 ms  total 3256.36 ms
+```
+
+Every counter matches the recorded `m3k-pack-a` / `m3l-pack-b` reference state exactly (`encoders` 21440,
+`passChanged` 20840, `loadedMiB` 93943.3, `storedMiB` 132773.6, `blits` 6600, `depthAttachments` 4800), so the
+scene is the reference scene and not a lookalike. The GPU span is the frame (`gpuP50` 7.34 against `wallP50`
+7.29): this frame is GPU-bound, and the submit window's 5.4 ms a frame is waiting for that same GPU work rather
+than adding to it.
+
+**The empty windows are explained and refused (metallum `1199f39`, `905d315`).** `vitrail/pack.txt` is shared,
+and two other writers read-modify-write the whole file - the settings screen picking a pack, and the video
+settings moving one of its three numbers - so a session of the owner's own turned the pack off under a run that
+was already counting. The log then says `No pack asked for` while the probe counts the game's own frame. The
+harness now fingerprints the file it wrote, refuses the window if it changed (exit 4), and separately refuses a
+window under 10 render passes a frame with zero copy-backs. `Saving and pausing game` / `Stopping worker
+threads` are in the good runs too and are **not** evidence of leaving the level.
+
+**Do not arm pass timings across a measurement window.** `-Dvitrail.passTimings=1` serialises the frame on its
+GPU queries: the run read single-frame spans of **1910 ms** ("Pass timings over 1.9 s, 1 frames"), the pack
+never reached the first-full-frame line the harness arms on, and the whole 900 s timeout was spent before the
+window opened (`run/p0-baseline`). The counting census (`vitrail/pass-census` holding N seconds) is the switch
+to use for a pass breakdown; `passTimings` is for a short, deliberate window with the harness told to expect it.
+
+**Next action:** take the pass breakdown with the census armed (`vitrail/pass-census` = 15 s) and no
+`passTimings`, then Phase 1's shadow cost census (shadow terrain GPU ms a frame, draw frequency, reuse
+frequency) - A/B with one variable at a time, per the plan.
 
 ## Pre-M4 boundary cleanup (metallum docs/pre-m4-boundary-cleanup.md carries the long form)
 
