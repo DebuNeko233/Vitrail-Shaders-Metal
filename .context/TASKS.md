@@ -229,10 +229,12 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   that still names the frame path's concrete generation, and it requires the ledger and the tree to agree in
   both directions - a new coupling fails, and finishing one without deleting its line fails too. It prints
   the total on every run, so the number can only go down:
-  `the frame path's isolation still owes 24 couplings in 12 files` (the first one is already gone:
+  `the frame path's isolation still owes 23 couplings in 11 files` (the first one is already gone:
   `MetalTransientMemory` now takes the encoder's own `MetalDestructionQueue` instead of the encoder, so the
   shared layer stops naming the frame path's class - semantics identical by construction, verified at 7.31 ms
-  against the same session's 7.31 ms baseline with every counter equal). **The 17/10 shape in this file was an
+  against the same session's 7.31 ms baseline with every counter equal; the second line needed no
+  abstraction at all - `mtl/MTLDevice.newCommandQueue()` named `MTLCommandQueue` from dead code, because the
+  services build the queue from the device handle, so the method, its `Msg` and its import simply went). **The 17/10 shape in this file was an
   undercount of where the work is**: `render/shared/MetalTransientMemory.java` names `MetalCommandEncoder` -
   a shared-layer file reaching into the future Metal 3 package - and `mtl/MTLDevice.java` names
   `MTLCommandQueue`, with `MTLBuiltinPipelines` and `MTLStorageTexturePipelines` naming Metal 3 encoders from
