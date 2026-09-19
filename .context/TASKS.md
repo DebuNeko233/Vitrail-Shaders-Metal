@@ -820,9 +820,33 @@ The attachment traffic is the honest proxy for the render target's area, and it 
 an arm is comparable with it only if it renders that same target**, which is what to check before reading a time
 column - not the window size and not the screenshot's dimensions.
 
-**Next action:** reproduce `run/p0-base`'s exact invocation (`--fullscreen`, 1920x1200 display mode) once to
-confirm the reference counters repeat, take that as the Phase 0 anchor, and only then start Phase 1's shadow cost
-census on the `run-vitrail-shadow-*` fixtures.
+**Phase 0 anchor is confirmed and the scene's own floor is measured** (`run/p0-base` fullscreen 1920x1200 display
+mode, 00:51; `run/p0-repeat`, 01:03 - same invocation, one hour apart):
+
+| counter | base | repeat | difference |
+| --- | --- | --- | --- |
+| `renderPasses` | 20928 | 20922 | -0.03 % |
+| `encoders` / `passChanged` | 21440 / 20840 | 21435 / 20835 | -0.02 % |
+| `loadedMiB` / `storedMiB` | 93943.3 / 132773.6 | 93922.0 / 132752.3 | -0.02 % |
+| `blits` / `blittedMiB` / `depthAttachments` | 6600 / 22159.3 / 4800 | 6600 / 22159.3 / 4800 | 0 |
+| `wallP50` / `gpuP50` | 7.29 / 7.34 | 7.27 / 7.29 | -0.3 % / -0.7 % |
+
+It also matches the reference state recorded hours earlier (`m3k-pack-a`/`m3l-pack-b`: `encoders` 21440,
+`passChanged` 20840, `loadedMiB` 93943.3, `storedMiB` 132773.6), so this scene reproduces across sessions. **The
+A/B floor for anything measured here is about 0.03 % on the structural counters and 0.3-0.7 % on the time
+columns** - well under the plan's 2 % keep threshold, so a real gain of that size is resolvable on this fixture.
+
+**And the picture comparison across launches is worthless on it.** The house tool compared the same two arms and
+reported **mean channel difference 30.68, 93.42 % of pixels differing at all, 47.59 % above eight levels** - with
+counters agreeing to 0.02 per cent. The sun, the weather phase and the pack's temporal history differ per
+launch, so "A against B" on screenshots cannot judge a GPU optimisation here. Visual verification has to use the
+idiom the checkpoint smokes use - a diagnostic fixture whose output is a function of the state (raw
+shadow-map/light-space values, a known marker colour), or an in-session A/B - never two launches' screenshots.
+That is a **correction to the plan's section 52 checklist** as it would be applied naively.
+
+**Next action:** Phase 1's shadow cost census on the `run-vitrail-shadow-*` fixtures (shadow terrain GPU ms a
+frame, draw frequency, reuse frequency), with `passTimings` used only for the ranking and never for a time
+column, and every arm judged by the structural counters first.
 
 ## Pre-M4 boundary cleanup (metallum docs/pre-m4-boundary-cleanup.md carries the long form)
 
