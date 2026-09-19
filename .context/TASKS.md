@@ -1059,6 +1059,15 @@ Map ABI unchanged and `Resolved` still copying, so the backend can never see a m
 There is no cached `Resolved` anywhere (`resolve` builds fresh maps on every call), which is what makes the
 scratch-map candidate safe rather than merely plausible.
 
+**Phase 7's "before" is measured** (`run/photon-compute`, 01:20, reference configuration): the counting line
+reads **274 dispatches a second** (about 2 a frame at 137 fps), **3 maps and 3 copies each**, and **6.5 bindings
+a dispatch** (1781 in a second). So a frame builds about **12 map objects and 13 bindings across 2 dispatches**,
+and a second of play allocates roughly 1644 maps for compute binding - the number section 33's acceptance needs,
+and the one nothing in the engine printed before this round. The reference probe line is unchanged
+(`renderPasses` 20928, `blits` 6600, `computeEncoders` 1800, `wallP50` 7.26), so the counting costs nothing
+measurable. Next: the section 32 scratch-map candidate, then this line again for the "after" - the same bound
+names and the same binding count, with the maps gone.
+
 ## Pre-M4 boundary cleanup (metallum docs/pre-m4-boundary-cleanup.md carries the long form)
 
 The `render.metal3` sealing is done (metallum `267f3b6`) and the generation-neutral capability vocabulary exists
