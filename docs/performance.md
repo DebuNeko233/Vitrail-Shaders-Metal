@@ -418,6 +418,22 @@ first is in P6: over four window sizes the frame's GPU time is a straight line i
 do not scale with them and 2.726 ms a megapixel that do, and the wall clock agrees with the GPU at every
 one of the four.
 
+**A comparison needs a scene that repeats, and this one does not.** Every measurement above compares
+two launches of the game, and two launches of this world do not draw the same frame. The first evidence
+was the picture: two runs of one configuration differ in ten per cent of their pixels, because the
+world's clock runs while a session is loaded and the sun has moved by the time the second run's window
+opens. That is fixed at the harness: the staged world holds one time of day and one player position, and
+it is copied in again before every run, unless `--continue-world` asks otherwise. What the fix does not
+give is a scene that repeats *structurally*. With the world starting fresh, the two arms of one A/B still
+differ by **eleven per cent in pipelines and nineteen in depth attachments** - ten passes a frame
+attaching depth against eleven - which is a different frame rather than a switch, and it is why that
+run's four per cent of frame time could not be attributed to anything. Chunk loading, entities and
+weather are not ours to pin by a copy, so what a small effect needs is a **deterministic fixture**: a
+scene the harness controls, which is what the companion repository's smoke fixtures already build for
+its smoke tests, and what the picture half of P1 and the copy half of P4 are both waiting on. Until then the
+resolution of a comparison is a few per cent of frame time, and a claim below that is not measurable
+however many decimal places it is printed to.
+
 ---
 
 # Phase P1 - Attachment lifetime, and the load and store actions that follow
@@ -854,6 +870,19 @@ reflection project.
 and a copy-back is a blit, so none of its counters sees one: the copies are inside `gpuMs` and invisible
 in its decomposition. A blit counter - how many copies a window ran and how many mebibytes they moved -
 is the missing reading, and it is what turns "three of ten" into milliseconds before anybody skips them.
+That counter exists now, at the 2D texture-to-texture copy in `MetalCommandEncoder`, and the first
+session it ran on moved **225 MiB a frame in eleven copies** - larger than the depth attachment's own
+loads, and never counted before.
+
+**Measured, and it is small.** `-Dvitrail.elideTargetCopies` is written, off by default, and filters the
+copy list by the plan's own read set on the half the copy writes to. Against one session of the same
+scene it removes exactly the three copies it names - eleven a frame becomes eight, 6600 blits over 600
+frames become 4800 - and the three it removes are small ones: the window's copy traffic falls from
+135187 to 131441 MiB, so the three together are 6.24 MiB a frame where a full-size target at this window
+is 28 MiB. Six mebibytes read and written is of the order of a twentieth of a millisecond. The frame
+time moved by less than two launches of this scene can resolve (see the reproducibility note in P0), so
+the honest record is: **correct, counter-confirmed, and too small to be worth a default**. Three of
+eleven copies is what this pack's declarations over-count, and it is not where a frame's time is.
 
 **Exit criterion.** At least one real pack is shown to take fewer copies or fewer bindings because a
 sampler is provably unreachable after preprocessing, with no image change on the regression set, and
