@@ -63,42 +63,32 @@ the pack and the player between them settled on there.
 The panorama capture does not follow it either, and never will: it renders the world at 4096
 square down a path that is not the ordinary frame at all, so the scale never sees it.
 
-## The upscale is a fixed cost
+## Bringing it back: MetalFX
 
-The picture is brought back up in two passes, AMD's FidelityFX Super Resolution 1.0: an
-edge-adaptive spatial upsample into a window-sized image, then a contrast-adaptive sharpen onto
-the game's colour texture.
+The picture is brought back up in one step, by MetalFX's spatial scaler, which the Metal backend owns
+and this engine asks for through a narrow capability: the scaled colour texture in, the game's own
+window-sized colour texture out, one encode. It used to be two passes of this engine's own - AMD's
+FidelityFX Super Resolution 1.0, an edge-adaptive upsample into a window-sized image and then a
+contrast-adaptive sharpen - and those are gone, along with the intermediate image they needed and the
+temporal fold that ran between them. The reasoning is in the performance plan; what a reader of this
+page needs is what changed underneath the slider.
 
-**Both of those run at the window's resolution, not at the scaled one.** They write every pixel of
-the window whatever the slider says, so what they cost does not shrink as the scale goes down. It
-is a fixed addition, paid once per frame, that buys back the sharpness. Lowering the scale from 70
-to 50 makes the world cheaper and leaves the upscale exactly where it was.
+**The upscale still runs at the window's size and is still a fixed cost.** Whatever writes the window's
+pixels, it writes all of them however small the world was drawn, so lowering the scale makes the world
+cheaper and leaves the upscale where it was. What the fixed cost is now is MetalFX's encode rather than
+FSR's two passes, and the plan measures both.
 
-## Folding the frames together
+**A device without it gets a blit.** Where MetalFX is not there to be used - an older system, a GPU that
+refuses the scaler, a backend that is not this one - the picture is brought back with a plain bilinear
+pass instead. The slider keeps working and the picture keeps arriving; what it loses is the sharpness,
+and the log says which of the two roads a session is on.
 
-A world drawn small loses the thin things first, and those are exactly what crawls as the camera
-moves: distant leaves, fences, the far edges of terrain. The spatial upscale above cannot put them
-back, because it only ever sees one frame and the detail is not in it.
-
-**Temporal Fold takes it from the frames before instead.** Several small pictures of a moving scene
-do not carry the same detail as each other, so blending them recovers some of what any one of them
-dropped, and the picture at a low scale settles rather than crawling. Each pixel is matched to where
-it stood a frame ago, which the engine works out by reprojecting the depth through the two cameras,
-and the value found there is held to the range of the pixels around it before it is mixed in. That
-clamp is what keeps a match that landed on the wrong surface from dragging a colour across an edge.
-
-It is off until asked for, and the checkbox greys out at a scale of 100 percent, where there is
-nothing to rebuild and the pass would be spent for nothing.
-
-**What it costs is two more passes and three more images**, on top of the fixed cost above. One pass
-writes the match at the render size into a two-channel image, and one folds at the window's size
-into a pair of half-float images, a pair because a fold cannot read the image it is writing. At
-1920x1080 that pair alone is about 32 MiB.
-
-**What it does not carry is anything that moves on its own.** The match is worked out from the
-camera alone, so a mob walking across a still screen is matched to where its pixels were rather than
-to where it was, and it keeps a faint trail. The clamp bounds how far that can go, which is why the
-result reads as a slight softness on moving things rather than as a smear behind them.
+**Temporal Fold is gone with the path it belonged to.** It took the thin detail a small picture loses
+from the frames before, by reprojecting the depth through the two cameras. But it consumed the
+*upscaled* frame and ran between the upsample and the sharpen, and a fused encode has no such slot -
+which is what the decision to put the fold on the FSR side had already implied. Its quality at a low
+scale is what a temporal MetalFX scaler would bring back, in one effect rather than two, and that is its
+own decision: it needs the frame jittered, and jitter is something a pack can see.
 
 ## Per-pass costs do not shrink either
 

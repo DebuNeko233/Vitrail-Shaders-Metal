@@ -55,12 +55,12 @@ import java.util.Optional;
  * texture, so the interface lands on a full-resolution picture and the present blit, which copies
  * texel for texel and stretches nothing, is handed the size it expects.
  * <p>
- * The upscale is AMD's FidelityFX Super Resolution 1.0, ported from the MIT-licensed
- * {@code ffx_fsr1.h} (see NOTICE): an edge-adaptive spatial upsample (EASU) into an intermediate
- * window-sized image, then a contrast-adaptive sharpen (RCAS) onto the game's colour texture. A
- * driver that refuses either pipeline falls back to a plain bilinear pass, and a driver that
- * refuses even that disengages the scale for the session rather than leave the interface over a
- * stale image.
+ * The upscale is MetalFX's spatial scaler, which the backend reaches through {@link ScaleCommands}:
+ * one encode from the picture drawn small straight into the game's own colour texture, where this
+ * engine used to run FSR 1.0's EASU upsample and RCAS sharpen as two passes of its own. A device that
+ * cannot run the scaler - an older system, a GPU that refuses it, a backend that is not the one this
+ * engine is built for - falls back to a plain bilinear pass, and a driver that refuses even that
+ * disengages the scale for the session rather than leave the interface over a stale image.
  * <p>
  * Two neighbours are handled by hand because they do not follow the main target within a frame.
  * The entity outline target is the one screen-sized target allocated outside the frame's resource
@@ -81,7 +81,6 @@ public final class RenderScale {
 	private static final int WHOLE = PackFile.MAX_RENDER_SCALE;
 
 	private static final String UPSCALE_LABEL = "Vitrail upscale";
-	private static final String SHARPEN_LABEL = "Vitrail sharpen";
 
 	private static final String SAMPLER = "InSampler";
 
@@ -100,10 +99,6 @@ public final class RenderScale {
 
 	private static final Identifier VERTEX_ID =
 			Identifier.fromNamespaceAndPath(Vitrail.MOD_ID, "scale/upscale_vertex");
-	private static final Identifier UPSCALE_ID =
-			Identifier.fromNamespaceAndPath(Vitrail.MOD_ID, "scale/upscale_fragment");
-	private static final Identifier SHARPEN_ID =
-			Identifier.fromNamespaceAndPath(Vitrail.MOD_ID, "scale/sharpen_fragment");
 	private static final Identifier BLIT_ID =
 			Identifier.fromNamespaceAndPath(Vitrail.MOD_ID, "scale/blit_fragment");
 
@@ -122,192 +117,7 @@ public final class RenderScale {
 			""";
 
 	/**
-	 * EASU, the upsampling half of FSR 1.0, ported from {@code FsrEasuF} of {@code ffx_fsr1.h}.
-	 * <p>
-	 * The reference feeds its constants from a CPU-side setup; here they are all derived in place
-	 * from {@code textureSize}, which is what that setup computes them from, so the pass needs no
-	 * uniform block and survives a resize without being rebuilt. The two bit-trick reciprocals are
-	 * the reference's own ({@code APrxLoRcpF1} and {@code APrxLoRsqF1} of {@code ffx_a.h}) rather
-	 * than plain divisions, and that is load-bearing at one spot: a flat neighbourhood hands
-	 * {@code easuSet} a zero gradient, whose true reciprocal is an infinity that turns
-	 * {@code 0 * inf} into a NaN, where the approximation returns a large finite number that the
-	 * zero gradient multiplies away to nought.
-	 * <p>
-	 * Nothing in it depends on which way is up. The gather footprint and the tap offsets are all
-	 * in texel space, and the kernel is symmetric under reflection, so the engine's bottom-left
-	 * image convention needs no flip anywhere; one added "to be safe" would be the defect.
-	 */
-	private static final String UPSCALE = """
-			#version 460 core
-
-			uniform sampler2D InSampler;
-
-			in vec2 ofTexCoord;
-
-			layout(location = 0) out vec4 ofFragData0;
-
-			float aRcp(float x) {
-				return uintBitsToFloat(0x7ef07ebbu - floatBitsToUint(x));
-			}
-
-			float aRsq(float x) {
-				return uintBitsToFloat(0x5f347d74u - (floatBitsToUint(x) >> 1));
-			}
-
-			void easuTap(inout vec3 colour, inout float weight, vec2 off, vec2 dir, vec2 len,
-					float lob, float clp, vec3 c) {
-				vec2 v = vec2(off.x * dir.x + off.y * dir.y, off.x * -dir.y + off.y * dir.x) * len;
-				float d2 = min(dot(v, v), clp);
-				float wB = (2.0 / 5.0) * d2 - 1.0;
-				float wA = lob * d2 - 1.0;
-				wB *= wB;
-				wA *= wA;
-				wB = (25.0 / 16.0) * wB - (25.0 / 16.0 - 1.0);
-				float w = wB * wA;
-				colour += c * w;
-				weight += w;
-			}
-
-			void easuSet(inout vec2 dir, inout float len, float w,
-					float lA, float lB, float lC, float lD, float lE) {
-				float lenX = max(abs(lD - lC), abs(lC - lB));
-				float dirX = lD - lB;
-				dir.x += dirX * w;
-				lenX = clamp(abs(dirX) * aRcp(lenX), 0.0, 1.0);
-				len += lenX * lenX * w;
-				float lenY = max(abs(lE - lC), abs(lC - lA));
-				float dirY = lE - lA;
-				dir.y += dirY * w;
-				lenY = clamp(abs(dirY) * aRcp(lenY), 0.0, 1.0);
-				len += lenY * lenY * w;
-			}
-
-			void main() {
-				vec2 inputSize = vec2(textureSize(InSampler, 0));
-				vec2 texel = 1.0 / inputSize;
-				vec2 pp = ofTexCoord * inputSize - 0.5;
-				vec2 fp = floor(pp);
-				pp -= fp;
-				// The 12-tap footprint, gathered four texels at a time:
-				//    b c
-				//  e f g h
-				//  i j k l
-				//    n o
-				vec2 p0 = (fp + vec2(1.0, -1.0)) * texel;
-				vec2 p1 = p0 + vec2(-1.0, 2.0) * texel;
-				vec2 p2 = p0 + vec2(1.0, 2.0) * texel;
-				vec2 p3 = p0 + vec2(0.0, 4.0) * texel;
-				vec4 bczzR = textureGather(InSampler, p0, 0);
-				vec4 bczzG = textureGather(InSampler, p0, 1);
-				vec4 bczzB = textureGather(InSampler, p0, 2);
-				vec4 ijfeR = textureGather(InSampler, p1, 0);
-				vec4 ijfeG = textureGather(InSampler, p1, 1);
-				vec4 ijfeB = textureGather(InSampler, p1, 2);
-				vec4 klhgR = textureGather(InSampler, p2, 0);
-				vec4 klhgG = textureGather(InSampler, p2, 1);
-				vec4 klhgB = textureGather(InSampler, p2, 2);
-				vec4 zzonR = textureGather(InSampler, p3, 0);
-				vec4 zzonG = textureGather(InSampler, p3, 1);
-				vec4 zzonB = textureGather(InSampler, p3, 2);
-				vec4 bczzL = bczzB * 0.5 + (bczzR * 0.5 + bczzG);
-				vec4 ijfeL = ijfeB * 0.5 + (ijfeR * 0.5 + ijfeG);
-				vec4 klhgL = klhgB * 0.5 + (klhgR * 0.5 + klhgG);
-				vec4 zzonL = zzonB * 0.5 + (zzonR * 0.5 + zzonG);
-				float bL = bczzL.x;
-				float cL = bczzL.y;
-				float iL = ijfeL.x;
-				float jL = ijfeL.y;
-				float fL = ijfeL.z;
-				float eL = ijfeL.w;
-				float kL = klhgL.x;
-				float lL = klhgL.y;
-				float hL = klhgL.z;
-				float gL = klhgL.w;
-				float oL = zzonL.z;
-				float nL = zzonL.w;
-				vec2 dir = vec2(0.0);
-				float len = 0.0;
-				easuSet(dir, len, (1.0 - pp.x) * (1.0 - pp.y), bL, eL, fL, gL, jL);
-				easuSet(dir, len, pp.x * (1.0 - pp.y), cL, fL, gL, hL, kL);
-				easuSet(dir, len, (1.0 - pp.x) * pp.y, fL, iL, jL, kL, nL);
-				easuSet(dir, len, pp.x * pp.y, gL, jL, kL, lL, oL);
-				float dirR = dot(dir, dir);
-				bool zro = dirR < (1.0 / 32768.0);
-				dirR = zro ? 1.0 : aRsq(dirR);
-				dir.x = zro ? 1.0 : dir.x;
-				dir *= dirR;
-				len = len * 0.5;
-				len *= len;
-				float stretch = dot(dir, dir) * aRcp(max(abs(dir.x), abs(dir.y)));
-				vec2 len2 = vec2(1.0 + (stretch - 1.0) * len, 1.0 - 0.5 * len);
-				float lob = 0.5 + ((1.0 / 4.0 - 0.04) - 0.5) * len;
-				float clp = aRcp(lob);
-				vec3 min4 = min(min(vec3(ijfeR.z, ijfeG.z, ijfeB.z), vec3(klhgR.w, klhgG.w, klhgB.w)),
-						min(vec3(ijfeR.y, ijfeG.y, ijfeB.y), vec3(klhgR.x, klhgG.x, klhgB.x)));
-				vec3 max4 = max(max(vec3(ijfeR.z, ijfeG.z, ijfeB.z), vec3(klhgR.w, klhgG.w, klhgB.w)),
-						max(vec3(ijfeR.y, ijfeG.y, ijfeB.y), vec3(klhgR.x, klhgG.x, klhgB.x)));
-				vec3 colour = vec3(0.0);
-				float weight = 0.0;
-				easuTap(colour, weight, vec2(0.0, -1.0) - pp, dir, len2, lob, clp, vec3(bczzR.x, bczzG.x, bczzB.x));
-				easuTap(colour, weight, vec2(1.0, -1.0) - pp, dir, len2, lob, clp, vec3(bczzR.y, bczzG.y, bczzB.y));
-				easuTap(colour, weight, vec2(-1.0, 1.0) - pp, dir, len2, lob, clp, vec3(ijfeR.x, ijfeG.x, ijfeB.x));
-				easuTap(colour, weight, vec2(0.0, 1.0) - pp, dir, len2, lob, clp, vec3(ijfeR.y, ijfeG.y, ijfeB.y));
-				easuTap(colour, weight, vec2(0.0, 0.0) - pp, dir, len2, lob, clp, vec3(ijfeR.z, ijfeG.z, ijfeB.z));
-				easuTap(colour, weight, vec2(-1.0, 0.0) - pp, dir, len2, lob, clp, vec3(ijfeR.w, ijfeG.w, ijfeB.w));
-				easuTap(colour, weight, vec2(1.0, 1.0) - pp, dir, len2, lob, clp, vec3(klhgR.x, klhgG.x, klhgB.x));
-				easuTap(colour, weight, vec2(2.0, 1.0) - pp, dir, len2, lob, clp, vec3(klhgR.y, klhgG.y, klhgB.y));
-				easuTap(colour, weight, vec2(2.0, 0.0) - pp, dir, len2, lob, clp, vec3(klhgR.z, klhgG.z, klhgB.z));
-				easuTap(colour, weight, vec2(1.0, 0.0) - pp, dir, len2, lob, clp, vec3(klhgR.w, klhgG.w, klhgB.w));
-				easuTap(colour, weight, vec2(1.0, 2.0) - pp, dir, len2, lob, clp, vec3(zzonR.z, zzonG.z, zzonB.z));
-				easuTap(colour, weight, vec2(0.0, 2.0) - pp, dir, len2, lob, clp, vec3(zzonR.w, zzonG.w, zzonB.w));
-				ofFragData0 = vec4(min(max4, max(min4, colour * (1.0 / weight))), 1.0);
-			}
-			""";
-
-	/**
-	 * RCAS, the sharpening half of FSR 1.0, ported from {@code FsrRcasF} of {@code ffx_fsr1.h} and
-	 * run at the window's size on what EASU produced.
-	 * <p>
-	 * The sharpness is the reference's own scale, stops of reduction from the maximum, baked at
-	 * the 0.2 the FSR demo ships with: this pass has no block of its own, and a number that cannot
-	 * move is one less thing to keep in step. The reference's optional noise-detection term is
-	 * left out, as the reference itself leaves it out unless a define asks for it.
-	 */
-	private static final String SHARPEN = """
-			#version 460 core
-
-			uniform sampler2D InSampler;
-
-			in vec2 ofTexCoord;
-
-			layout(location = 0) out vec4 ofFragData0;
-
-			void main() {
-				ivec2 last = textureSize(InSampler, 0) - 1;
-				ivec2 sp = ivec2(gl_FragCoord.xy);
-				// The cross of taps:
-				//    b
-				//  d e f
-				//    h
-				vec3 b = texelFetch(InSampler, clamp(sp + ivec2(0, -1), ivec2(0), last), 0).rgb;
-				vec3 d = texelFetch(InSampler, clamp(sp + ivec2(-1, 0), ivec2(0), last), 0).rgb;
-				vec3 e = texelFetch(InSampler, clamp(sp, ivec2(0), last), 0).rgb;
-				vec3 f = texelFetch(InSampler, clamp(sp + ivec2(1, 0), ivec2(0), last), 0).rgb;
-				vec3 h = texelFetch(InSampler, clamp(sp + ivec2(0, 1), ivec2(0), last), 0).rgb;
-				vec3 mn4 = min(min(b, d), min(f, h));
-				vec3 mx4 = max(max(b, d), max(f, h));
-				vec3 hitMin = min(mn4, e) / (4.0 * mx4);
-				vec3 hitMax = (1.0 - max(mx4, e)) / (4.0 * mn4 - 4.0);
-				vec3 lobes = max(-hitMin, hitMax);
-				float lobe = max(-(0.25 - 1.0 / 16.0),
-						min(max(lobes.r, max(lobes.g, lobes.b)), 0.0)) * exp2(-0.2);
-				float weight = 1.0 / (4.0 * lobe + 1.0);
-				ofFragData0 = vec4((lobe * (b + d + f + h) + e) * weight, 1.0);
-			}
-			""";
-
-	/**
-	 * The fallback when EASU or RCAS will not compile: one bilinear read, which is what the image
+	 * The fallback when MetalFX cannot run: one bilinear read, which is what the image
 	 * would have been under a plain stretch. Chosen over disengaging because the frame that learns
 	 * of the refusal has already rendered the world small, and something has to put a picture
 	 * under the interface.
@@ -328,14 +138,6 @@ public final class RenderScale {
 
 	private static final ShaderSource SOURCE = (id, type) -> {
 		if (type == ShaderType.FRAGMENT) {
-			if (UPSCALE_ID.equals(id)) {
-				return UPSCALE;
-			}
-
-			if (SHARPEN_ID.equals(id)) {
-				return SHARPEN;
-			}
-
 			return BLIT_ID.equals(id) ? BLIT : null;
 		}
 
@@ -392,8 +194,6 @@ public final class RenderScale {
 		}
 	}
 
-	private static final Pass EASU = new Pass(UPSCALE_ID);
-	private static final Pass RCAS = new Pass(SHARPEN_ID);
 	private static final Pass BILINEAR = new Pass(BLIT_ID);
 
 	/**
@@ -433,19 +233,13 @@ public final class RenderScale {
 	/** The scaled colour and depth the world renders into. Allocated while a scale is active. */
 	private static TextureTarget scaled;
 
-	/** The window-sized image between the two passes: EASU writes it, RCAS reads it. */
-	private static TargetSurface upscaled;
-
 	private static GpuBuffer quad;
-
-	/**
-	 * The temporal probe, which is nothing at all unless it was asked for on the command line. Held
-	 * here because this class owns the moment it would run at, between the upscale and the sharpen.
-	 */
-	private static final TemporalAccumulation TEMPORAL = new TemporalAccumulation();
 
 	/** Whether the entity outline target is at the scaled size and owes the window its own back. */
 	private static boolean outlineScaled;
+
+	/** Said once per session: which of the two roads the picture is brought back on. */
+	private static boolean saidRoad;
 
 	/**
 	 * Latched on an allocation failure at one size, and lifted when the size moves. Volatile for
@@ -582,23 +376,40 @@ public final class RenderScale {
 
 		GpuDevice device = RenderSystem.getDevice();
 		GpuTextureView world = ((RenderTargetAccessor) scaled).vitrail$colorTextureView();
-		RenderPipeline easu = EASU.get(device);
-		RenderPipeline rcas = easu == null ? null : RCAS.get(device);
-		if (easu != null && rcas != null && upscaled != null) {
-			draw(encoder, device, easu, world, upscaled.view(), FilterMode.LINEAR, UPSCALE_LABEL);
-			// Between the two and not after the sharpen: RCAS raises local contrast, and folding a
-			// sharpened frame into a sharpened history sharpens the same edge once per frame it
-			// survives. Sharpening last is also what AMD's own chain does.
-			draw(encoder, device, rcas, sharpenFrom(encoder, device, main), fullColorView(main),
-					FilterMode.NEAREST, SHARPEN_LABEL);
+		GpuTextureView into = fullColorView(main);
 
+		// MetalFX where this device has a scaler for the pair: one encode from the picture drawn small
+		// straight into the game's own colour texture, which is the whole of bringing it back. The
+		// capability answers false wherever it cannot be done - no framework, no scaler for these sizes
+		// and formats, a backend that is not this one - and the blit below is what the frame gets then.
+		boolean scaledWithMetalFx = false;
+		Object backend = Backends.encoder(encoder);
+		if (backend instanceof ScaleCommands commands) {
+			boolean available = commands.vitrail$metalFxAvailable();
+			scaledWithMetalFx = available
+					&& commands.vitrail$metalFxScale(world, into, scaled.width, scaled.height);
+			if (!saidRoad) {
+				saidRoad = true;
+				Vitrail.logger().info("The {}% render scale brings the picture back with {}",
+						percent, scaledWithMetalFx ? "MetalFX"
+								: available ? "a blit: MetalFX refused this frame's pair"
+										: "a blit: MetalFX is not available here");
+			}
+		} else if (!saidRoad) {
+			saidRoad = true;
+			Vitrail.logger().warn("The {}% render scale brings the picture back with a blit: the "
+					+ "backend behind {} carries no scale capability (mipmaps {}), so nothing MetalFX "
+					+ "offers can be reached", percent, encoder.getClass().getName(),
+					backend instanceof MipmapCommands);
+		}
+
+		if (scaledWithMetalFx) {
 			return;
 		}
 
 		RenderPipeline fallback = BILINEAR.get(device);
 		if (fallback != null) {
-			draw(encoder, device, fallback, world, fullColorView(main), FilterMode.LINEAR,
-					UPSCALE_LABEL);
+			draw(encoder, device, fallback, world, into, FilterMode.LINEAR, UPSCALE_LABEL);
 
 			return;
 		}
@@ -663,14 +474,6 @@ public final class RenderScale {
 			scaled = null;
 		}
 
-		if (upscaled != null) {
-			upscaled.close();
-			upscaled = null;
-		}
-
-		// With them and not on its own latch: the history is the size of the window, so whatever
-		// frees the window-sized pair here has the same reason to free that one.
-		TEMPORAL.release();
 	}
 
 	/** Puts the game's own textures back into the target's fields, closing nothing. */
@@ -689,7 +492,7 @@ public final class RenderScale {
 		swapped = false;
 	}
 
-	/** The view RCAS and the fallback write, read off the target after the restore. */
+	/** The view the upscale writes, read off the target after the restore. */
 	private static GpuTextureView fullColorView(RenderTarget main) {
 		return ((RenderTargetAccessor) main).vitrail$colorTextureView();
 	}
@@ -717,11 +520,6 @@ public final class RenderScale {
 				announce(width, height, outWidth, outHeight);
 			}
 
-			if (upscaled == null) {
-				upscaled = new TargetSurface(UPSCALE_LABEL, FORMAT, false, outWidth, outHeight);
-			} else if (upscaled.width() != outWidth || upscaled.height() != outHeight) {
-				upscaled.resize(outWidth, outHeight);
-			}
 		} catch (GpuDeviceLossException e) {
 			throw e;
 		} catch (RuntimeException e) {
@@ -764,29 +562,6 @@ public final class RenderScale {
 		}
 
 		outlineScaled = scaledNow;
-	}
-
-	/**
-	 * What the sharpen reads: the upscaled frame, or the fold of it into the frames before when the
-	 * temporal probe is asked for and has everything it needs. The probe answers null for every
-	 * reason there is, a missing motion vector image included, and each of them lands back on the
-	 * plain upscale rather than on a black screen.
-	 */
-	private static GpuTextureView sharpenFrom(CommandEncoder encoder, GpuDevice device,
-			RenderTarget main) {
-		if (!TemporalAccumulation.wanted() || scaled == null) {
-			// Given back here and not left to the release below: that one is only reached when the
-			// scale stands down altogether, so a player who turns the fold off while still scaling
-			// would keep two window-sized images of half floats for the rest of the session.
-			TEMPORAL.release();
-
-			return upscaled.view();
-		}
-
-		GpuTextureView folded = TEMPORAL.fold(encoder, device, quad(device), upscaled.view(),
-				PackChain.motionVectors(), main.width, main.height, scaled.width, scaled.height);
-
-		return folded == null ? upscaled.view() : folded;
 	}
 
 	/** One full screen pass: sample one image whole, write another whole. */

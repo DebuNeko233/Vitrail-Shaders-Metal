@@ -17,12 +17,17 @@ import java.lang.reflect.Method;
  * A backend without the surface, or one whose shape has moved, leaves every pass on its own default -
  * contents carried - which is the answer that changes nothing. So every failure here is soft and said
  * once: this is an optimisation, and a frame may not depend on it.
+ * <p>
+ * What this reflects into is the backend's public bridge and not its encoder. The encoder is
+ * package-private, and reflection refuses to enter it however public the method on it is: every call
+ * here threw, was caught, and quietly left the pass on its default - so the store half of P1 and its
+ * storage boundary were measured as worth nothing while never having been delivered at all.
  */
 public final class MetallumAttachmentBridge {
 
 	private static final String CONTENTS_CLASS = "com.metallum.render.AttachmentContents";
 
-	private static final String ENCODER_CLASS = "com.metallum.render.MetalCommandEncoder";
+	private static final String ENCODER_CLASS = "com.metallum.render.MetalAttachmentBridge";
 
 	private static Surface surface;
 
@@ -54,7 +59,7 @@ public final class MetallumAttachmentBridge {
 			for (int index = 0; index < contents.length; index++) {
 				contents[index] = found.answer().newInstance(readAfterwards[index], overwritten[index]);
 			}
-			found.setter().invoke(encoder, (Object) contents);
+			found.setter().invoke(null, encoder, contents);
 		} catch (ReflectiveOperationException | RuntimeException exception) {
 			giveUp(exception);
 		}
@@ -74,7 +79,7 @@ public final class MetallumAttachmentBridge {
 		}
 
 		try {
-			found.reads().invoke(encoder, reads);
+			found.reads().invoke(null, encoder, reads);
 		} catch (ReflectiveOperationException | RuntimeException exception) {
 			giveUp(exception);
 		}
@@ -91,9 +96,10 @@ public final class MetallumAttachmentBridge {
 					contents,
 					contents.getConstructor(boolean.class, boolean.class),
 					Class.forName(ENCODER_CLASS).getMethod(
-							"setNextPassContents", Array.newInstance(contents, 0).getClass()),
+							"setNextPassContents", Object.class,
+							Array.newInstance(contents, 0).getClass()),
 					Class.forName(ENCODER_CLASS).getMethod(
-							"setNextPassReadsStorageImage", boolean.class));
+							"setNextPassReadsStorageImage", Object.class, boolean.class));
 		} catch (ReflectiveOperationException | RuntimeException exception) {
 			// A backend that is not Metallum at all, or an older one. Not an error: the passes keep
 			// the behaviour they had before this existed, and the reason is kept for the log.
