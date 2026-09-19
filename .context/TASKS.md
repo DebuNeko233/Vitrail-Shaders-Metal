@@ -191,6 +191,18 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   mode), not a rename. `MetalResourceBinding` is out (previous commit); the remaining neutral part of
   `ArgumentBufferLayout` (`stageMask`, `descriptorSet`, `bufferIndex`, `encodedLength`) can follow once the
   key exists, with `MTLArgumentEncoder` staying on the generation side.
+**The cache-switch question is answered, and the answer changes the step: the key is not yet sufficient.**
+  Read from the code rather than reasoned about: the artifact a compile produces also depends on **five**
+  things `MetalPipelineKey` does not name - the depth and stencil state (`info.getDepthStencilState()`), the
+  polygon mode (`getPolygonMode()`), culling (`isCull()`), the primitive topology (`getPrimitiveTopology()`)
+  and the vertex format bindings (`getVertexFormatBindings()`) - each read by `MetalCompiledRenderPipeline`
+  while it builds, with the colour-target formats arriving through the depth state. So two pipelines that
+  differ only in depth state would collide under the current key and one would be handed the other's
+  artifact. The hypothesis that the game's `sortKey` marks a rebuild episode was **checked and is false**
+  (`sortKeySeed` is randomised only under `DEBUG_SHUFFLE_UI_RENDERING_ORDER`, and `sortKey` is a fixed
+  per-object field for draw ordering). **So the switch needs those five fields added first**, after which the
+  cache may move to the key; until then the key is a diagnostic and the cross-generation marker, and the
+  cache stays on object identity.
 **Prerequisite ① is done except for the cache switch**: `MetalPipelineKey` exists in `render.shared`
   (location, vertex/fragment shader locations, defines, **shader profile**, argument-buffer mode), is built at
   the one place a pipeline is compiled and stored on the compiled object, with the cache still keyed by the
