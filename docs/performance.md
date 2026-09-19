@@ -725,6 +725,39 @@ them targets rather than scratch. They are recorded because they are where the b
 future frame were memory-bound, and because a reader who finds the verdict above surprising should see
 what Apple's own answer to the same problem is.
 
+**Re-measured with the capability actually delivered.** One session, four configurations of one scene,
+1800x1019: plain, `-Dvitrail.elideTargetTraffic=true`, `-Dvitrail.narrowStorageBoundary=true`, and both.
+
+| | plain | elide | narrow | both |
+| --- | --- | --- | --- | --- |
+| loadedMiB | 884471 | **582311 (-34.2%)** | 885708 (+0.1%) | 633669 (-28.4%) |
+| storedMiB | 1071597 | **1054911 (-1.6%)** | 1072834 | 1106270 |
+| depth attachments | 6000 | 6000 | 6000 | 6600 |
+| copy-backs | 6600 | 6600 | 6600 | 6600 |
+| encoders | 18981 | 19017 | **19252** | 19823 |
+
+**The store half works, and it is worth exactly what the engine said it was.** It removes 16686 MiB over
+600 frames - **27.8 MiB a frame, one full-size colour target** - which is the one target the load's own
+announcement names as read by nothing in the frame. That number is mechanism-shaped rather than
+scene-shaped, and the copy-back and depth counters are identical across those three arms, so it is the
+switch. The boundary switch also reaches the backend now, and changes something: 271 more encoders over
+the window, half an encoder a frame.
+
+**And the frame-time readings from that session are not usable**, for a reason worth writing down: the
+four arms drew the same pass *structure* (identical depth and copy-back counters) but not the same frame -
+the texture and sampler counts differ by five to nine per cent between them, which is the intra-frame
+variation this fixture cannot remove: a hand, an entity, a particle. So the two time columns for `narrow`
+(+18 per cent) and `both` (+16 per cent) belong to the scene those runs happened to draw and not to the
+switch, exactly as the earlier four per cent did. What P1's store half is *worth* in milliseconds is
+therefore still unmeasured, but no longer because it is not delivered: because a comparison of a few per
+cent needs two runs that draw the same frame down to the entity, and this world does not.
+
+That is the instrument's next gap, and it is narrower than the one the fixture closed: the pass structure
+repeats and the bytes repeat, and what varies is what is drawn *inside* one. Two ways out and they are
+worth naming before either is built: freeze the last thing that moves - the player's own entity, by
+putting the world's game type into spectator, which is one field in the same file the freezer already
+rewrites - or run each configuration more than once and compare the least-perturbed of them.
+
 **Exit criterion.** Attachment bytes per frame fall on the P0 capture, the bindings and encoder counts
 do not regress, and the regression set in "Regression, not just frame rate" is unchanged, image for
 image. The counter alone does not close this phase. Two of the three are met on the pack measured above -
