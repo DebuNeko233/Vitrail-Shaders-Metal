@@ -352,10 +352,12 @@ pack's programs needs a sampler slot Metal does not have, which is a fault in th
 direct-resource decision rather than in the pack, and it is fixed in `metallum` by counting the slot
 the last sampled image lands in instead of counting the sampled images.
 
-What is still owed is the light pack's numbers, a picture on both sides of a comparison - macOS
-refuses screen capture to the process the harness runs under until it is granted in System Settings -
-and a **frame time**: the probe counts bytes and bindings, and the only rate in the log belongs to the
-first full frame, which is a warming window and not a measurement.
+What is still owed is the light pack's numbers, and a picture comparison on a scene that repeats:
+the harness photographs the screen now that macOS has been told to allow it, but two launches of one
+scene do not draw the same frame, because the world's clock runs while a session is loaded - so the
+difference it prints is lighting and particles rather than the switch. The frame time this section
+used to owe now exists: the probe's line carries the window's own wall-clock, and the first thing it
+measured is that a third of the attachment traffic was worth nothing in it. That reading is in P1.
 
 ---
 
@@ -365,6 +367,10 @@ first full frame, which is a warming window and not a measurement.
 the rest of the plan is ordered around. An attachment whose contents are dead when a pass ends is
 currently written back to memory anyway, and one whose contents are about to be fully overwritten is
 currently loaded first.
+
+*That premise is now measured and partly wrong, and the measurement is in "Where it stands" below:
+the traffic goes away and the frame time does not. The ordering this phase set is what the same
+measurement re-opens - read it before trusting the paragraph above.*
 
 **Needs first.** P0's byte counter, and a capture showing where the stores and loads actually are.
 Without that number there is no way to tell a real win from a smaller one.
@@ -429,19 +435,35 @@ the answer nobody gives is the one that changes nothing, and both directions are
 The two doors differ on purpose - a load is only elidable for a draw that covers the whole target,
 while a store needs only the absence of a reader - and the chain publishes both per pass.
 
-**Measured.** One build, one scene, two runs: photon v1.3b with the options its owner chose, the same
-world, an 1800x1019 window (a 3600x2038 drawable), 600 frames a run, the first run without the switch
-and the second with it. The scenes are the same to within a per cent on every binding count.
+**Measured.** Two sessions of one build, one scene: photon v1.3b with the options its owner chose, the
+same world, an 1800x1019 window (a 3600x2038 drawable), 600 frames a run, the first run without the
+switch and the second with it. The scenes are the same frame: viewport, scissor, texture, sampler and
+submit counts agree to within six hundredths of one per cent, and the store counter came back
+identical to four figures.
 
 | counter | off | on | change |
 | --- | --- | --- | --- |
-| loadedMiB | 938906 | 633286 | -32.6% |
-| storedMiB | 1126032 | 1122679 | -0.3% |
-| encoders | 19691 | 19752 | +0.3% |
-| passChanged | 19091 | 19152 | +0.3% |
+| loadedMiB | 935403 | 633137 | -32.3% |
+| storedMiB | 1122529 | 1122529 | +0.0% |
+| encoders | 19712 | 19718 | +0.0% |
+| windowMs | 17212.8 | 17245.5 | +0.2% |
+| ms a frame | 28.69 | 28.74 | +0.2% |
 
-The load half is the win it was supposed to be: 509 MiB a frame less read, 1565 to 1056, and about a
-sixth of the frame's attachment traffic across the two counters together (3441 MiB a frame to 2927).
+**The load half removes the traffic it says it removes and buys no frame time at all.** 509 MiB a
+frame less read, 1559 to 1055, about a sixth of the frame's attachment traffic across the two
+counters together - and 28.69 milliseconds a frame against 28.74, which is the same frame rate. The
+window's own clock, taken from the frame boundary on the render thread, is what says so; before that
+number existed this session would have been read as a win, and P1's premise would have survived
+another phase unchallenged.
+
+**That premise is the correction.** P1 was ordered first because "this is the largest avoidable cost
+in the frame on a tile-based GPU", and the trace said the GPU was saturated, so the reasoning went
+that GPU work removed is frame time returned. The GPU is saturated; the attachment loads are simply
+not what it is saturated on. Apple's tile memory takes the load at the start of a pass and the frame
+is bound in the fragment shader, which is where 12.63 of the 14.04 traced seconds went. A phase that
+removes bytes and not shader work removes a number and not milliseconds, and the measured shape of
+this frame says the phases that remove fragment work - P4's dead passes and P6's upscaling - are the
+ones that can move the rate.
 
 **The store half measured nothing, and the chain says why.** It fires only where nothing reads what a
 pass leaves, and in this pack almost everything a pass leaves is read: the frame is a sequence of
@@ -453,18 +475,33 @@ nothing is unread, which is why it stays: a pack whose last write to a target is
 what P4's reachability work is for, and this is the door it will come through.
 
 `-Dvitrail.narrowStorageBoundary=true` was on in the same run and moved no encoder boundary either
-(19691 to 19752 is noise, in the other direction). That is the expected reading rather than a fault:
-the frame already opens about one encoder per pass, so a rule that would force an extra boundary has
-none left to force. The pack does read storage images - it declares four and reads two of them as
-samplers - so the mechanism has something to narrow in principle and nothing to narrow here.
+(19712 to 19718). That is the expected reading rather than a fault: the frame already opens about one
+encoder per pass, so a rule that would force an extra boundary has none left to force. The pack does
+read storage images - it declares four and reads two of them as samplers - so the mechanism has
+something to narrow in principle and nothing to narrow here.
 
-What is still owed is the picture on both sides, and a frame time to go with the bytes.
+**What that leaves owed.** The switch stays off by default: it is now known to cost nothing and to
+buy nothing on this pack, and a default that changes what Metal is told has to be worth a picture
+comparison before it is worth a default. The picture half is not yet evidence either way, and the
+reason is the harness rather than the engine: two launches of one scene do not draw the same frame,
+because the world's clock runs while a session is loaded and the sun has moved by the time the second
+run's window opens. The measurement above shows the two windows drawing the same *work* - identical
+store traffic, identical viewport and scissor counts - and the two pictures differ in 10.6 per cent
+of pixels by more than eight levels: the same scene, lit from a different angle, with the particles
+respawned and the idle arm in another position. No part of either picture is corrupt, and that is a
+weaker claim than the phase's exit criterion asks for. The way to make it is the one "Regression, not
+just frame rate" already names: a deterministic fixture, whose scene the harness controls, rather
+than free play. What is genuinely still owed, then, is the fixture, the second (light) pack's numbers,
+and - now that the first phase has measured what it measured - a decision about whether P1's remaining
+work is worth its place ahead of P4 and P6.
 
 **Exit criterion.** Attachment bytes per frame fall on the P0 capture, the bindings and encoder counts
 do not regress, and the regression set in "Regression, not just frame rate" is unchanged, image for
 image. The counter alone does not close this phase. On the pack measured above the whole of that fall
-is the load half, and the store half is worth what the chain is asked for: a phase that only ever
-claims the load half has to say so, and this one does.
+is the load half - the store half is worth what the chain is asked for, and this chain asks for
+nothing - and the third clause is the one that is open: the bytes fall, the counts do not regress,
+and the image has not yet been compared on a scene that repeats. It also costs a clause this phase
+did not have: what the bytes were worth. Both are taken by a deterministic fixture, not by free play.
 
 **Risk.** The failure mode is silent and looks like a pack defect, which is why the phase is
 entry-gated on P0 and exit-gated on the comparison rather than on the number.
