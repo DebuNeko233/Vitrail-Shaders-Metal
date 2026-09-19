@@ -1499,6 +1499,23 @@ upscaler and does not run it** (`composite3 (TAAU)` is in that session's "progra
 does not run"), so the engine's scale is not stacked on the pack's. What the picture at 55 per cent looks
 like is the phase's remaining item, and it is a human verdict rather than a number.
 
+**And the encode is ordered the way MetalFX documents it, which cost nothing to fix.** An audit of the
+backend against Apple's documentation found four places where the code and the documents disagreed, and
+the one on this phase's own path is that every texture here opts out of Metal's hazard tracking while
+`MTLFXSpatialScaler` declares the property for exactly that case - `fence`, the fence "this scaler waits
+for and updates" - which the binding never set. The scaler was therefore the one encoder in a frame
+sitting in no part of the engine's fence chain: a frame could sample an input that was still being
+stored, or an output the scaler had not written. It is handed over now, behind the same
+`respondsToSelector:` guard the content origin needs, and the log says so if a scaler ever refuses it.
+
+That is the only one of the four that touches a frame's time, so it was measured on its own at 55 per cent
+in one window: **12.35 ms a frame with no fence and 12.27 with one**, 81.2 against 81.6 frames a second -
+inside the 1.4 per cent two runs of one configuration differ by. **The documented ordering costs nothing
+measurable here**, and the seat's 0.38 ms stands with it. The other three are the backend's own: the wait
+before a pipeline cache is cleared named a submit index that had committed nothing, so it never waited
+for the GPU; a failed command buffer was read as a drawn one; and the `CAMetalLayer`'s own reference was
+never given back. Each is fixed and pinned by a contract in the companion repository.
+
 **And the window is where the scale stops paying.** The sweep above varied the scale at a 1800x1019
 window, where the world and the output are the same size at 100 per cent and both shrink together below
 it. A player's window is not that shape: measured at the window a player's session used (3600x2260,
