@@ -276,7 +276,16 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   8. That is not the 0.14-0.41 per cent one configuration repeats to, and the arms' counters differ by their
   own present encoding (600 fewer viewports, 4200 more buffers in the m4 arm), so the frames differ too. The
   Metal 4 present is verified as **running**, not as **equivalent**, and the old claim is now contradicted
-  rather than merely unverified.
+  rather than merely unverified. **The difference is now classified**, by re-reading the two screenshots with
+  the compare tool's own PNG reader: **not a flip and not a shift** (mean channel difference - identity
+  2.447 against vertical flip 50.910 and best row shift 4.472, so identity is the minimum by a wide margin),
+  and **concentrated at edges** - flat pixels mean max-channel difference 1.652, edge pixels 8.027, worst 174.
+  A global tone or gamma shift would offset everything equally; an edge-weighted error five times the flat one
+  is the signature of **filtering**, which fits the two roads: the Metal 4 present *draws* the picture through
+  a pipeline with `presentSampler(scaling)` while Metal 3 *blits* it. The actionable item is therefore a
+  present-path one - at one to one the Metal 4 present should copy rather than resample - and the two-arm pair
+  is the test that says when it does. **It is not a blocker for M4**, whose subject is the frame's encoding,
+  but the claim stays "running" until it is fixed.
 **Prerequisite ①'s last piece (`MetalPipelineKey`) is specified down to the lines it touches, and not
   started.** Where the identity material is: `MetalDevice.getOrCompilePipeline(RenderPipeline)` (line ~408)
   is the only place a compiled pipeline is made - `this.compiledPipelines.computeIfAbsent(pipeline, p ->
