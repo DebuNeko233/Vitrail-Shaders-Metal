@@ -323,7 +323,26 @@ within noise, the probe is off unless asked for, and a GPU trace of one frame ha
 kept with the numbers. The trace is taken - three recordings, in the section above - and so is the
 reproduction: two sessions of one build report **the same 829 encoders, 230 pass changes and 599
 submissions** over their 600-frame windows, attachment bytes within one per cent of each other, and
-the same 1317 modules served with none built. What is still owed is the light pack's numbers.
+the same 1317 modules served with none built.
+
+**Both baseline packs are measured, on the scene that repeats.** One window each, 1800x1019, 600 frames,
+the frozen world, the driver's own GPU time:
+
+| | photon v1.3b | MakeUp-UltraFast 9.5e |
+| --- | --- | --- |
+| ms a frame of GPU time | 26.70 | **15.19** |
+| frames a second | 37.5 | 65.9 |
+| encoders a frame | 31.7 | 17.7 |
+| attachment loads a frame | 1559 MiB | 1342 MiB |
+| attachment stores a frame | 1870 MiB | 1514 MiB |
+| depth attachments a frame | 11 | 12.5 |
+| bytes copied back a frame | 225 MiB | 344 MiB |
+
+The pair is the strongest evidence this plan has for what a frame's time is made of. The light pack is
+**1.76 times faster** while moving **fourteen per cent fewer bytes**, copying **half again as many
+mebibytes** as the heavy one and attaching depth on **more** passes than it: what makes the heavy pack
+heavy is not traffic, not pass count and not copies, it is what each of its full screen programs does to
+each pixel - which is the same conclusion the resolution fit reached from the other side.
 "Within noise" is a claim about one build: a development build reads a cache edition of its own, so
 two runs either side of a rebuild are two cold starts and comparing them compares that, not the
 engine.
@@ -352,7 +371,7 @@ pack's programs needs a sampler slot Metal does not have, which is a fault in th
 direct-resource decision rather than in the pack, and it is fixed in `metallum` by counting the slot
 the last sampled image lands in instead of counting the sampled images.
 
-What is still owed is the light pack's numbers, and a picture comparison on a scene that repeats:
+What is still owed is a picture comparison on a scene that repeats:
 the harness photographs the screen now that macOS has been told to allow it, but two launches of one
 scene do not draw the same frame, because the world's clock runs while a session is loaded - so the
 difference it prints is lighting and particles rather than the switch. The frame time this section
@@ -912,6 +931,14 @@ time moved by less than two launches of this scene can resolve (see the reproduc
 the honest record is: **correct, counter-confirmed, and too small to be worth a default**. Three of
 eleven copies is what this pack's declarations over-count, and it is not where a frame's time is.
 
+**Closed below the floor.** Re-measured on the scene that repeats, the two arms of that comparison still
+differ by a whole pass - one arm drew ten depth-attaching passes a frame and the other eleven, the
+residual `shadow_cutout_cull entity` variation the fixture does not remove - and one pass is worth one to
+two per cent of a frame, where the three copies are worth about a twentieth of a millisecond. **So this
+switch's effect is below what any comparison here can resolve, and the counter is the proof that it
+works**: eleven copies a frame become eight, and 6.24 MiB a frame of the 225 stops moving. It stays in
+the tree, off by default, as a correct mechanism with no measurable prize on this pack.
+
 **Exit criterion.** At least one real pack is shown to take fewer copies or fewer bindings because a
 sampler is provably unreachable after preprocessing, with no image change on the regression set, and
 the finding is written down with the pack and the evidence. If reflection turns out not to prove
@@ -1109,6 +1136,31 @@ The prototype's acceptance is therefore three things: with the option off, the p
 exactly today's; with it on at the same render scale, the frame is not slower than the upscaler it
 replaced, read as `gpuMs` from the probe; and the picture is reviewed per pack under the compatibility
 policy rather than per engine.
+
+**Feasibility, checked against the API and against this backend.** MetalFX is a framework, not part of
+Metal: `MTLFXSpatialScalerDescriptor` and `MTLFXSpatialScaler` live in MetalFX.framework, and this
+backend reaches Objective-C through `objc_getClass`, which sees only what is already loaded. There is no
+`dlopen` anywhere in `metallum` today, so the first thing the implementation needs is a way to load that
+framework before asking for the class - a handful of lines through the same FFM linker the rest of the
+runtime interface uses, and a check that the class arrived rather than a crash if it did not.
+
+What has to be bound, all of it macOS 13 or later and all of it reachable by the message-send shape the
+rest of the layer uses, because the scaler is a protocol rather than a class and every property is a
+selector:
+
+- on the descriptor: `+supportsDevice:`, `inputWidth`, `inputHeight`, `colorTextureFormat`,
+  `colorProcessingMode`, `outputWidth`, `outputHeight`, `outputTextureFormat`, and the factory;
+- on the scaler: `colorTexture`, `outputTexture`, `inputContentWidth`, `inputContentHeight`,
+  `inputContentOriginX`, `inputContentOriginY`, and `encodeToCommandBuffer:`.
+
+One thing to check at runtime rather than read: the documentation gives the factory its Swift name
+(`makeSpatialScaler(device:)`), and the Objective-C selector is the `new`-prefixed one. A wrong selector
+is not a crash but a nil scaler, so the binding asks the class which it responds to and says so in the
+log rather than assuming.
+
+Across the seam it is the same shape P1's attachment facts took: a small interface Vitrail-side, mixed
+into the backend's command encoder, with a soft failure when the backend does not implement it. What
+crosses is a decision - scale this texture into that one, at these sizes - and never a Metal handle.
 
 **Work.**
 
