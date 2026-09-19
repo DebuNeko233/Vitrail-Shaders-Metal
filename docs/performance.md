@@ -1482,7 +1482,26 @@ of the scene rather than of the scale. At 25 per cent, the slider's own floor, t
 same scene at about 8.9 ms (112 frames a second), which is the ceiling the setting can reach. So 55 per
 cent buys 2.09 times against 1.00 and the next 30 points of slider buy about 1.6: **below roughly 60 per
 cent, more of the frame is the part the scale cannot touch than the part it can**, and that is where a
-player who expects the slider to keep paying finds that it does not. The session that motivated this
+player who expects the slider to keep paying finds that it does not.
+
+The same two points taken on **the owner's own world** rather than the fixture - their save, their
+window, their pack and their pack options, which are the fixture's options byte for byte, 600 frames
+each - read **24.99 ms a frame at 100 per cent and 11.14 at 55 per cent with the shadow map at 40 per
+cent**, which is 40.1 against 89.9 frames a second. Two things about that pair are worth keeping. The
+shadow map's own fill is **0.69 ms** of the 11.14 (11.83 with it at 100 per cent), so at this scene the
+shadows are not where the remaining time is. And **halving the render distance from 32 chunks to 16 moves
+11.14 ms to 11.15**: at this pack's fog, the chunks beyond the near field are not a per-frame cost, which
+is the opposite of what geometry reasoning predicts and is why the frame's time has to be measured rather
+than attributed.
+
+**Every number above is GPU time, and that is the limit of what it can say about a live session.** One
+such session, on the same machine and the same pack with 56 mods, reports 43 and 31 frames a second over
+two windows that each contain a pack reopen - and no probe line, so nothing in it says whether those
+frames were waiting on the GPU or on the CPU the mods run on. The probe prints both (`windowMs` and
+`gpuMs`, within 0.3 per cent of each other on every run above), and **the two together are what tells a
+pack-bound frame from a mod-bound one**; a claim about this engine's work can only be read against the
+first. That is the reading a player's own session owes before its frame rate is attributed to the pack,
+the scale or the renderer. The session that motivated this
 reading reports 43 and 31 frames a second over two windows that each contain a pack reopen - neither is a
 steady reading, and the same build reports 172 over the window that contains the startup and its menus.
 
