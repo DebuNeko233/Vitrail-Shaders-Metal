@@ -1068,6 +1068,30 @@ and the one nothing in the engine printed before this round. The reference probe
 measurable. Next: the section 32 scratch-map candidate, then this line again for the "after" - the same bound
 names and the same binding count, with the maps gone.
 
+### Open question from the owner: the distance does not join the sky (no Distant Horizons installed)
+
+Reported as "missing unloaded-chunk rendering", then sharpened to "looking into the distance, the colour where
+the chunks are not loaded does not join the sky". The mechanism, read out of the code and the pack rather than
+guessed:
+
+- Photon declares **no** `colortex*Clear*` constant at all (zero matches across its fragment shaders), so
+  `ColorTargets:421` sets `fogCleared = true` and the engine's rule is in force.
+- `TargetDirectives:271-275` answers `clears(index)` **true when the pack declares nothing** (`setting == null`),
+  so colortex0 is re-cleared **every frame**, not once at reallocation.
+- That clear's colour is the parameter of `ColorTargets.clear(CommandEncoder, Vector4fc fog)`, documented as
+  "the fog the game computed, with an alpha of one".
+- With no Distant Horizons there is no far terrain at all (`DistantDraw` reported 0 far-terrain sections in every
+  reference arm), so every pixel past the geometry is either the pack's own sky pass or that game-fog clear.
+
+So the seam is the **game's fog colour the engine clears with against the pack's own horizon fog/sky**, which is
+the same arrangement Iris has - packs are written against the clear rule and are expected to paint their own
+horizon. Changing the engine's colour would change what a pack's fog means, which this plan forbids, so the
+honest output is an interaction to report and a decision for the owner, not an engine change.
+
+**The observation that closes it:** whether the mismatched band moves with the weather and the sun (then it is
+the game's fog from the clear, refreshed every frame) or stays put with the sky (then it is the pack's own
+horizon). Only the owner can see that; the code cannot.
+
 ## Pre-M4 boundary cleanup (metallum docs/pre-m4-boundary-cleanup.md carries the long form)
 
 The `render.metal3` sealing is done (metallum `267f3b6`) and the generation-neutral capability vocabulary exists
