@@ -22,6 +22,28 @@ BUILD = ROOT / '.github/workflows/build.yml'
 
 CHECK = re.compile(r'(\w+)\s+instanceof\s+\w*Commands\b')
 
+# The whole of what this repository may name on the other side of the seam. It is closed on purpose: a
+# backend class reached by name is a runtime lookup, so the list is the ABI, and growing it is a decision
+# about the boundary rather than an edit anybody makes by accident.
+METALLUM_SURFACE = (
+    # The public API class, which is its own list: it advertises what the backend can do, and it is not a
+    # render bridge.
+    'com.metallum.api.MetallumApi',
+    # The nine stable flat facades. Each one is the door to a capability whose implementation lives in a
+    # generation package, and none of them names a generation.
+    'com.metallum.render.MetalBackend',
+    'com.metallum.render.MetalDevice',
+    'com.metallum.render.MetalAttachmentBridge',
+    'com.metallum.render.MetalFrameBridge',
+    'com.metallum.render.MetalComputeBridge',
+    'com.metallum.render.MetalDepthMipmapBridge',
+    'com.metallum.render.MetalSamplerBridge',
+    'com.metallum.render.MetalScaleBridge',
+    'com.metallum.render.MetalTextureBridge',
+)
+
+NAMED = re.compile(r'"((?:com\.metallum\.[A-Za-z0-9_.]+))"')
+
 
 class CapabilityReach(unittest.TestCase):
     def test_every_capability_check_has_a_receiver_that_can_carry_one(self):
@@ -34,6 +56,19 @@ class CapabilityReach(unittest.TestCase):
                     if receiver == 'encoder' and 'Backends.encoder(' not in line:
                         offenders.append(f'{path.relative_to(ROOT)}:{number}: {line.strip()}')
         self.assertEqual([], offenders, 'a capability is asked of the wrapper:\n' + '\n'.join(offenders))
+
+    def test_the_only_backend_classes_named_are_the_stable_flat_surface(self):
+        # Every adapter resolves its backend by name, so those names are the ABI in the only form that
+        # matters at runtime. A name outside the nine is a class the other repository is free to move.
+        named = {}
+        for path in sorted(SOURCES.rglob('*.java')):
+            for name in NAMED.findall(path.read_text(encoding='utf-8')):
+                named.setdefault(name, []).append(str(path.relative_to(ROOT)))
+        self.assertTrue(named, 'no backend class name was found, so this rule checked nothing')
+        strangers = {name: files for name, files in named.items() if name not in METALLUM_SURFACE}
+        self.assertEqual({}, strangers, f'named outside the stable flat surface: {strangers}')
+        # And the list is the ABI, so an entry nothing names is an entry nobody may rely on.
+        self.assertEqual(set(METALLUM_SURFACE), set(named), 'the surface and the names in use disagree')
 
     def test_the_accessor_is_the_only_door_and_it_goes_to_the_backend(self):
         accessor = ACCESSOR.read_text(encoding='utf-8')
