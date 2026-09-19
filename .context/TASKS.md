@@ -180,7 +180,11 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   unchanged on hardware. Remaining: `com.metallum.render.metal3` (the frame path: `MetalCommandEncoder`,
   `MetalRenderPass`, `MetalComputeBridge`, `MetalDepthMipmapBridge`, `MetalSurface` and the `Metal3*` seats
   the specification names) and `com.metallum.render.shared` for the version-neutral resource classes.
-  **Next: finish M3's render half, then M4 (the Metal 4 frame submission shell).**
+  **Shared layer done** (`com.metallum.render.shared`, eleven classes, public by design, verified on both
+  scenes). **Next for M3: `com.metallum.render.metal3`** - the frame path (`MetalCommandEncoder`,
+  `MetalRenderPass`, `MetalFence`) now has a shared layer to import, so the move no longer needs the API
+  widened ad hoc; then `MetalDevice` stays a facade and loses the concrete generation, with the queue coming
+  from `MetalExecutionServices`. After that, M4 (the Metal 4 frame submission shell).
 - [ ] **M2 of the dual-execution plan: shader language profiles (done, not yet merged).**
   `MetalShaderLanguageProfile` pairs the SPIRV-Cross MSL version with `MTLLanguageVersion`; the Metal 3
   ladder is probed by compiling (3.2 -> 3.1 -> 3.0) and the Metal 4 pairing is 4.0; render and compute both
