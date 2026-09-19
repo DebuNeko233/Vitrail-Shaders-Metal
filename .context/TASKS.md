@@ -848,6 +848,32 @@ That is a **correction to the plan's section 52 checklist** as it would be appli
 frame, draw frequency, reuse frequency), with `passTimings` used only for the ranking and never for a time
 column, and every arm judged by the structural counters first.
 
+### Phase 1 - shadow cost census: what the logs already answer
+
+Taken from `run/p0-base`, `run/p0-repeat` and `run/p0-timings` (Photon v1.3b, 55 %, 600 frames) - no new arm.
+
+**Draw frequency and reuse: every frame, and this pack refuses reuse by construction.** `Shadow map: the opaque
+world was drawn into it 600 times in the last 600 frames` in both reference arms, and the engine says why:
+`This pack voxelises into its shadow pass, so the map is drawn every frame whatever the reuse setting says`,
+beside `Shadow map kept for 1 frame(s) after the one that draws it, so the ground in it is that many frames
+old, everything that moves being drawn a...`. So the plan's phase 9 sweep (reuse=0/1/2) is a no-op on Photon,
+and its phase 10 gate - "voxelising packs still refuse reuse" - is a property the engine already has rather
+than a change to make. Shadow cost here cannot be lowered by reuse; it can only be lowered by drawing less or
+cheaper per draw.
+
+**Rank: the shadow terrain row is the most expensive single pass in the frame.** The pass-timings table (armed
+`-Dvitrail.passTimings=5`, its times explicitly not trusted - see Phase 0) ranked, over 176 frames: `Vitrail
+shadow chunk` **0.295 ms, 21.3 % of the stamped total, x2.0 a frame**; then `Vitrail chunk` 0.225 (16.2 %),
+`Vitrail sky` 0.150 (10.9 %), `world0/deferred4` 0.076, `particles` 0.070, `Animate blocks.png` 0.070, and
+everything else at or under 0.03 ms. The stamped total was 1.384 ms in a 2.683 ms span with a middle frame of
+8.57 ms, so the ranking and the share are the usable output and the milliseconds are not.
+
+**What is still missing for the phase:** shadow terrain's own GPU ms a frame (the table cannot give it), the
+shadow entity/translucent/preserve-restore/mipmap/compute split, and the shadow share of the whole frame as a
+number rather than a rank. Next round: look for an existing diagnostic switch that skips the shadow pass (the
+historical figure "shadows removed 1.96 ms" implies one existed), and if there is none, derive the share from
+the probe's depth counters (`depthAttachments`, `depthLoadedMiB`, `clearEncoders`) rather than from the table.
+
 ## Pre-M4 boundary cleanup (metallum docs/pre-m4-boundary-cleanup.md carries the long form)
 
 The `render.metal3` sealing is done (metallum `267f3b6`) and the generation-neutral capability vocabulary exists
