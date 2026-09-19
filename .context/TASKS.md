@@ -191,6 +191,12 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   mode), not a rename. `MetalResourceBinding` is out (previous commit); the remaining neutral part of
   `ArgumentBufferLayout` (`stageMask`, `descriptorSet`, `bufferIndex`, `encodedLength`) can follow once the
   key exists, with `MTLArgumentEncoder` staying on the generation side.
+**Prerequisite ①'s second piece is done**: `MetalArgumentBufferLayout` (where an argument buffer sits, how
+  big it is, which stages and descriptor set) is in `render.shared`, with the Metal 3 encoder composed beside
+  it in the pipeline record - verified on the pack scene at the settled default (7.247 against 7.277 ms, 0.41
+  per cent). **Remaining in ①: the pipeline key/identity, which has to be *designed* (the cache is keyed by
+  the game's pipeline object today); in ②: the encoder also coming from `MetalExecutionServices`, and
+  `MetalDevice` losing the concrete generation. Then the frame path's facade move.**
 **Prerequisite ②'s first piece is done**: the frame's queue comes from `MetalExecutionServices` (its first
   consumer), the handle crossing as an address, with a contract refusing `this.metalDevice.newCommandQueue()`
   again. **Next: the rest of ② - `MetalDevice`'s facade losing the concrete generation and the *encoder* also
