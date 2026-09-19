@@ -1159,6 +1159,19 @@ already running. What item 1 still owes is the other half of its shape - putting
 advertised capability the pack-facing side reads (`metallum/api/MetallumApi.java`, `MetallumStatus`) rather
 than only in the log.
 
+**Item 4's prize is sized, and on this chain it is one boundary a frame.** In a 600-frame window at 100 per
+cent the probe reads `encoders` 18210 and `passChanged` 17610, which is **30.35 boundaries and 29.35 pass
+changes a frame**, with `submit` at 600 - one command buffer a frame - so the engine's own steady overhead
+is **one boundary per frame** and the other twenty-nine are the pack chain's own passes. The frame the
+engine prints its reasons for shows where the engine's share goes while a pack is opening: ten of its
+thirteen boundaries are the engine's own, **seven of them pending clears** (six colour, one shadow), one a
+copy-back, against thirty-five textures cleared - so the clears are a *load-time* cost, and batching them
+(one clear pass per group of same-shape attachments) would shorten a load rather than a frame. That is the
+same shape as P2's result and it reorders this phase's two remaining items: what would move the boundary
+count is item 3 - the attachment map that lets one encoder carry "the same attachment set, and then a
+different one" - and it needs the Metal 4 path, while item 4's unified compute encoder has about one
+boundary a frame to absorb.
+
 **Apple documentation.**
 
 - Understanding the Metal 4 core API:
