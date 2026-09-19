@@ -1183,6 +1183,31 @@ the engine defines is a promise it provides the feature, and defining it while t
 enter the block and fail on sampling them instead. The same reading covers `SSBO`, `BLOCK_EMISSION_ATTRIBUTE`,
 `FADE_VARIABLE` and `IRIS_HAS_CONNECTED_TEXTURES`, each only where the engine really provides it.
 
+**Second correction, and it kills the feature-macro theory: `IRIS_FEATURE_CUSTOM_IMAGES` is already defined.**
+`EngineDefines.java:178-182`:
+
+```
+// Custom images are the voxel volumes Complementary writes from shadow geometry and floods
+// in shadowcomp, and the symbol is a promise of that pipe: the allocation, the 3D bind and
+// the compute dispatch are all there, and a pack that reads it goes down the road that
+// uses them.
+defines.put("IRIS_FEATURE_CUSTOM_IMAGES", "");
+```
+
+So the engine enters the pack's custom-image block already, and the pipe is described as complete. The macro is
+not the missing piece and neither is `iris.features.optional` (which `ShaderProperties:87,346` reads and
+`declares()` answers). What is left, and it is the only hypothesis that survives all the evidence, is a
+**macro-order problem around the pack's own option**: `COLORED_LIGHTING_INTERNAL` is defined by the pack's
+settings include, the declarations sit in `lib/uniforms.glsl` under `#if COLORED_LIGHTING_INTERNAL > 0` reached
+through `lib/common.glsl`, and the uses sit in `lib/voxelization/lightVoxelization.glsl` and
+`program/shadowcomp.glsl` under the same guard. If the declarations are expanded in a context where that macro
+is not yet defined and the uses in one where it is, the pack produces exactly the observed pair of errors.
+
+**Do not reason further from structure.** The next step is to look at the source this engine actually hands the
+GLSL compiler for `world0/composite6.fsh` and the shadowcomp compute program: whether the settings include that
+defines `COLORED_LIGHTING_INTERNAL` is expanded before `lib/common.glsl` in those two expansions, and whether the
+declaration lines survive. That is a definite answer sitting in the expansion, not a fourth hypothesis.
+
 ## Pre-M4 boundary cleanup (metallum docs/pre-m4-boundary-cleanup.md carries the long form)
 
 The `render.metal3` sealing is done (metallum `267f3b6`) and the generation-neutral capability vocabulary exists
