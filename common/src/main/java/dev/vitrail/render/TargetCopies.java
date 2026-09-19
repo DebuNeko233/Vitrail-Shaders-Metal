@@ -199,6 +199,8 @@ final class TargetCopies {
 	 * names, with the clears still owed paid ahead of it.
 	 */
 	void take(CommandEncoder encoder) {
+		int taken = 0;
+		long bytes = 0L;
 		for (Map.Entry<Key, TargetSurface> entry : this.copies.entrySet()) {
 			TargetSurface source = this.sources.get(entry.getKey());
 			TargetSurface copy = entry.getValue();
@@ -208,6 +210,16 @@ final class TargetCopies {
 
 			encoder.copyTextureToTexture(source.texture(), copy.texture(), 0, 0, 0, 0, 0,
 					copy.width(), copy.height());
+			taken++;
+			bytes += (long) copy.width() * copy.height() * 4L;
+		}
+
+		// Pure counting telemetry, said once a second at most: how many of these snapshots a frame really
+		// copies, of how many bytes, and for which targets. The plan's phase 3 asks for exactly this and
+		// nothing in the engine printed it - a mechanism whose cost is invisible is one that cannot be
+		// decided, and these copies exist for compatibility rather than for a picture.
+		if (taken > 0) {
+			TargetCopyCensus.took(taken, bytes);
 		}
 
 		this.written = true;
