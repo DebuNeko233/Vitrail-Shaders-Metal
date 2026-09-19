@@ -283,9 +283,17 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   A global tone or gamma shift would offset everything equally; an edge-weighted error five times the flat one
   is the signature of **filtering**, which fits the two roads: the Metal 4 present *draws* the picture through
   a pipeline with `presentSampler(scaling)` while Metal 3 *blits* it. The actionable item is therefore a
-  present-path one - at one to one the Metal 4 present should copy rather than resample - and the two-arm pair
-  is the test that says when it does. **It is not a blocker for M4**, whose subject is the frame's encoding,
-  but the claim stays "running" until it is fixed.
+  present-path one at the time of writing. **Reading the two present implementations then moved the suspect
+  off the present entirely**: both use the same `presentPipeline` from the same `PRESENT_MSL`, the same
+  three-vertex triangle and the same sampler rule read from the same size predicate (`requiresScaling` in
+  Metal 3, `scaling` in Metal 4), differing only in direct binding versus argument table - so "the roads filter
+  differently" is unavailable, and the edge-weighted split (1.652 flat against 8.027 edge) fits **MetalFX's
+  temporal work on a frame that is now synchronised differently** (the m4 arm's present waits for the drawable
+  and the frame's commit signals the event that wait is on; it also sets 600 fewer viewports and binds 4200
+  more buffers). **The separating test is a same-road repeat - `m4present` against `m4present` in one session -
+  and it has not been run.** Tight repeat means the difference is road-specific and the frame's synchronisation
+  is the next thing to vary; loose repeat means the road is less stable frame to frame. The claim stays
+  "running" until then, but **the present is no longer the suspect**.
 **Prerequisite ①'s last piece (`MetalPipelineKey`) is specified down to the lines it touches, and not
   started.** Where the identity material is: `MetalDevice.getOrCompilePipeline(RenderPipeline)` (line ~408)
   is the only place a compiled pipeline is made - `this.compiledPipelines.computeIfAbsent(pipeline, p ->
