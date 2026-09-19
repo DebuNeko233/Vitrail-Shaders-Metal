@@ -1146,6 +1146,19 @@ inferred. An engine that cannot say what a pass reads, what it writes, and how l
 lives cannot produce correct barriers, and cannot declare residency. That is the same description
 P1 builds for a different reason, which is why the ordering here is not a preference.
 
+**The first step is taken, and it is a question rather than a migration.** `Metal4.java` asks the device
+the two things Apple documents and remembers the answer, the negative one included: whether it has the
+Metal 4 family (`supportsFamily:` with `MTLGPUFamilyMetal4`, whose value 5002 is this machine's own SDK's -
+`MTLDevice.h`, `macos(26.0)`), and whether it answers to the new command structure's entry point
+(`newMTL4CommandQueue`, asked with `respondsToSelector:` because a selector an object does not implement is
+an Objective-C exception rather than a nil). On the M5 Pro running macOS 27.0 the log reads
+**"Metal 4 core API: available, the device has the family and answers to newMTL4CommandQueue"**, beside
+the MetalFX line said at the same moment. Nothing in a frame path depends on it yet: this is the capability
+advertisement item 1 asks for, and the fallback it names is not a branch to write but the path that is
+already running. What item 1 still owes is the other half of its shape - putting that answer on the
+advertised capability the pack-facing side reads (`metallum/api/MetallumApi.java`, `MetallumStatus`) rather
+than only in the log.
+
 **Apple documentation.**
 
 - Understanding the Metal 4 core API:
