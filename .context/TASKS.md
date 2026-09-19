@@ -941,6 +941,33 @@ elided load there would start every pixel from nothing and land the quantised st
 the elision refuses where it must and removes a tenth of both traffics where it may, on a frame whose output
 cannot drift with the weather.
 
+### Phase 4 verdict on `elideTargetTraffic`: measured, correctness-cleared, and NOT made the default
+
+`run/photon-traffic`, 01:10/01:11, the reference configuration (Photon v1.3b, 55 %, fullscreen at the
+reference display mode, camera pinned, 600 frames), `plain` against `-Dvitrail.elideTargetTraffic=true`:
+
+| | plain | elide | change |
+| --- | --- | --- | --- |
+| `loadedMiB` | 93943.3 | **65229.4** | **-30.6 %** |
+| `storedMiB` | 132773.6 | **131178.4** | **-1.2 %** |
+| `renderPasses` / `depthAttachments` | 20928 / 4800 | 20928 / 4800 | 0 (the arms are the same scene) |
+| `gpuP50` | 7.28 | 7.30 | +0.3 % (the scene's floor is 0.3-0.7 %) |
+| `wallP50` | 7.22 | 7.30 | +1.1 % |
+
+**Verdict: the switch removes 30.6 per cent of the frame's loaded bytes, 1.2 per cent of its stored bytes, and
+none of its time** - `gpuP50` is flat inside the floor and `wallP50` is a hair worse. That is the same result
+P1 recorded ("worth what they remove in bytes and nothing in time") on the current reference scene, and the
+reason is visible in the numbers: this frame is GPU-bound at 7.3 ms on work the removed bytes were not on the
+critical path of. So it is **not** made the default, and the reason is measured rather than assumed - section
+22's rule is satisfied by a verdict, not by leaving it experimental. Its correctness, which the earlier
+session could not establish, is now established by the fixture: the elision refuses the pass that samples its
+own target and leaves the picture bit-identical wherever it applies (`run/at-fixture2`, mean channel
+difference 0.00 with `loadedMiB` -10.8 %). The switch stays as the measured, correctness-cleared experiment it
+is, and the production default stays off.
+
+**Section 57.5 is therefore answered**: `elideTargetTraffic` = rejected as a production default, with a
+measured reason.
+
 ## Pre-M4 boundary cleanup (metallum docs/pre-m4-boundary-cleanup.md carries the long form)
 
 The `render.metal3` sealing is done (metallum `267f3b6`) and the generation-neutral capability vocabulary exists
