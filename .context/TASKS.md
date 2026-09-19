@@ -224,6 +224,16 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   inside the configuration's settled band, so the instrument did not move the number it measures. The
   behaviour question ("may two semantically equal pipeline objects share one artifact?") is moot for the
   cache and stays open for the Metal 4 path, where argument tables are per-pipeline objects.
+**Prerequisite ②'s remaining cost is now counted by a contract rather than estimated.** The architecture
+  guard (`metallum/tools/ci-architecture.py`) carries a ledger of every file outside the generation packages
+  that still names the frame path's concrete generation, and it requires the ledger and the tree to agree in
+  both directions - a new coupling fails, and finishing one without deleting its line fails too. It prints
+  the total on every run, so the number can only go down:
+  `the frame path's isolation still owes 25 couplings in 13 files`. **The 17/10 shape in this file was an
+  undercount of where the work is**: `render/shared/MetalTransientMemory.java` names `MetalCommandEncoder` -
+  a shared-layer file reaching into the future Metal 3 package - and `mtl/MTLDevice.java` names
+  `MTLCommandQueue`, with `MTLBuiltinPipelines` and `MTLStorageTexturePipelines` naming Metal 3 encoders from
+  the bindings side. Those are the couplings the facade has to remove, and the ledger is the checklist.
 **Prerequisite ①'s last piece (`MetalPipelineKey`) is specified down to the lines it touches, and not
   started.** Where the identity material is: `MetalDevice.getOrCompilePipeline(RenderPipeline)` (line ~408)
   is the only place a compiled pipeline is made - `this.compiledPipelines.computeIfAbsent(pipeline, p ->
