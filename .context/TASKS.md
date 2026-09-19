@@ -615,3 +615,19 @@ The roadmap is a page rather than this list: it records what is already implemen
   - `AGENTS.md` rule 4 and the `docs/README.md` router point at both, and `AGENTS.md` records why the one uncompressed file sits in a directory defined as compressed mental models.
 - [ ] Keep Vitrail/Metallum ownership boundaries strict in every follow-up: pack semantics/defaults/diagnostics in Vitrail; generic Metal execution in Metallum.
 - [ ] Do not relax startup guards or claim general Metal shader-pack support from one runtime session, CI alone, or the absence of log-level errors.
+
+**M3 step 4 done, and steps 5-6 are one coupled change.** The frame's queue became the Metal 3 encoder's own
+object (services' address factory, closed with its teardown) and `Metal4Path.start`/`close` moved behind
+`startPresentPath`/`closePresentPath` with `Metal4PresentGate` owning the road's static start/close; the gate is
+chosen and kept once per session. `MetalDevice` names `MTLCommandQueue`, `Metal4Path`, `MetalCommandEncoder`
+zero times and its ledger line is gone - **15 couplings in 6 files**, with the queue's type moved into the
+encoder's entry and the present path's into the services'. No-pack two arms after it: 1.78/1.78 ms,
+`metal4Presents=0` and `=600`, picture difference 0.00 (that bed's own noise is 0.04-0.05).
+**Steps 5-6 must not be split**: `MetalComputeBridge` is 547 lines whose body is inseparable from
+`MTLComputeCommandEncoder` (a neutral interface cannot hand out a compute encoder), so the bridge's implementation
+has to move as a file into `render.metal3` behind a thin public facade - together with `MetalDepthMipmapBridge`,
+`MetalCommandEncoder` and `MetalRenderPass`, or the cast inside the moved body points backwards at a class still
+outside its package.
+**M2 follow-up, non-blocking**: the pipeline cache is validate-on-hit today; the better long-term shape is for the
+cache identity itself to contain generation + MSL profile (ahead of concurrent precompile, `MTL4Compiler`, binary
+archives). Not in this phase's scope.
