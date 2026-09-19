@@ -355,6 +355,15 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   `servicesSelected=metal3 ... referenceShell=false` (forced `-Dmetallum.execution=metal3`), both executing
   Metal 3 at 1.78 ms wallP50 with a picture difference of 0.03. The AUTO line is the evidence: before the fix
   that arm's services would have answered `metal3`.
+  **Done, and it took three contract failures with it.** `executing()` is a parameter of the services now,
+  `isReferenceShell()` asks whether the executing generation is the selected one (it used to ask whether the
+  selection was Metal 3 - the right answer for the wrong reason), and the device asks `framePathReady()`, which
+  reads `false` with `servicesSelected=metal4 servicesExecuting=metal3` on this machine and is printed. The
+  device passes METAL3 for what executes with the reason beside it; **that the caller passes the generation
+  which really executes is not something a contract can prove** - only M4's own frame path can, which is what
+  `framePathReady()` is for. Three pins fired while writing it (the seam's log format, the queue seam's factory
+  call, the `executing()` literal), each naming the line that moved; the third had pinned an implementation
+  detail as if it were the design and now pins the property it was about.
   **And the readiness seam nothing asks**: `framePathReady()` and `isReferenceShell()` have exactly one reader
   in the whole source tree - the log line just added. `framePathReady()` is `!isReferenceShell() && selected()
   == executing()`, `executing()` is a constant `METAL3`, and AUTO's `selected()` is `metal4`, so readiness is
