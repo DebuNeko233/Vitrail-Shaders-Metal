@@ -539,8 +539,9 @@ A pack compile holds the world back, so the screen used to be the frame from bef
     encoder. The call sites that would express the distinction are the mixins hooking that method -
     `mixin/sodium/MixinDefaultChunkRenderer.java:130`, `mixin/CloudRendererMixin.java:76`,
     `mixin/QuadParticleFeatureRendererMixin.java:64`, `mixin/WeatherEffectRendererMixin.java:120` - and the
-    capability surface they would carry it on is `mixin/metallum/MetalCommandEncoderMixin.java:31` (beside
-    `ComputeCommands`, `AttachmentCommands`, `ScaleCommands`). On the backend the decision lives in three
+    capability surface they would carry it on is `compat/metallum/MetallumEncoderCapabilities.java`, beside
+    `MipmapCommands`, `ComputeCommands`, `AttachmentCommands` and `ScaleCommands` - which is also where the
+    deleted injected mixin's five methods now live. On the backend the decision lives in three
     places: `MetalCommandEncoder.renderCommandEncoder` (`:358`) opens an encoder, `submitRenderPass`
     (`:555`) closes one, and `invalidateEncoderState` (`:287`) is the existing "this encoder may no longer
     be reused" signal. **The first bounded step is therefore a semantic seat** - one capability that says
@@ -761,13 +762,13 @@ Vitrail may name only the stable flat surface (`MetalBackend`, `MetalDevice`, `M
 `MetalTextureBridge`). It may not name `com.metallum.render.metal3.*`, `render.metal4.*`, `mtl.metal3.*` or
 `mtl.metal4.*` - in code **or in a string**.
 
-### Batch 1 - Vitrail adapters, and the mixin only with them
+### Batch 1 - Vitrail adapters, and the mixin only with them - **done** (`44e97493`, `beb3a651`, `bee38231`)
 
-`common/src/main/java/dev/vitrail/mixin/metallum/MetalCommandEncoderMixin.java` targets
+`common/src/main/java/dev/vitrail/mixin/metallum/MetalCommandEncoderMixin.java` targeted
 `com.metallum.render.metal3.MetalCommandEncoder` by string. That is the structure that broke once already
 (`267f3b6` moved the class, the mixin stopped applying, and every capability it carried disappeared - visible as
-darker Photon shadows, with one WARN in the log and no test failure). It must be deleted, and it may only be
-deleted in the same change that adds the replacements, or the same regression returns:
+darker Photon shadows, with one WARN in the log and no test failure). It is now deleted, in a change that
+lands after - not with - its replacements, which is the order that keeps the regression from returning:
 
 1. `dev.vitrail.compat.metallum.MetallumFrameBridge` - reflection onto `com.metallum.render.MetalFrameBridge`
    (`supports`, `generateMipmaps`, `clearStorageTexture`, `copyStorageTextureRegion`).
@@ -779,9 +780,24 @@ deleted in the same change that adds the replacements, or the same regression re
    (weakly), because this is on the frame path.
 4. Every `instanceof <Capability>` on a raw backend becomes `Backends.capabilities(...) instanceof <Capability>`;
    `Backends.encoder(...)` stays for callers that need backend identity.
-5. `tests/test_backend_neutrality_contract.py` gains a second reading that strips **comments only** and rejects
-   the four generation package prefixes. It was written and proved - it fires on the mixin target - and then
-   reverted because five other scripts were red; it must land with this batch, not before.
+5. `tests/test_backend_neutrality_contract.py` gained the second reading, which strips **comments only** and
+   refuses the four generation package prefixes in either separator. It was written and proved against the live
+   mixin target, reverted because five other scripts were red, and has now landed with the deletion. The doc's
+   claim that it "fires on the mixin target" is no longer reproducible by construction - the target is gone - so
+   it is proved two ways: a self-test that also holds the other direction (a comment may name a generation
+   package, the stable flat surface stays nameable in a string, a `com/metallum/mtl/metal4/...` path is caught),
+   and a mutation of the live tree (`ZzProbeLeak.java` naming `com.metallum.render.metal3.MetalCommandEncoder`),
+   which reported `1 generation package name(s)` and went back to `0` on removal.
+
+`tests/test_shadow_mipmap_contract.py` now pins the mechanism instead of the mixin: no file under
+`mixin/metallum/` may carry `MipmapCommands`, the removal is out of `vitrail.mixins.json`, the adapter's mipmap
+answer is the frame bridge with the depth fallback behind it, and `Backends.capabilities` keeps both branches.
+`MetalBackendMixin` and `MetalDeviceMixin` stay: they target the stable flat surface
+(`com.metallum.render.MetalBackend` / `com.metallum.render.MetalDevice`), which is what this batch allows to be
+named.
+
+Still owed for batch 1: the Photon run (55 %, 600 frames, camera pinned, settle 25) whose log shows the
+capability arriving through the adapter - `Error loading class` at 0, counters in band.
 
 ### Batch 2 - the Attachment ABI, which is broken today
 
