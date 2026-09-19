@@ -336,7 +336,14 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   **the Metal 4 present is equivalent to the Metal 3 road**, verified where the test is sharp, with `wallP50`
   1.75 ms in both arms and counters differing only by the presentation itself (600 fewer viewport sets, the
   present's GPU time accounted on the Metal 4 queue: `gpuM4Ms` 47.03). The pack scene stays unresolvable, and
-  that is now a statement about the test bed rather than about the road.
+  that is now a statement about the test bed rather than about the road. **The pack scene was checked with a
+  control at 100 per cent too** (scaler out of the picture, both roads on the nearest sampler): cross-road
+  `plain` against `m4present` **2.06**, but two runs of `plain` alone **36.37**. So at both scales measured the
+  road-against-road difference is smaller than the scene against itself (3.65 vs 4.10 at 55 per cent, 2.06 vs
+  36.37 at 100 per cent): **the pack's own temporal history is the noise, no picture claim is supportable in a
+  pack scene, and the no-pack scene (0.04-0.05 same-config) is the only bed for this test.** Frame time does
+  not follow the picture - that 100 per cent pair read `wallP50` 10.75 and 10.73 ms while the pictures differed
+  by 36.
 **Prerequisite ①'s last piece (`MetalPipelineKey`) is specified down to the lines it touches, and not
   started.** Where the identity material is: `MetalDevice.getOrCompilePipeline(RenderPipeline)` (line ~408)
   is the only place a compiled pipeline is made - `this.compiledPipelines.computeIfAbsent(pipeline, p ->
