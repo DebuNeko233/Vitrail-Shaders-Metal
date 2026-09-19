@@ -1279,6 +1279,30 @@ there is nothing to share - and it is recorded as a no-op rather than as a win. 
 ends rose again over it (21180 to 22375), for the same reason as before: an encoder that is no longer ended
 by its own caller is ended by the pass that follows, which is counted.
 
+**And the path carries a frame now, once per committed frame.** Every frame the new command structure takes
+one submission of its own shape: an allocator from a ring of three, a command buffer begun on it, a 64x64
+render pass encoded and ended, the buffer committed to the queue, and its completion signalled and waited
+for before that allocator is reused - the documented frame-in-flight discipline, which is what a later path
+that shares resources with the frame will have to get right. What it draws into is a scratch target of its
+own, so nothing about the picture can change, and no order between the two queues is needed because no
+resource crosses.
+
+Measured over 600 frames at 100 per cent, the probe reports **`metal4Frames=600`** - one a frame, where the
+first version carried two, because the surface's present-time submit commits nothing and a frame is a
+commit - and **`metal4Us=54.7`**: about **55 microseconds of CPU** to carry one, against a frame of 23 to
+28 ms. The frame's own time says nothing: two pairs in the same afternoon read on/off as **25.83 against
+32.73 ms** and then **28.43 against 26.02**, so the sign flips and the arms disagree by more than the
+effect could be - and both arms sat 15 to 25 per cent above the same configuration's numbers from earlier
+the same day, which is the machine drifting over a long session of runs rather than anything this path
+does (its GPU work is a 64x64 pass). The counters the real frame reports are unchanged: 5 blits, 3 compute
+dispatches and 1 clear a frame in both arms, and the render-pass count within one per cent.
+
+The lesson the first version cost is worth keeping beside it: `Metal4Path.start` threw a
+`NullPointerException` out of its own cleanup - it released a field that had not been assigned yet - and
+because that happened inside the device's constructor the whole Metal device failed to come up and the
+session fell back to OpenGL, with the pack undrawn. A path that fails must fail **closed**: every release
+goes through a guard now, and the reason a device is not on Metal is in the log above the line that says so.
+
 **Apple documentation.**
 
 - Understanding the Metal 4 core API:
