@@ -372,6 +372,12 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   Metal 4 path is available". **M4 must not gate on it to decide whether the new path can be used** - that
   question is the capability record's. Frame time was unmoved either way (`wallP50` 7.24 ms, `gpuM3Ms=4368.17`,
   inside the session's 7.24-7.31 band), because both selections execute Metal 3.
+  **Tally after eight more warm arms: two flips in fourteen arms, and both were a session's first arm.** The
+  instrument added for this has not fired. The pattern is a tendency, not a rule (other first-arm runs did not
+  flip), but it is the first thing about the flip that is not "sometimes": the leading explanation is **the
+  first Metal 4 argument-table attempt in a session**, which matches the original observation too. **The next
+  attempt wants a cheaper trigger than a reboot: a fresh process against an idle GPU, as the first arm, several
+  times** - eight warm arms cost six minutes and answered nothing.
   **And the readiness seam nothing asks**: `framePathReady()` and `isReferenceShell()` have exactly one reader
   in the whole source tree - the log line just added. `framePathReady()` is `!isReferenceShell() && selected()
   == executing()`, `executing()` is a constant `METAL3`, and AUTO's `selected()` is `metal4`, so readiness is
