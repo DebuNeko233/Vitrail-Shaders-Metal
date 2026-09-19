@@ -181,7 +181,13 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   `MetalRenderPass`, `MetalComputeBridge`, `MetalDepthMipmapBridge`, `MetalSurface` and the `Metal3*` seats
   the specification names) and `com.metallum.render.shared` for the version-neutral resource classes.
   **Shared layer done** (`com.metallum.render.shared`, eleven classes, public by design, verified on both
-  scenes). **Next for M3: `com.metallum.render.metal3`** - the frame path (`MetalCommandEncoder`,
+  scenes). **The frame-path move was tried again, now that the shared layer exists, and it produced 118 visibility
+  crossings** (`MetalCommandEncoder` 的构造器/`close`/`renderCommandEncoder`/`presentTextureToDrawable`/
+  `flushPendingClear`、`MetalDevice.getOrCompilePipeline`/`metalDeviceHandle`、`MetalCompiledRenderPipeline`
+  本身，等等)。结论比上次更清楚：**帧路径不是"移动"能隔离的，必须先把 facade 写出来**——把
+  `MetalCommandEncoder` 变成对外 facade、把实现抽成 `Metal3CommandEncoder` 并逐方法委托，否则隔离的代价
+  是把引擎内部 API 大面积放开。两次尝试都已回退，工作树在已验证的提交上。
+  **Next for M3: `com.metallum.render.metal3`** - the frame path (`MetalCommandEncoder`,
   `MetalRenderPass`, `MetalFence`) now has a shared layer to import, so the move no longer needs the API
   widened ad hoc; then `MetalDevice` stays a facade and loses the concrete generation, with the queue coming
   from `MetalExecutionServices`. After that, M4 (the Metal 4 frame submission shell).
