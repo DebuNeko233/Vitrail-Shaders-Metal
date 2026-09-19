@@ -113,6 +113,7 @@ final class PackComputeBindings {
 			textures.put(name, sampled.view());
 			samplerStates.put(name, sampled.sampler());
 		}
+		ComputeDispatchCensus.resolved(textures.size() + samplerStates.size());
 		return new Resolved(buffers, textures, samplerStates);
 	}
 
