@@ -848,6 +848,42 @@ That is a **correction to the plan's section 52 checklist** as it would be appli
 frame, draw frequency, reuse frequency), with `passTimings` used only for the ranking and never for a time
 column, and every arm judged by the structural counters first.
 
+### Phase 1's shadow census is taken, and the answer moves the cost off the terrain (2026-09-20 09:40, `run/shadow-decomp2`)
+
+Taken the way the paragraph above asks: `passTimings` for nothing, the driver's whole-frame `gpuMs` for the time,
+and every arm judged by the structural counters first. Six arms, one session, one target - all six reproduce
+`encoders` 21435 and `loadedMiB` 93922.0, which is the anchor's own. Removal arms, each behind an off-by-default
+JVM property and each **NOT SEMANTICALLY CORRECT** (the shadow map is missing a piece of what the pack asked it
+to hold, so every picture on one is wrong by construction and no reading may be used to decide what to delete):
+
+| arm | switch | `gpuMs` / 600 | against plain |
+| --- | --- | ---: | ---: |
+| `plain` | none | 4377.97 | - |
+| `noentity` | `-Dvitrail.probeNoShadowEntities=true` | 4375.25 | -0.06 % |
+| `absorb` | `-Dvitrail.probeNoMipChains=true` | 4332.61 | -1.04 % |
+| `notrans` | `-Dvitrail.probeNoShadowTranslucent=true` | 4125.21 | -5.8 % |
+| `noraster` | `-Dvitrail.probeNoShadowRaster=true` | 4087.85 | -6.6 % |
+
+`plain`, `noentity` and `absorb` share every structural counter except the one blit encoder a frame the two mip
+chains share, so they are the measurement; `notrans` and `noraster` also remove 625 and 1225 encoders and 20.6 per
+cent of the frame's loaded attachment bytes, so their deltas are the component plus its attachment traffic.
+
+**What it says:** the opaque shadow terrain raster is **0.04 ms** of a 7.30 ms frame and the translucent shadow
+pass is **0.25 ms**. The cost was expected in the 298-section terrain raster and is not there; the earlier reading
+that put `Vitrail shadow chunk` first at 21.3 per cent of stamped pass time was reading CPU encode time, which is
+what that table measures on this backend. The mip chains are **0.045 ms, 1.0 per cent**, below section 6's gate,
+so mipmap research stops: *not worth further complexity*. Entities and block entities cost nothing measurable
+because the fixture has none - the harness strips the world's entities and the caster census reports `0 frames
+gathered` - so a world with casters stays `NOT MEASURED`. Voxelisation and the walk's CPU cost stay `UNKNOWN`.
+**Decision C** (neither significant nor avoidable) is recorded in `docs/performance-report.md` with the two
+reopen conditions named.
+
+**What this cost in runs, so the next session does not pay it again:** the display has two fullscreen modes and
+`--fullscreen` lands on either, so three sessions mixed a 1056x660 target with a 2112x1320 one and are unusable;
+the compare script refuses them, and the fix is to read `loadedMiB`/`encoders` before any time column. One session
+also overlapped the Python test suite from another shell and its later arms are the outliers. With nothing else
+running, the same arm twice reads 0.11 per cent apart (`run/shadow-decomp3`).
+
 ### Phase 1 - shadow cost census: what the logs already answer
 
 Taken from `run/p0-base`, `run/p0-repeat` and `run/p0-timings` (Photon v1.3b, 55 %, 600 frames) - no new arm.
