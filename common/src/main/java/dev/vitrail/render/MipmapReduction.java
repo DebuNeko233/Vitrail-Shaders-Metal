@@ -50,7 +50,7 @@ final class MipmapReduction {
 			return false;
 		}
 
-		MipmapCensus.generated(surface.levels());
+		MipmapCensus.generated(surface.levels(), surface.width(), surface.height());
 		surface.chainWritten(true);
 
 		return true;

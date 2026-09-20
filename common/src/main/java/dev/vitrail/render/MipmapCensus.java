@@ -21,15 +21,23 @@ final class MipmapCensus {
 
 	private static int chains;
 	private static long levels;
+	private static long pixels;
 	private static long saidAt;
 
 	private MipmapCensus() {
 	}
 
-	/** One chain reduced: how many levels it holds, level nought included. */
-	static void generated(final int levelsInChain) {
+	/**
+	 * One chain reduced: how many levels it holds, level nought included, and how many pixels the reduction
+	 * touches - levels one down to the last, at the size that level really has. Counted rather than estimated:
+	 * this is the number phase 26 asks for and the one that decides whether the work is worth anything.
+	 */
+	static void generated(final int levelsInChain, final int width, final int height) {
 		chains++;
 		levels += levelsInChain;
+		for (int level = 1; level < levelsInChain; level++) {
+			pixels += (long) Math.max(1, width >> level) * Math.max(1, height >> level);
+		}
 
 		long now = System.nanoTime();
 		if (saidAt == 0L) {
@@ -43,12 +51,16 @@ final class MipmapCensus {
 		}
 
 		double seconds = elapsed / 1_000_000_000.0;
-		Vitrail.logger().info("Mip chains: {} reduced over {} ms ({} a second), {} levels ({} a chain)",
+		Vitrail.logger().info("Mip chains: {} reduced over {} ms ({} a second), {} levels ({} a chain), "
+						+ "{} pixels ({} a frame at {} a second)",
 				chains, elapsed / 1_000_000, String.format(Locale.ROOT, "%.1f", chains / seconds),
-				levels, String.format(Locale.ROOT, "%.1f", (double) levels / Math.max(chains, 1)));
+				levels, String.format(Locale.ROOT, "%.1f", (double) levels / Math.max(chains, 1)),
+				pixels, String.format(Locale.ROOT, "%.0f", (double) pixels / Math.max(chains, 1)),
+				String.format(Locale.ROOT, "%.1f", chains / seconds));
 
 		chains = 0;
 		levels = 0L;
+		pixels = 0L;
 		saidAt = now;
 	}
 }

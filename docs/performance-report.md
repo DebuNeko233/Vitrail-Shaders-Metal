@@ -69,8 +69,8 @@ Mip chains: 276 reduced over 1006 ms (274.1 a second), 3036 levels (11.0 a chain
 - **about 2 chains a frame**, one per chain-carrying target - both are invalidated and rebuilt every frame;
 - **11 levels a chain**, which is a full chain to level nought;
 - **about 3036 level reductions a second**;
-- **pixels reduced a frame: NOT MEASURED** - the level count says the chain spans the target's own size, but the
-  census does not read the dimensions, and this report does not estimate them.
+- **pixels reduced: 63 623 074 a second, 232 201 a chain, about 464 400 a frame** - counted from each target's
+  own width and height at every level the chain holds, not estimated (`run/p6-pixels`, 09:23).
 
 The arm is the reference scene exactly (`encoders` 21435, `loadedMiB` 93922.0, `blits` 6600, `wallP50` 7.27), so
 counting costs nothing measurable. Nothing was optimised here: the code already skips a valid chain, and the only
@@ -125,6 +125,39 @@ nobody has measured, and it is not proposed here.
 
 So the measured claim is: **three reusable mutable binding maps are no longer allocated per dispatch, and the
 three immutable snapshots remain.**
+
+
+## Mipmap cost (phase 6, `run/p6-pixels`, 09:23)
+
+```
+chains/frame:   about 2 (274 a second at 137 fps)
+levels/chain:   11.0
+pixels/frame:   about 464400 (232201 a chain, 63623074 a second)
+GPU ms/frame:   NOT MEASURED
+% frame:        NOT MEASURED
+```
+
+The volume is measured and the time is not, and the reason is concrete rather than vague: a mip reduction is a
+blit, not a labelled pass, so the pass table has no row for it and the probe has no counter that separates it
+from the frame-end copy-backs. What can be said from measured numbers alone: the reduction moves about 1.8 MiB a
+frame (464400 pixels at four bytes), against the frame's whole blit traffic of `blittedMiB` 22159.3 over 600
+frames, which is **36.9 MiB a frame**. So the reductions are roughly **5 per cent of the frame's blit traffic**,
+and blits are a small part of a frame that is GPU-bound at 7.3 ms on rendered passes.
+
+**Decision (section 6's gate).** Since the volume is about 5 per cent of a small traffic class and no timing
+exists to say it costs 0.2-0.3 ms, the plan's own rule applies in the direction of *not* touching it: with no
+measurement showing a real cost, changing invalidation would be complexity bought on a guess, and the code
+already skips a chain that is still valid. **Mipmap: not worth further complexity on this evidence**, and the
+one thing that would reopen it is a GPU timing that separates the reduction from the other blits - which needs a
+harness capability or a device-side timer, not another census.
+
+## Next optimisation decision
+
+**A. Pursue the measured shadow cost.** It is the only component with a measured share of the frame: `Vitrail
+shadow chunk` is the top row of the pass table at 21.3 per cent of stamped pass time, drawn every frame because
+this pack voxelises in its shadow stage. Mipmap volume is about 5 per cent of the frame's blit traffic with no
+timing against it (B), and every other measured item has already been answered or rejected (C for the rest).
+
 
 ## Remaining cost, and why work stopped there
 
