@@ -28,7 +28,28 @@ public final class ShadowCensus {
 	private static boolean terrain;
 	private static String culling = "";
 
+	/**
+	 * What the light's walk put into the map besides the terrain: the casters that move, counted where
+	 * they are handed over rather than where they are drawn.
+	 * <p>
+	 * The two counts existed before this and were said once per block table, which is one frame's
+	 * sample held out for the whole load; a rate is what says whether the family is worth anything in
+	 * the frame's cost, and a pack may refuse either family, so the two are summed apart. Nothing is
+	 * added at a draw site and no draw changes: this is the number {@code ShadowGeometry} already
+	 * keeps, read once a frame.
+	 */
+	private static long casterEntities;
+	private static long casterBlocks;
+	private static long casterFrames;
+
 	private ShadowCensus() {
+	}
+
+	/** One frame's gather: what the light's walk found before anything was drawn. */
+	public static void casters(final int entities, final int blockEntities) {
+		casterEntities += entities;
+		casterBlocks += blockEntities;
+		casterFrames++;
 	}
 
 	/** One walk: what it kept, what carries geometry, how many sections the world holds, and its shape. */
@@ -60,11 +81,18 @@ public final class ShadowCensus {
 				String.format(Locale.ROOT, "%.0f", (double) drawn / Math.max(walks, 1)),
 				String.format(Locale.ROOT, "%.0f", (double) total / Math.max(walks, 1)),
 				terrain, culling);
+		Vitrail.logger().info("Shadow casters: {} frames gathered, {} entities and {} block entities a frame",
+				casterFrames,
+				String.format(Locale.ROOT, "%.1f", (double) casterEntities / Math.max(casterFrames, 1)),
+				String.format(Locale.ROOT, "%.1f", (double) casterBlocks / Math.max(casterFrames, 1)));
 
 		walks = 0;
 		kept = 0;
 		drawn = 0;
 		total = 0;
+		casterEntities = 0;
+		casterBlocks = 0;
+		casterFrames = 0;
 		saidAt = now;
 	}
 }

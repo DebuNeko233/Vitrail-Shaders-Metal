@@ -323,6 +323,10 @@ public final class ShadowGeometry {
 
 		submit(minecraft, camera);
 		say(gathered, gatheredBlocks);
+		// The same two counts, read once a frame instead of once per block table: what the light's
+		// walk found is a rate, and a rate is what says whether the family is worth anything in the
+		// frame's cost. Nothing is added at a draw site and no draw changes.
+		ShadowCensus.casters(gathered, gatheredBlocks);
 
 		EntityDraw.shadowFeatures(true);
 		try {

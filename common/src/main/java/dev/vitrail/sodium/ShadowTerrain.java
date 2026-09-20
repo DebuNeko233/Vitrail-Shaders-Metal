@@ -117,6 +117,26 @@ public final class ShadowTerrain {
 
 	private static @Nullable String walkCulling;
 
+	/**
+	 * Diagnostic arms for the shadow stage, and nothing else.
+	 * <p>
+	 * <strong>NOT SEMANTICALLY CORRECT and never to be productionised.</strong> Each one takes one
+	 * component of the stage out of the frame so that the component's own cost can be read off the
+	 * only GPU time this backend really reports, which is the whole-frame figure the driver answers
+	 * with: a per-pass GPU clock does not exist on the Metal path, because
+	 * {@code MetalCommandEncoder.writeTimestamp} stores {@code System.nanoTime()} at record time.
+	 * What an arm is for is a difference between two arms and never a setting to ship; the picture
+	 * on either arm is the pack's picture with a piece of its shadow map missing.
+	 */
+	private static final boolean PROBE_NO_SHADOW_RASTER =
+			Boolean.getBoolean("vitrail.probeNoShadowRaster");
+
+	private static final boolean PROBE_NO_SHADOW_ENTITIES =
+			Boolean.getBoolean("vitrail.probeNoShadowEntities");
+
+	private static final boolean PROBE_NO_SHADOW_TRANSLUCENT =
+			Boolean.getBoolean("vitrail.probeNoShadowTranslucent");
+
 	private ShadowTerrain() {
 	}
 
@@ -421,7 +441,7 @@ public final class ShadowTerrain {
 		boolean drawTerrain = ShadowAmortisation.drawTerrainThisFrame() || !TerrainDraw.shadowMapKept();
 
 		// Refused by the pack rather than skipped for cheapness.
-		if (casters.terrain() && drawTerrain) {
+		if (casters.terrain() && drawTerrain && !PROBE_NO_SHADOW_RASTER) {
 			// Distant Horizons' far terrain goes first and INSIDE this word, both of which are
 			// Iris's. DH hangs its LOD draws off the HEAD of ChunkSectionsToRender.renderGroup
 			// (neoforge/mixins/client/MixinChunkSectionsToRender.java:67-74), and the only call to
@@ -451,7 +471,9 @@ public final class ShadowTerrain {
 		// after: shadowtex1 is the map WITHOUT the translucent half, and a mob belongs in it. Drawn
 		// after the copy, every caster that moves would be missing from the one name half the corpus
 		// reads its shadows through.
-		ShadowGeometry.draw(camera);
+		if (!PROBE_NO_SHADOW_ENTITIES) {
+			ShadowGeometry.draw(camera);
+		}
 
 		// Between the translucent group and everything else, and nowhere else: this is the one moment
 		// shadowtex0 and shadowtex1 hold different things, and what separates them is exactly the
@@ -459,7 +481,7 @@ public final class ShadowTerrain {
 		// walk above closes its last one, so a copy here is outside one.
 		TerrainDraw.copyShadowDepth();
 
-		if (casters.translucent() && !Boolean.getBoolean("vitrail.probeNoShadowTranslucent")) {
+		if (casters.translucent() && !PROBE_NO_SHADOW_TRANSLUCENT && !PROBE_NO_SHADOW_RASTER) {
 			// And its water half here, after the copy and inside the word that governs the world's
 			// own translucent group, for the two reasons the opaque half is where it is: DH's hook
 			// is the head of this very call, and Iris makes it inside its own shadowTranslucent test
