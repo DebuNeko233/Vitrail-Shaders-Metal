@@ -174,6 +174,35 @@ and voxel-side-work draw sites (none exists - those cells are `NOT COUNTED`), an
 itself. If those show an engine-side component that is both significant and removable, this decision changes;
 until then, changing shadow code would be complexity bought on a guess, which section 11 forbids.
 
+## Shadow decomposition (phase 1, `run/shadow-walk`, 09:26)
+
+What the walk does, read from the engine's own record once a second:
+
+```
+Shadow walk: 70 walks (69.2 a second), kept 734 a walk, drew 298 a walk, 22104 loaded,
+             terrain=true culling=SAFE_ZONE SWEPT r=128 z=32
+shadow-cull SAFE_ZONE SWEPT r=128 z=32 kept=734 camera=487 drawn=287 blocks=2
+Shadow map: the opaque world was drawn into it 598 times in the last 600 frames
+```
+
+| component | calls/frame | CPU evidence | GPU evidence | removable? |
+| --- | ---: | --- | --- | --- |
+| terrain/chunk (walk + raster) | **1 walk a frame; 734 sections kept, 298 of them carrying block geometry, of 22104 loaded** | walk runs every frame, `SAFE_ZONE SWEPT r=128 z=32` | shadow map written in **598 of 600 frames**; `Vitrail shadow chunk` is the top pass row at 21.3 per cent of stamped pass time | **no**: the pack voxelises in its shadow stage, so reuse is refused and the map is drawn every frame; the 298 drawn sections are the ones the light reaches that carry geometry |
+| entities | NOT COUNTED | NOT MEASURED | NOT MEASURED | unknown |
+| translucent | NOT COUNTED | NOT MEASURED | NOT MEASURED | unknown |
+| voxel side work | NOT COUNTED | NOT MEASURED | NOT MEASURED | unknown |
+| other (block entities) | `blocks=2` in the walk's own line | the count exists, its cost does not | NOT MEASURED | unknown |
+
+**The scene drifted in this arm and the report says so**: `loadedMiB` 312294.5 against the anchor's 93922.0 and
+`wallP50` 14.66 against 7.27, so its times are not the reference frame's times. The walk counts are the traversal
+facts of that heavier world; a count on the anchor scene needs an arm that lands on it.
+
+**What is established and what is not.** Established: the shadow stage walks the world every frame and rasters
+298 geometry-carrying sections into the map every frame, with reuse refused by the pack itself. Not established:
+how the 21.3 per cent splits between the walk (CPU), the chunk raster (GPU), the entities, the translucent
+casters and the voxel side work - that needs a counter at each of those draw sites, which is the next step, and
+no optimisation is written before it.
+
 ## Remaining cost, and why work stopped there
 
 The frame is GPU-bound (gpuP50 7.34 against wallP50 7.29) on the pack's own work: the pass-timings ranking puts
