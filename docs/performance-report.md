@@ -203,6 +203,14 @@ how the 21.3 per cent splits between the walk (CPU), the chunk raster (GPU), the
 casters and the voxel side work - that needs a counter at each of those draw sites, which is the next step, and
 no optimisation is written before it.
 
+**Where those counters go, located but not yet written** (so the next pass does not have to find them again):
+`ShadowGeometry.gather(Matrix4f light, Vec3 camera, ShadowCasters casters)` is the entity/caster gather,
+`ShadowGeometry.gatherBlockEntities(BlockEntityWalk walk)` the block-entity one, and `ShadowGeometry.draw(Vec3
+camera)` the draw of what they gathered - the class also records the two caster counts it gathers against
+(`ShadowGeometry:545-560` notes that entities and block entities are gathered by two different walks and that a
+pack can refuse either). A per-second census at those three sites, in the same shape as `ShadowCensus` and the
+other counters this pass added, is what turns the `NOT COUNTED` cells into numbers.
+
 ## Remaining cost, and why work stopped there
 
 The frame is GPU-bound (gpuP50 7.34 against wallP50 7.29) on the pack's own work: the pass-timings ranking puts
