@@ -156,12 +156,20 @@ GPU ms/frame:   about 0.045 ms
 % frame:        about 1.0 %
 ```
 
-**The pixels are counted from each target's own dimensions and level count, not estimated.** Level one down to
+**Which target, at what size and in what shape.** The two chain-carrying targets are `colortex5` and
+`colortex11`, read at a lod by exactly one program (`deferred4`), and each is a ping-pong pair - two images of
+the world's own size, `1056x660` at this render scale - so four surfaces in all carry a chain. The per-frame
+census only reduces the side a reader actually samples, which is why it counts two chains a frame and the
+load-time memory line charges four.
+
+**The pixels are counted from each surface's own dimensions and level count, not estimated.** Level one down to
 the last, at the size that level really has: 528x330 + 264x165 + 132x82 + 66x41 + 33x20 + 16x10 + 8x5 + 4x2 +
-2x1 + 1x1 = 232201 a chain, two chains a frame, 63855275 pixels a second. The eight bytes a pixel is the
-engine's own load-time accounting, checked against the arithmetic rather than assumed: both chain-carrying
-targets are doubled, so four chains of 232201 pixels are charged `7 MiB more`, and 4 x 232201 x 8 = 7.09 MiB is
-the only width that lands inside that figure (four bytes would be 3.5 MiB, sixteen would be 14 MiB).
+2x1 + 1x1 = 232201 a chain over 11 levels, two chains a frame, 63855275 pixels a second. **The format is eight
+bytes a pixel**, which is the engine's own load-time accounting read back rather than a guess: four surfaces of
+232201 pixels are charged `7 MiB more`, and 4 x 232201 x 8 = 7.09 MiB is the only whole-byte width that lands
+inside that figure (four bytes would be 3.5 MiB, sixteen would be 14 MiB), so the chain-carrying targets are
+eight bytes a pixel, which is four sixteen-bit channels - the engine's byte width and not a format name read off
+the pack's own declaration, which was not read this pass - and the reduction moves **about 3.5 MiB a frame**.
 
 **The GPU time is measured, and by removal rather than by a clock.** There is no per-pass GPU clock on this
 backend, so the reduction was priced the only way it can be: two arms of one session whose frames are otherwise
@@ -213,7 +221,7 @@ the one blit encoder a frame the two chains share. Across those three the sessio
 | translucent | 1 `drawChunkLayer(TRANSLUCENT)` a frame | the same shadow pass wrapper | **about 0.25 ms a frame** (`plain` minus `notrans`: 4377.97 against 4125.21), 3.4 per cent, and it carries 625 encoders and 20.6 per cent of the frame's loaded attachment bytes with it | **no on this pack**: `shadowTranslucent` is the pack's own directive and `shadowtex1` is defined as the map *without* translucents (`ShadowTerrain:456-471`) |
 | entities and block entities | **0 casters** on this fixture | the harness strips the measurement world's entities before every run ("Took the entities out of PerfWorld"), and the new caster census reports `0 frames gathered` for the whole session | **no measurable cost**: removing the shadow entity draw moved the frame by -0.06 per cent with every structural counter identical | nothing to remove here: the fixture has no movers. A world **with casters** is `NOT MEASURED` |
 | voxel side work (the pack's own `imageStore` into its volume) | not separable | UNKNOWN | **UNKNOWN**: it is inside the same fragment program as the raster, and no switch takes it out without changing what the pack's shader does. No diagnostic switch was written for it, so it stays UNKNOWN rather than estimated | unknown |
-| other (block entities, copy, shadow mip chain) | 1 `copyShadowDepth` a frame; 1 blit encoder a frame shared by the 2 chains | the chain is counted by the mip census and the copy is inside `blittedMiB`, which does not move | **about 0.045 ms a frame** for the chain (`plain` minus `absorb`), 1.0 per cent | no: the chains are what the pack's `deferred4` reads at a lod |
+| other (block entities, clears, copy, shadow mip chain) | **1 clear encoder a frame** (`clearEncoders` 600, unchanged in every arm); 1 `copyShadowDepth` a frame; 1 blit encoder a frame shared by the 2 chains | the chain is counted by the mip census, the clears by the pack census, and the copy is inside `blittedMiB`, which does not move in any arm | **about 0.045 ms a frame** for the chain (`plain` minus `absorb`), 1.0 per cent; the clears and the copy are inside the arm deltas above and are not separable from them without changing what the frame draws | no: the chains are what the pack's `deferred4` reads at a lod, the copy is what makes `shadowtex1` the map without translucents, and the clears are the pack's own marked custom images |
 
 ```
 Shadow walk: 138 walks (137.0 a second), kept 734 a walk, drew 298 a walk, 22104 loaded,
