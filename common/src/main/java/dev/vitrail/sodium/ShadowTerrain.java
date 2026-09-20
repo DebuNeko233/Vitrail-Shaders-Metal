@@ -1,5 +1,6 @@
 package dev.vitrail.sodium;
 
+import dev.vitrail.render.ShadowCensus;
 import dev.vitrail.mixin.access.MixinSodiumWorldRenderer;
 import dev.vitrail.mixin.access.RenderSectionManagerAccessor;
 import dev.vitrail.pack.source.ShadowCasters;
@@ -152,6 +153,14 @@ public final class ShadowTerrain {
 			throw e;
 		} catch (RuntimeException e) {
 			TerrainDraw.shadowStageFailed(e);
+		}
+
+		// The section counts the pass table cannot say, read off the walk this class already keeps for its own
+		// overlay line: how much of the world the most expensive row of the frame walked to get there.
+		Walk walked = lastWalk();
+		if (walked != null) {
+			ShadowCensus.walked(walked.kept(), walked.drawn(), walked.total(), walked.terrain(),
+					walked.culling());
 		}
 	}
 
