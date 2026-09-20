@@ -46,11 +46,18 @@ import java.util.function.Supplier;
  * measured from the end of whatever preceded it to the end of its own work: serialised, which is
  * what a frame of mostly full-screen passes with barriers between them is anyway.
  * <p>
- * <strong>The numbers are the card's, not the clock's.</strong> Ticks are converted with the
- * device's timestamp period, and a pair is only counted once both halves are available, without
- * waiting; a frame whose queries the card has not answered by the time its slot comes round again,
- * eight frames later, is dropped and counted as dropped in the report. A frame with more passes
- * than a slot holds is measured up to the last one that fits and counted as overflowed.
+ * <strong>What the numbers are depends on the backend, and the difference is not cosmetic.</strong>
+ * Ticks are converted with the device's timestamp period, and a pair is only counted once both halves
+ * are available, without waiting; a frame whose queries the card has not answered by the time its slot
+ * comes round again, eight frames later, is dropped and counted as dropped in the report. A frame with
+ * more passes than a slot holds is measured up to the last one that fits and counted as overflowed.
+ * Where the backend really writes device timestamps, as the Vulkan encoder does, a row is the card's.
+ * Where it fills the pool from the host clock, a row is the CPU time that pass took to RECORD, and
+ * Metallum's Metal path is that backend: {@code MetalDevice.getTimestampNow()} is
+ * {@code System.nanoTime()} and the device it reports carries a period of 1.0, so the ticks are the
+ * host's nanoseconds. Read a row there as encoder cost and never as GPU time; the tell is a stamped
+ * total far below the frame's own GPU figure, growing when the window shrinks while the frame gets
+ * faster.
  */
 public final class PassTimings {
 

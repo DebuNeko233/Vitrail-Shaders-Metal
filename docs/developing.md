@@ -302,15 +302,28 @@ wall clock, and the driver's own pipeline build is in none of them. The split is
 faster load needs a translation cache or a reflection cache, which are different designs keyed on
 different things.
 
-**The card's time per pass is in the log on request.** Started with `-Dvitrail.passTimings=N`
-among the JVM arguments, the game prints every N seconds a table of GPU time per render pass
-label, the game's and Sodium's passes beside the pack's, sorted by cost, with the share of the pass
-total each takes and how many times a frame it ran. The header compares three numbers: the sum of
-the passes, the span from the first pass of the frame to the last, and the interval between frames.
-The gap between the first two is copies, clears and barriers between passes; the gap to the third
-is the CPU, the limiter or vertical sync. The timestamps are the device's own, read back a few
-frames late without waiting, so the table costs nothing to speak of, and nothing at all when the
-property is absent. A reading is only as good as the run around it: compare runs taken in the same
+**A table of time per pass is in the log on request, and what it prices depends on the backend.**
+Started with `-Dvitrail.passTimings=N` among the JVM arguments, the game prints every N seconds a
+table of time per render pass label, the game's and Sodium's passes beside the pack's, sorted by
+cost, with the share of the stamp total each takes and how many times a frame it ran. The header
+compares three numbers: the sum of the stamps, the span from the first stamp of the frame to the
+last, and the interval between frames. The gap between the first two is copies, clears and barriers
+between passes; the gap to the third is the CPU, the limiter or vertical sync. The timestamps are
+read back a few frames late without waiting, so the table costs nothing to speak of, and nothing at
+all when the property is absent.
+
+**Read the backend before reading the table.** The rows are the device's own where the backend
+really writes device timestamps, which is what the Vulkan encoder does. They are not the device's
+where the backend fills the pool from the host clock, and Metallum's Metal path is that backend:
+`MetalDevice.getTimestampNow()` is `System.nanoTime()` and the device it reports carries a timestamp
+period of `1.0`, so a row there is the **CPU cost of encoding that pass** and never the GPU time it
+took to run. The tell is arithmetic rather than a smell: a stamped total of 1.348 ms in a window
+whose frames take 28.25 ms, and a total that grows when the window shrinks while the frame gets
+faster. The GPU time a frame costs is the probe's `gpuMs`, which comes from the driver's own
+`GPUStartTime`/`GPUEndTime`; the per-pass table answers which pass costs the render thread, and a
+per-pass GPU clock on the Metal path is owed (a counter sample buffer, not this).
+
+A reading is only as good as the run around it: compare runs taken in the same
 state, and remember that the game lowers its own frame rate after a while without input (the
 inactivity limit in the video settings), which moves every per-second number and none of the
 per-pass milliseconds.
