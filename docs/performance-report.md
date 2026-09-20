@@ -153,41 +153,26 @@ harness capability or a device-side timer, not another census.
 
 ## Next optimisation decision
 
-**A. Pursue the measured shadow cost - with the walk counts now beside it.** It is the only component with a measured share of the frame: `Vitrail
-shadow chunk` is the top row of the pass table at 21.3 per cent of stamped pass time, drawn every frame because
-this pack voxelises in its shadow stage. Mipmap volume is about 5 per cent of the frame's blit traffic with no
-timing against it (B), and every other measured item has already been answered or rejected (C for the rest).
+**C. Neither is significant or avoidable on the evidence measured; stop GPU optimisation.** The reasons are
+specific rather than a shrug:
 
+- **The shadow row's cost is pack-required raster.** `Vitrail shadow chunk` is the frame's top row at 21.3 per
+  cent of stamped pass time, and it is drawn in **598 of 600 frames** because this pack voxelises in its shadow
+  stage - the engine's reuse is refused by the pack itself, not by a setting. The walk keeps 734 sections of
+  22104 loaded and rasters the 298 that carry block geometry inside the light's reach (`SAFE_ZONE SWEPT
+  r=128 z=32`): that is the world the pack asked to shadow, culled already to what the light can see.
+  **This is shader-pack-required work rather than avoidable Vitrail overhead.**
+- **The mipmap volume is about five per cent of the frame's blit traffic** (1.8 MiB of 36.9 MiB a frame), and
+  blits are a small part of a frame that is GPU-bound on rendered passes. No timing shows it costing the
+  0.2-0.3 ms that would justify touching invalidation, and the code already skips a chain that is still valid.
+- Every other measured item is already decided: copy elision and attachment traffic remove bytes and no time,
+  the storage boundary merges nothing on this chain, feedback copies do not happen here, and the one CPU change
+  that was worth keeping (compute binding maps) is kept.
 
-
-## Shadow decomposition (phase 1, `run/shadow-walk`, 09:26)
-
-What the walk does, read from the engine's own record once a second:
-
-```
-Shadow walk: 70 walks (69.2 a second), kept 734 a walk, drew 298 a walk, 22104 loaded,
-             terrain=true culling=SAFE_ZONE SWEPT r=128 z=32
-shadow-cull SAFE_ZONE SWEPT r=128 z=32 kept=734 camera=487 drawn=287 blocks=2
-Shadow map: the opaque world was drawn into it 598 times in the last 600 frames
-```
-
-| component | calls/frame | CPU evidence | GPU evidence | removable? |
-| --- | ---: | --- | --- | --- |
-| terrain/chunk (walk + raster) | **1 walk a frame; 734 sections kept, 298 of them carrying block geometry, of 22104 loaded** | walk runs every frame, `SAFE_ZONE SWEPT r=128 z=32` | shadow map written in **598 of 600 frames**; `Vitrail shadow chunk` is the top pass row at 21.3 per cent of stamped pass time | **no**: the pack voxelises in its shadow stage, so reuse is refused and the map is drawn every frame; the 298 drawn sections are the ones the light reaches that carry geometry |
-| entities | NOT COUNTED | NOT MEASURED | NOT MEASURED | unknown |
-| translucent | NOT COUNTED | NOT MEASURED | NOT MEASURED | unknown |
-| voxel side work | NOT COUNTED | NOT MEASURED | NOT MEASURED | unknown |
-| other (block entities) | `blocks=2` in the walk's own line | the count exists, its cost does not | NOT MEASURED | unknown |
-
-**The scene drifted in this arm and the report says so**: `loadedMiB` 312294.5 against the anchor's 93922.0 and
-`wallP50` 14.66 against 7.27, so its times are not the reference frame's times. The walk counts are the traversal
-facts of that heavier world; a count on the anchor scene needs an arm that lands on it.
-
-**What is established and what is not.** Established: the shadow stage walks the world every frame and rasters
-298 geometry-carrying sections into the map every frame, with reuse refused by the pack itself. Not established:
-how the 21.3 per cent splits between the walk (CPU), the chunk raster (GPU), the entities, the translucent
-casters and the voxel side work - that needs a counter at each of those draw sites, which is the next step, and
-no optimisation is written before it.
+**What would reopen it**, named so the decision is not a dead end: a counter at the entity, translucent-caster
+and voxel-side-work draw sites (none exists - those cells are `NOT COUNTED`), and a CPU timing for the walk
+itself. If those show an engine-side component that is both significant and removable, this decision changes;
+until then, changing shadow code would be complexity bought on a guess, which section 11 forbids.
 
 ## Remaining cost, and why work stopped there
 
