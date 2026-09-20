@@ -211,6 +211,11 @@ camera)` the draw of what they gathered - the class also records the two caster 
 pack can refuse either). A per-second census at those three sites, in the same shape as `ShadowCensus` and the
 other counters this pass added, is what turns the `NOT COUNTED` cells into numbers.
 
+**And nothing already logs those counts**, checked rather than assumed: grepping a reference session's log for
+shadow caster, entity or block-entity counts returns nothing - the two numbers `ShadowGeometry` keeps are for its
+own overlay line, not for the log. So the census is the only route to the entity and block-entity cells, and
+until it exists those cells are `UNKNOWN` rather than small.
+
 ## Remaining cost, and why work stopped there
 
 The frame is GPU-bound (gpuP50 7.34 against wallP50 7.29) on the pack's own work: the pass-timings ranking puts
