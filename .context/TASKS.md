@@ -1302,7 +1302,12 @@ stands: **usable - no; compiling and bound where they never were - yes.**
 | `wallP50` / `gpuP50` | 7.27 / 7.29 | 7.26 / 7.29 |
 
 Every scene counter is identical to the `p0-repeat` anchor, so the arms are the same scene, and the bound
-resources are the same names in the same count - section 33's acceptance, both halves. The time columns do not
+resources are the same names in the same count - section 33's acceptance, both halves.
+
+**Wording that matters:** what the change removed is the three *reusable mutable* binding maps per dispatch
+(`PackComputeBindings.Scratch`). The three *immutable* `Map.copyOf` snapshots inside `Resolved` remain, on
+purpose - they are what keeps a backend from holding a map that a later dispatch clears and refills under it.
+Read as "map allocations a dispatch: 0" this change would be misdescribed. The time columns do not
 move, which is expected and allowed for a CPU allocation change: the evidence is the allocation count, and the
 frame was never bound on these maps. Kept as a production change (`a770cab3`), with the census line left in
 place so the number stays readable.

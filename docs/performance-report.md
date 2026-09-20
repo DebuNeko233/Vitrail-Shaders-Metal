@@ -37,7 +37,7 @@ per launch.
 | Attachment traffic | 7.22 | 7.30 | +1.1 % (inside the floor) | loadedMiB 93943.3 → 65229.4 (-30.6 %), storedMiB -1.2 % | 0 | 0 | no  -  rejected, measured |
 | Storage boundary | 7.31 | 7.31 | 0 | 0 | 0 | 0 | no  -  rejected, measured (zero boundaries merged) |
 | Mipmap planning | 7.27 | 7.27 | 0 (telemetry only) | 0 | 0 | 0 | no change made; 274 chains a second measured |
-| Compute bindings | 7.27 | 7.26 | 0 (CPU change) | 0 | 0 | 0 | **YES**  -  maps/dispatch 3 → 0 |
+| Compute bindings | 7.27 | 7.26 | 0 (CPU change) | 0 | 0 | 0 | **YES** - the 3 reusable mutable binding maps are no longer allocated per dispatch; the 3 immutable `Map.copyOf` snapshots remain |
 | Capability lookup | NOT MEASURED | - | - | - | - | - | no change made |
 
 ## Definition of Done (§57)
@@ -50,7 +50,7 @@ per launch.
 | 57.4 feedback copies | **answered** | zero copies on this pack; `PackChain:2066` is live, so it is a fact about the pack |
 | 57.5 attachment traffic | **answered** | rejected, measured: -30.6 % loaded bytes, no time |
 | 57.6 storage boundary | **answered** | rejected, measured: zero boundaries merged, because every pass answers "may read" |
-| 57.7 compute hot allocations | **answered** | kept: 3 maps a dispatch → 0, same 6.5 bindings, same scene, time unchanged |
+| 57.7 compute hot allocations | **answered** | kept: 3 reusable mutable binding maps a dispatch no longer allocated, the 3 immutable `Map.copyOf` snapshots remain (downstream ownership isolation preserved), same 6.5 bindings, same scene, time unchanged |
 | 57.8 no unmeasured high-value switch | **yes** | all three named switches have conclusions |
 | 57.9 correctness corpus | **not met** | fixtures cover the elision cases; no cross-pack corpus run this pass |
 | 57.10 reload/lifecycle | **not met** | NOT MEASURED |
@@ -105,6 +105,26 @@ must still be the pack's picture and the log must not carry a refusal, a lost ta
 steady-state counters should return to the reference band (`renderPasses` about 20900, `blits` 6600,
 `loadedMiB` about 93900) rather than drifting across the event. A pack switch and a world join are the two where
 a lost target would show; F3+T and a resize are the two where a stale ping-pong half would.
+
+
+## Compute allocation correction
+
+The phase 7 change is often summarised as "maps a dispatch: 3 to 0", which reads as though a compute dispatch
+allocates no map at all. It does not, and the difference matters to anyone reading the code next:
+
+```
+before:  3 x new LinkedHashMap      + 3 x Map.copyOf snapshots
+after:   0 x new LinkedHashMap      + 3 x Map.copyOf snapshots
+```
+
+What changed is the three **reusable mutable binding maps** (`PackComputeBindings.Scratch`, owned by the program
+and cleared per dispatch). What remains is the three **immutable `Map.copyOf` snapshots** inside `Resolved`, and
+they are deliberate: they are what stops a backend holding a map that a later dispatch then clears and refills
+underneath it. Removing them would trade a measured 1644 short-lived maps a second for an ownership question
+nobody has measured, and it is not proposed here.
+
+So the measured claim is: **three reusable mutable binding maps are no longer allocated per dispatch, and the
+three immutable snapshots remain.**
 
 ## Remaining cost, and why work stopped there
 
