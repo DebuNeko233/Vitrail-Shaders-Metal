@@ -29,6 +29,19 @@ import com.mojang.blaze3d.textures.GpuTexture;
  */
 final class MipmapReduction {
 
+	/**
+	 * Diagnostic arm for the chain reduction, and nothing else.
+	 * <p>
+	 * <strong>NOT SEMANTICALLY CORRECT and never to be productionised.</strong> It leaves every level
+	 * past the base holding whatever it held, so a program that reads a lod gets the base level
+	 * instead of an average: the wrong picture by construction, and that is the point. The GPU cost
+	 * of the reduction is the difference between a frame with it and a frame without it, because the
+	 * only GPU clock this backend reports is the driver's whole-frame figure - a per-pass one does
+	 * not exist on the Metal path. It is not a candidate optimisation and no reading of it may be
+	 * used as one: the chain is what the packs are written against, not an extra.
+	 */
+	private static final boolean PROBE_NO_MIP_CHAINS = Boolean.getBoolean("vitrail.probeNoMipChains");
+
 	private MipmapReduction() {
 	}
 
@@ -64,7 +77,7 @@ final class MipmapReduction {
 	 *         held and the caller must keep its readers at the base
 	 */
 	static boolean generate(CommandEncoder encoder, GpuTexture texture) {
-		if (texture == null || texture.getMipLevels() <= 1) {
+		if (texture == null || texture.getMipLevels() <= 1 || PROBE_NO_MIP_CHAINS) {
 			return false;
 		}
 
