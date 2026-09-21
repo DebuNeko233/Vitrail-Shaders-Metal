@@ -128,6 +128,14 @@ def check_toggle(config_entry: Path) -> None:
             raise SystemExit(f"metal selection contract: toggling the setting reaches {forbidden}, so it would "
                              "change the running session rather than the next launch")
 
+    # The write road is the binding and nothing else, and the binding is Sodium's `save`: `modifyValue` moves a
+    # pending value only, so the toggle writes no file, Undo cannot leave one behind, and the write lands on the
+    # press that also raises the restart notice. A second road - a storage handler that wrote the file - would
+    # break that pairing, which is why the handler has to stay empty.
+    if ".setStorageHandler(() -> {})" not in body:
+        raise SystemExit("metal selection contract: the row has a storage handler again, so the file would be "
+                         "written by a second road beside the binding and a change Sodium's own Undo takes back "
+                         "could still leave a choice on disk")
     # The row is on the page, and the page is the video settings rather than a shader-pack sub-page.
     before("addOption(metal4(builder))", "addOption(graphicsApi(builder))", text,
            "metal selection contract: the Metal 4 row is not on the engine's own page")

@@ -46,11 +46,20 @@ the encoding. A plain launch with the box off now reads metal3 on all three fiel
 
 The switch cannot change the session it is clicked in. Which generation encodes the frame, the
 command queue and the shader profile are all decided while the device is created, so the option
-carries Sodium's restart-required flag, and that flag is not decorative: Sodium's own
-`Config.processFlags` answers it with `Config.onGameNeedsRestart()`, which raises a warning through
-its console sink - `sodium.console.game_restart`, "The game must be restarted to apply one or more
-video settings!" - so the player is told a restart is owed rather than left thinking the click did
-something. Vitrail adds no notification of its own for this, because Sodium already has the place.
+carries Sodium's restart-required flag, and the whole of the click's effect is one file written by
+that flag's own road. Sodium's `StatefulOption` is where that is settled, and it is worth reading once
+because two of this row's properties fall out of it rather than out of anything Vitrail does:
+`modifyValue` only moves a pending value, and `applyChanges` - reached from the screen's **Apply**
+button through `Config.applyAllOptions` - is what copies it into the live value *and* calls the
+binding's `save`. So the toggle writes nothing at all, **Undo therefore cannot leave a file behind**,
+and the write happens on the same press that commits the change.
+
+The restart notice rides that same press and is not decorative: `Config.processFlags` answers the flag
+with `Config.onGameNeedsRestart()`, which raises a warning through Sodium's console sink -
+`sodium.console.game_restart`, "The game must be restarted to apply one or more video settings!" - so
+the player is told a restart is owed rather than left thinking the click did something. Vitrail adds
+no notification of its own for this, because Sodium already has the place and its own
+restart-required options take the same road.
 
 An explicit `-Dmetallum.execution=` on the command line outranks the stored choice in both
 directions, which is what keeps the development harnesses measuring the generation they asked for.

@@ -218,8 +218,11 @@ public final class ConfigEntry implements ConfigEntryPoint {
 								chosen ? MetallumExecutionChoice.METAL4 : MetallumExecutionChoice.METAL3),
 						() -> MetallumExecutionChoice.read() == MetallumExecutionChoice.METAL4)
 				// Empty for the same reason the two sliders below leave it empty, and required for the same
-				// reason: Sodium refuses to build a stateful option without one. The binding has written the
-				// file.
+				// reason: Sodium refuses to build a stateful option without one. The file is written by the
+				// binding above, which Sodium calls from `applyChanges` - reached by the screen's Apply
+				// button - and not from `modifyValue`, which only moves a pending value. So toggling writes
+				// nothing, Undo cannot leave a file behind, and the write lands on the press that commits
+				// the change, beside the restart notice the flag below raises.
 				.setStorageHandler(() -> {})
 				// The screen's own restart-required UX, rather than a notification of ours: the option is
 				// about a decision the running process has already made, and Sodium already has the place a
