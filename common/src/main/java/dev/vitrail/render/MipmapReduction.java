@@ -59,11 +59,10 @@ final class MipmapReduction {
 			return false;
 		}
 
-		if (!generate(encoder, surface.texture())) {
+		if (!generate(encoder, surface.texture(), surface.label())) {
 			return false;
 		}
 
-		MipmapCensus.generated(surface.levels(), surface.width(), surface.height());
 		surface.chainWritten(true);
 
 		return true;
@@ -73,16 +72,25 @@ final class MipmapReduction {
 	 * The same over an image this engine holds directly, which is the shadow map: its depth pair is
 	 * not a colour target of a pack and carries its level count from its own directive.
 	 *
+	 * @param label what the census calls this image, since nothing here has a target's name to hand it. The
+	 *              count is taken here and nowhere else: both roads to a chain reach this method, so counting
+	 *              in the surface overload as well would report every pack target's chain twice.
 	 * @return false when the chain could not be filled, in which case the levels hold whatever they
 	 *         held and the caller must keep its readers at the base
 	 */
-	static boolean generate(CommandEncoder encoder, GpuTexture texture) {
+	static boolean generate(CommandEncoder encoder, GpuTexture texture, String label) {
 		if (texture == null || texture.getMipLevels() <= 1 || PROBE_NO_MIP_CHAINS) {
 			return false;
 		}
 
 		GeometryHold.flush(() -> "a mip chain being filled");
-		return Backends.capabilities(encoder) instanceof MipmapCommands commands
-				&& commands.vitrail$generateMipmaps(texture);
+		if (!(Backends.capabilities(encoder) instanceof MipmapCommands commands)
+				|| !commands.vitrail$generateMipmaps(texture)) {
+			return false;
+		}
+
+		MipmapCensus.generated(label, texture.getMipLevels(), texture.getWidth(0), texture.getHeight(0));
+
+		return true;
 	}
 }

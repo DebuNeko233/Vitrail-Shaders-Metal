@@ -642,12 +642,12 @@ final class ShadowTargets {
 			return;
 		}
 
-		this.chainWritten[0] = MipmapReduction.generate(encoder, this.depth);
+		this.chainWritten[0] = MipmapReduction.generate(encoder, this.depth, "shadow");
 		// Its own chain over its own base, which the copy has just written. Left out, the levels of
 		// shadowtex1 would hold the average of whatever the last fill saw, which is a frame of the
 		// world older than the base under them.
 		this.chainWritten[1] = this.noTranslucents != null
-				&& MipmapReduction.generate(encoder, this.noTranslucents);
+				&& MipmapReduction.generate(encoder, this.noTranslucents, "shadowtex1");
 	}
 
 	/**

@@ -99,6 +99,15 @@ final class TargetSurface implements AutoCloseable {
 		return mipped ? Mth.log2(Math.max(width, height)) + 1 : 1;
 	}
 
+	/**
+	 * What this surface is called: a pack target's own name, or the label this engine gave a copy or the shadow
+	 * map. Read by the mipmap census, which counts a chain against the target it was filled for - a rate of four
+	 * chains a second is four images and not one, and the name is the only thing that says which.
+	 */
+	String label() {
+		return this.label;
+	}
+
 	int width() {
 		return this.width;
 	}

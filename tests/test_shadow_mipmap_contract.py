@@ -13,6 +13,9 @@ METAL_MIXINS_JSON = ROOT / "common/src/main/resources/vitrail.mixins.json"
 METAL_CAPABILITIES = ROOT / "common/src/main/java/dev/vitrail/compat/metallum/MetallumEncoderCapabilities.java"
 BACKENDS = ROOT / "common/src/main/java/dev/vitrail/render/Backends.java"
 METAL_BRIDGE = ROOT / "common/src/main/java/dev/vitrail/compat/metallum/MetallumDepthMipmapBridge.java"
+MIPMAP_CENSUS = ROOT / "common/src/main/java/dev/vitrail/render/MipmapCensus.java"
+TARGET_SURFACE = ROOT / "common/src/main/java/dev/vitrail/render/TargetSurface.java"
+PACK_CHAIN = ROOT / "common/src/main/java/dev/vitrail/render/PackChain.java"
 PACK_DIRECTIVES = ROOT / "common/src/main/java/dev/vitrail/pack/target/PackDirectives.java"
 
 
@@ -55,8 +58,10 @@ class ShadowMipmapContractTest(unittest.TestCase):
         targets = compact(SHADOW_TARGETS)
         self.assertIn("GpuTexture.USAGE_TEXTURE_BINDING | GpuTexture.USAGE_RENDER_ATTACHMENT", targets)
         self.assertIn('createTexture(() -> "Vitrail shadowtex1", USAGE, this.depth.getFormat()', targets)
-        self.assertIn("this.chainWritten[0] = MipmapReduction.generate(encoder, this.depth);", targets)
-        self.assertIn("&& MipmapReduction.generate(encoder, this.noTranslucents);", targets)
+        # Each chain is named for the census: the map's two images are not pack targets, and a rate of four
+        # chains a second is four images, so which image is the only thing that says which is which.
+        self.assertIn('this.chainWritten[0] = MipmapReduction.generate(encoder, this.depth, "shadow");', targets)
+        self.assertIn('&& MipmapReduction.generate(encoder, this.noTranslucents, "shadowtex1");', targets)
         self.assertIn("return this.chainWritten[withoutTranslucents && this.copied ? 1 : 0];", targets)
 
         formats = compact(GPU_FORMATS)
@@ -67,8 +72,8 @@ class ShadowMipmapContractTest(unittest.TestCase):
         reduction = compact(MIPMAP_REDUCTION)
         # The capability is resolved through Backends.capabilities: asking the raw backend silently answered no for
         # every backend that does not carry the capabilities itself, which is the fault this resolver exists for.
-        self.assertIn("Backends.capabilities(encoder) instanceof MipmapCommands commands "
-                      "&& commands.vitrail$generateMipmaps(texture)", reduction)
+        self.assertIn("if (!(Backends.capabilities(encoder) instanceof MipmapCommands commands) "
+                      "|| !commands.vitrail$generateMipmaps(texture)) {", reduction)
 
         # The capability is supplied by an adapter over the stable flat surface, not by injecting methods into
         # whichever Metallum class happens to be named. Injection read as working until that class moved and the
@@ -98,6 +103,40 @@ class ShadowMipmapContractTest(unittest.TestCase):
         self.assertIn("if (method == null) { return false; }", bridge)
         self.assertIn("catch (ReflectiveOperationException ignored) { generate = null; }", bridge)
         self.assertNotIn("unavailable or incompatible", bridge)
+
+
+    def test_a_chain_is_counted_against_the_target_it_was_filled_for(self):
+        """The census says which image a chain was filled for, which is what C6 asks of it.
+
+        A rate of four chains a second is four images and not one, and the answer to "is a chain ever filled
+        after nobody reads it" needs the names: a pack target's own name, or the shadow map's, which is not a
+        pack target at all. The label travels with the call and the count is taken at the one road every chain
+        reaches - the texture overload - because taking it in the surface overload as well would report every
+        pack target's chain twice.
+        """
+        census = compact(MIPMAP_CENSUS)
+        reduction = compact(MIPMAP_REDUCTION)
+        shadow = compact(SHADOW_TARGETS)
+
+        self.assertIn("static void generated(final String target, final int levelsInChain, ", census)
+        self.assertIn("byTarget.merge(target, 1, Integer::sum);", census)
+        self.assertIn("private static String described()", census)
+        self.assertIn("byTarget.clear();", census)
+
+        # One counting site, on the road both callers reach, and the name travels to it.
+        self.assertEqual(reduction.count("MipmapCensus.generated("), 1)
+        self.assertIn("MipmapCensus.generated(label, texture.getMipLevels(), texture.getWidth(0), "
+                      "texture.getHeight(0));", reduction)
+        self.assertIn("generate(encoder, surface.texture(), surface.label())", reduction)
+
+        # The surface's own name, and the shadow map's two images named for what they are.
+        self.assertIn("String label() {", compact(TARGET_SURFACE))
+        self.assertIn('MipmapReduction.generate(encoder, this.depth, "shadow")', shadow)
+        self.assertIn('MipmapReduction.generate(encoder, this.noTranslucents, "shadowtex1")', shadow)
+
+        # And the pack targets' chains still reach the same road, from the pass that reads them at a lod.
+        chain = compact(PACK_CHAIN)
+        self.assertIn("MipmapReduction.generate(encoder, surface)", chain)
 
 
 if __name__ == "__main__":
