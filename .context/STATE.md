@@ -5,6 +5,26 @@ Scope: `feat/backend-neutral-sodium-terrain-hook`
 
 ## Confirmed from the current checkout
 
+- **A frame's period on the packed scene is mostly the client's own work, and the second population is the client
+  tick.** Phase C3 of the companion audit decomposes the period from the two spans the Metal 4 trace already
+  writes: `wallUs` is `begin(N) - begin(N-1)` and `encodeUs` is `commit(N) - begin(N)`, so `between(N) = wall(N) -
+  encode(N-1) = begin(N) - commit(N-1)` is the interval from the previous frame's commit to this one's begin. No
+  pack (four arms, 1/2/3 ring slots, each on its own 300-frame window): period 8.33-8.42 = between 0.08-0.72 +
+  previous encode 7.68-8.26 with `corr(period, previous encode)` +0.929 to +0.998 - the client's work is a
+  rounding error and the period *is* the encoder's span, which is where both the ring's slot wait and the
+  display's drawable wait live, and that is why moving the wait between them changed no wall.
+  MakeUp-UltraFast-9.5e (`run/c-makeup-trace/t3`): period 4.94 = between 2.71 + previous encode 2.23,
+  `corr(period, between)` +0.909, and the slow population (59 of 300 frames, period at or above 1.5x the median)
+  reads 8.74 = 5.30 + 3.44 with the ring free (0.00), the display nearly free (0.59) and this path's own encode
+  **cheaper** in the slow frames than in the fast ones (1.69 against 2.36 ms). 802 of the window's 1475 ms are
+  outside this engine's frame, and thirty frames carry the pack's extra passes against exactly thirty client
+  ticks in the same window (`windowTicks=30 framesPerTick=10.00`), so the population is the tick; the `between`
+  series peaks at a lag of ten frames. The earlier attribution of that population to "the pacing resource" is
+  **withdrawn**. **Still owed**: which part of the client's span it is, and a per-frame line on the reference
+  path - without it the M3-vs-M4 tail cannot be attributed per frame, because only this path writes one. The same
+  round corrected the analyser's window: it read whatever `--frames` said (default 600) rather than the window the
+  probe's own report line names, which is how the C1/C2 table came to carry `n` of 1839-2024 a row for 300-frame
+  windows; re-read on the windows, the medians agree to 0.04 ms and the wait location is unchanged. (2026-09-21)
 - **The Metal 4 upload road is priced and it does not explain the frame's slow population.** Phase F1 of the
   companion audit: Metal 4 stages and copies every CPU-written buffer where Metal 3 writes a dynamic buffer's
   contents straight into its own CPU-visible backing, so the shape was the first candidate for the 4-5 ms bucket

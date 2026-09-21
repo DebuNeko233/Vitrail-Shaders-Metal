@@ -172,13 +172,27 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   is about, so the direct-write replacement is rejected; the gap itself stays Phase C3's. Two contract mutations
   prove the pins (a deleted call site, a deleted per-road accumulator), and the census's own reach is verified
   end to end by a session whose comparison printed the renamed fields. (2026-09-21)
+- [x] **Phase C3: the slow frame is the client's own work at the frame boundary, not this path or its pacing.**
+  A frame's period decomposes from the two spans the Metal 4 trace already writes - `between(N) = wall(N) -
+  encode(N-1) = begin(N) - commit(N-1)` - and the identity is printed beside the numbers so an off-by-one cannot
+  pass as a regression of this path. No pack (four arms, 1/2/3 ring slots, each on its own 300-frame window):
+  period 8.33-8.42 = between 0.08-0.72 + previous encode 7.68-8.26, `corr(period, previous encode)` +0.929 to
+  +0.998 - the client's own work is a rounding error and the period *is* the encoder's span, which is where both
+  the slot wait and the drawable wait live. MakeUp-UltraFast-9.5e: period 4.94 = between 2.71 + previous encode
+  2.23, `corr(period, between)` +0.909, and the slow population (59 of 300) reads 8.74 = 5.30 + 3.44 with the ring
+  free (0.00), the display nearly free (0.59) and this path's own encode **cheaper** in the slow frames than in
+  the fast ones (1.69 against 2.36). 802 of the window's 1475 ms are outside this engine's frame; thirty frames
+  carry the pack's extra passes and the probe counted exactly thirty client ticks in the same window, so the
+  population is the client's tick. The earlier attribution of that population to "the pacing resource" is
+  withdrawn. **Still owed**: which part of the client's span it is (nothing marks the client's frame boundaries),
+  and a per-frame line on the reference path, without which the M3-vs-M4 tail cannot be attributed per frame at
+  all. (2026-09-21)
 - [ ] **The audit's remaining phases, in the plan's priority order.** D1's fixture gaps (no dedicated pack yet
   for clear-to-copy, a partial view, or the frame-end flush), D2's pass-stitching census (attachment tuple,
-  load/store, depth, sample count, area, intervening copy or compute, candidate or reject reason), C3's
-  drawable-acquisition phase outside the frame encoder - where the ~10 ms inter-frame gap is now known *not* to
-  be the upload road - J1's overworld sky and cloud shading residual (its own diagnosis, with a same-code control
-  in the same session before any picture difference is attributed), then E, G, H, I, K and L, and the three
-  standing documents the plan's §25 names. (2026-09-21)
+  load/store, depth, sample count, area, intervening copy or compute, candidate or reject reason), J1's overworld
+  sky and cloud shading residual (its own diagnosis, with a same-code control in the same session before any
+  picture difference is attributed), then E, G, H, I, K and L, and the three standing documents the plan's §25
+  names. (2026-09-21)
 - [x] **The Metal 4 switch asks rather than demands, and the backend work that goes with it is done in companion
   Metallum.** `prefer-metal4` is the row's word now; the same audit round there made `persistentMapping` a
   generation's answer instead of the device's, stopped a forced Metal 3 startup from running the Metal 4
