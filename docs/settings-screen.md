@@ -19,6 +19,22 @@ On a backend other than Vulkan the engine draws nothing, so its page in the vide
 offer to switch to Vulkan, which closes the game, Iris installed or not. Its two keys do nothing
 there, and its own page of settings is not listed in the video settings.
 
+## The backend row
+
+One row on this engine's own page is not about a shader pack at all: **Metal 4 (Experimental)**. It
+is off by default, and what it does is write one word - `metal3` or `metal4` - to
+`vitrail/metal-execution.txt`, which the next launch reads before the graphics device exists. Metal
+3 is what a fresh install, a missing file and an unreadable one all mean, and the backend still
+decides for itself whether a device can run Metal 4, so the row never claims support it has not
+asked about and keeps no list of chip names.
+
+The switch cannot change the session it is clicked in. Which generation encodes the frame, the
+command queue and the shader profile are all decided while the device is created, so the option
+carries Sodium's restart-required flag and the screen tells the player a restart is owed rather than
+pretending the click did something. An explicit `-Dmetallum.execution=` on the command line outranks
+the stored choice in both directions, which is what keeps the development harnesses measuring the
+generation they asked for.
+
 ## Two views, one screen
 
 The screen holds two views and swaps between them with the button above the bottom row. Tab does the

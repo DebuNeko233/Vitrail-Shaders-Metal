@@ -160,6 +160,12 @@ A pack compile holds the world back, so the screen used to be the frame from bef
 
 ## P1 - Performance, Metal 4 and MetalFX (see `docs/performance.md`)
 
+- [x] **Manual Metal 4 selection is exposed and Metal 3 is the default.** `--vanilla-clouds` beside it now takes
+  `on|fast|off` so the flat cloud can be measured; the cloud defect it helped find is companion Metallum's (a
+  texel-buffer binding dropped on the Metal 4 path, fixed and pinned there). Open on this side: the Metal 4
+  overworld frame is lighter than Metal 3's (sky and clouds shifted toward white), which is **NOT MEASURED**
+  beyond its description and is separate from the cloud geometry. (2026-09-21)
+
 - [ ] **M3's render half: the frame-path move was tried and reverted, and what it cost is now measured.**
   Moving `MetalCommandEncoder`, `MetalRenderPass` and `MetalFence` into `com.metallum.render.metal3` as a
   pure move produced **100 compile errors, every one of them "class/member is not public"**: the render

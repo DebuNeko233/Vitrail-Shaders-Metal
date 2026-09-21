@@ -1,13 +1,19 @@
 # The render scale, and what it covers
 
-**Render Scale**, under Video Settings on Vitrail's own page, draws the world at a fraction of
+**MetalFX Render Scale**, under Video Settings on Vitrail's own page, draws the world at a fraction of
 the window and brings the finished picture back to full size before the interface. It is the
 setting to reach for when a pack runs but runs slowly, and it is worth knowing exactly how far it
 reaches, because a lot of a frame is not measured in pixels at all.
 
-Two things about it before anything else. At 100 percent it does not run: the world is drawn at
-the window's own size and the upscale is never even started. And it only engages while a pack is
-drawing, so with shaders off it changes nothing either.
+The row was called **Render Scale** until the name learned to say what does the upscaling. Only the
+name changed: the identifier, the key in `pack.txt` and the stored number are the same, so an
+existing scale survives the update.
+
+Two things about it before anything else. At 100 percent it does not run, and that is now what the
+row says - it reads `100% (Off)` rather than a bare number, because the value a player is looking for
+there is "this is off". The world is drawn at the window's own size, no scaled target is created, the
+MetalFX scaler is never asked for and the fallback upscale never runs. And it only engages while a
+pack is drawing, so with shaders off it changes nothing either.
 
 ## What follows it
 

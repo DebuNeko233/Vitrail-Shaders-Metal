@@ -5,6 +5,23 @@ Scope: `feat/backend-neutral-sodium-terrain-hook`
 
 ## Confirmed from the current checkout
 
+- **The Metal generation is now a player setting, and it is read before the device exists.** `Vitrail.initClient`
+  applies `MetallumExecutionChoice` (`vitrail/metal-execution.txt`, one word, default `metal3`) to the
+  `metallum.execution` property, and only where the JVM left that property unset - an explicit
+  `-Dmetallum.execution=` still outranks the file. Companion Metallum's `MetalExecutionPreference.read()` now
+  answers `FORCE_METAL3` for an absent property, so a launch that says nothing runs Metal 3 and AUTO is only what
+  a harness asks for by name. The settings row is "Metal 4 (Experimental)" on Vitrail's own page, off by default,
+  flagged `REQUIRES_GAME_RESTART`, and its binding writes the file and takes nothing else - the running session's
+  generation cannot change. `tests/test_metal_selection_and_scale.py` pins the storage, the precedence, the
+  entry-point ordering, the restart flag, the inert binding, the 100 per cent scale semantics and the locale keys,
+  with a mutation-proving `--self-test`. (2026-09-21)
+- **The performance harness had been staging the nether, and its scenes could not contain a sky or a cloud.**
+  A player record carries the dimension it was last in; the staged world holds 81 records in the overworld and 9
+  in the nether at the world spawn, and the nine are the profiles the dev instance joins as. `freeze-world.py`
+  now pins every record's dimension (`--dimension`, default `minecraft:overworld`) and the harness passes it
+  through, which is what made the vanilla-cloud defect reproducible at all: the same scene goes from no cloud
+  pass to 683 in a 120-frame Metal 4 window. (2026-09-21)
+
 - The migration boundary remains strict: Vitrail owns shader-pack semantics, scheduling, fallback interpretation and compatibility status; Metallum owns generic Metal execution. Both requests are merged - companion `metallum#1` into `master` (`cc7e8905`) first, then this repository's `#1` - and `v0.12.0-metal-beta` is released from `main` at `55d6d6a8` with `dev` since opened to `0.13.0-dev`. The release promotes no pack: the compatibility matrix still carries no status for any row.
 - `#1` entered `dev` through a merge commit (`85b21157`) rather than the rebase `CONTRIBUTING.md` asks for, because this fork has no ruleset and no branch protection and leaves all three merge methods enabled, so nothing refused the wrong button. It was repaired the same day by resetting `dev` to the pull request's own head `b4da068d`, which is a strict descendant of the old `dev` and contains the whole batch, so the merge commit added no content at all - `git diff 85b21157 b4da068d` was empty. `main` was reset to the same commit in the same pass, because it had drifted one commit ahead of `dev` with an inlined copy of the migration plan in `AGENTS.md` (superseded by `.context/architecture/roadmap.md`), which made the documented `dev` to `main` fast-forward impossible. Both resets were `--force-with-lease` against an explicitly stated expected value. `dev` is linear again, `main` is contained in it, and the `prefix` check that exists to catch exactly this is green.
 - The Vitrail code line contains the entity-reference-default and particle/weather diagnostic fixes, the source-classified sky/line reference-unbacked handling, the sky-ownership replay, and compatibility-function builtin shadowing recorded below; companion Metallum is on `feat/mc26.2-mrt-foundation` with code-bearing Metal head `82a0c75e53e28390472b3c26b569cdc2335d90b4`. This memory pins code-bearing heads rather than branch tips: later commits on either branch that touch only documentation, CI, tests or `.gitignore` change no rendered behaviour, so pinning a tip would restate the same fact on every such commit and go stale between them.
