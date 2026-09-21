@@ -64,8 +64,11 @@ def check_choice(choice: Path, vitrail: Path) -> None:
     text = read(choice)
 
     for needle, why in (
-        ('METAL3("metal3")', "the stored choice no longer has a Metal 3 word"),
-        ('METAL4("metal4")', "the stored choice no longer has a Metal 4 word"),
+        ('METAL3("metal3", "metal3")', "the stored choice no longer has a Metal 3 word, or its property word "
+                                       "stopped being the same word"),
+        ('METAL4("metal4", "prefer-metal4")',
+         "the stored Metal 4 choice no longer asks Metallum for a PREFERENCE, so the player's opt-in would "
+         "either force a launch failure on a device that cannot run Metal 4 or silently stop selecting it"),
         ("public static final MetallumExecutionChoice DEFAULT = METAL3;",
          "the stored choice's default is not Metal 3, so a fresh install would run the experimental path"),
         ('private static final String FILE = "metal-execution.txt";',
@@ -76,9 +79,20 @@ def check_choice(choice: Path, vitrail: Path) -> None:
 
     # The precedence rule, in the order the method has to have it: the JVM's word is read first and answered
     # with, and the property is written only on the road where it was absent.
-    before("if (asked != null) {", "System.setProperty(PROPERTY, choice.word);", text,
+    before("if (asked != null) {", "System.setProperty(PROPERTY, choice.propertyWord());", text,
            "metal selection contract: an explicit -D would be overwritten by the stored setting, so a harness "
            "that asked for a generation could be handed the other one")
+    # The property is the PREFERENCE word and the file is the stored word: a player's Metal 4 must not become
+    # the developer's forced Metal 4, which is a startup failure on a device without the contract.
+    if "System.setProperty(PROPERTY, choice.word);" in text:
+        raise SystemExit("metal selection contract: the stored word is written into metallum.execution, so the "
+                         "player's opt-in is the strict force and a device that cannot run Metal 4 would fail "
+                         "the launch instead of falling back")
+    if "private static MetallumExecutionChoice known(String word)" not in text \
+            or "choice.word.equals(word) || choice.propertyWord.equals(word)" not in text:
+        raise SystemExit("metal selection contract: a property word on the command line is no longer recognised, "
+                         "so `-Dmetallum.execution=prefer-metal4` would be logged as a word Metallum does not "
+                         "answer")
     if text.count("System.setProperty(") != 1:
         raise SystemExit("metal selection contract: the property is written somewhere other than the one road "
                          "that has already established it was unset")
@@ -271,13 +285,15 @@ def self_test() -> None:
         vitrail = root / "Vitrail.java"
 
         choice.write_text(
-            'METAL3("metal3")\nMETAL4("metal4")\n'
+            'METAL3("metal3", "metal3")\nMETAL4("metal4", "prefer-metal4")\n'
             "public static final MetallumExecutionChoice DEFAULT = METAL3;\n"
             'private static final String FILE = "metal-execution.txt";\n'
+            "private static MetallumExecutionChoice known(String word) {\n"
+            "    return choice.word.equals(word) || choice.propertyWord.equals(word) ? null : null;\n}\n"
             "public static MetallumExecutionChoice apply() {\n"
             "    String asked = System.getProperty(PROPERTY);\n"
             "    if (asked != null) {\n        return known(asked);\n    }\n"
-            "    System.setProperty(PROPERTY, choice.word);\n    return choice;\n}\n",
+            "    System.setProperty(PROPERTY, choice.propertyWord());\n    return choice;\n}\n",
             encoding="utf-8")
         vitrail.write_text(
             "platform = loaderPlatform;\nMetallumExecutionChoice.apply();\n"
@@ -298,14 +314,16 @@ def self_test() -> None:
 
         # An unconditional write, which is how a stored setting would silently beat the JVM's own word.
         choice.write_text(
-            'METAL3("metal3")\nMETAL4("metal4")\n'
+            'METAL3("metal3", "metal3")\nMETAL4("metal4", "prefer-metal4")\n'
             "public static final MetallumExecutionChoice DEFAULT = METAL3;\n"
             'private static final String FILE = "metal-execution.txt";\n'
+            "private static MetallumExecutionChoice known(String word) {\n"
+            "    return choice.word.equals(word) || choice.propertyWord.equals(word) ? null : null;\n}\n"
             "public static MetallumExecutionChoice apply() {\n"
             "    String asked = System.getProperty(PROPERTY);\n"
             "    if (asked != null) {\n        return known(asked);\n    }\n"
             "    MetallumExecutionChoice choice = readIn(file());\n"
-            "    System.setProperty(PROPERTY, choice.word);\n    return choice;\n}\n"
+            "    System.setProperty(PROPERTY, choice.propertyWord());\n    return choice;\n}\n"
             "    static { System.setProperty(PROPERTY, \"metal3\"); }\n", encoding="utf-8")
         if not fires(lambda: check_choice(choice, vitrail)):
             raise SystemExit("metal selection self-test: a second, unconditional property write passed")
@@ -317,6 +335,7 @@ def self_test() -> None:
             "    builder.createBooleanOption(METAL4)\n"
             "        .setBinding(chosen -> MetallumExecutionChoice.write(dir, chosen),\n"
             "                () -> MetallumExecutionChoice.read() == METAL4)\n"
+            "        .setStorageHandler(() -> {})\n"
             "        .setFlags(OptionFlag.REQUIRES_GAME_RESTART);\n"
             "    RenderSystem.getDevice();\n"
             "\t}\naddOption(metal4(builder))\naddOption(graphicsApi(builder))\n", encoding="utf-8")
@@ -328,35 +347,74 @@ def self_test() -> None:
             "    builder.createBooleanOption(METAL4)\n"
             "        .setBinding(chosen -> MetallumExecutionChoice.write(dir, chosen),\n"
             "                () -> MetallumExecutionChoice.read() == METAL4)\n"
+            "        .setStorageHandler(() -> {})\n"
             "        .setFlags(OptionFlag.REQUIRES_GAME_RESTART);\n"
             "\t}\naddOption(metal4(builder))\naddOption(graphicsApi(builder))\n", encoding="utf-8")
         check_toggle(config)
 
+        # And the second write road, which is the one that would make Undo leave a choice on disk.
+        config.write_text(
+            "private static OptionBuilder metal4(ConfigBuilder builder) {\n"
+            "    builder.createBooleanOption(METAL4)\n"
+            "        .setBinding(chosen -> MetallumExecutionChoice.write(dir, chosen),\n"
+            "                () -> MetallumExecutionChoice.read() == METAL4)\n"
+            "        .setStorageHandler(() -> MetallumExecutionChoice.write(dir, METAL4))\n"
+            "        .setFlags(OptionFlag.REQUIRES_GAME_RESTART);\n"
+            "\t}\naddOption(metal4(builder))\naddOption(graphicsApi(builder))\n", encoding="utf-8")
+        if not fires(lambda: check_toggle(config)):
+            raise SystemExit("metal selection self-test: a second road that writes the choice passed")
+
         # The scale, on a tree where 100 per cent still allocates.
         scale = root / "RenderScale.java"
-        scale.write_text(
-            "public static boolean beginWorld(RenderTarget main) {\n"
-            "    ensure(width, height, main.width, main.height);\n"
-            "    if (asked >= WHOLE) {\n        standDown(main);\n        return false;\n    }\n"
-            "    resizeOutline(width, height, true);\n\t}\n"
+        # The same order the real file has - `wanted` before `beginWorld` - because one of the rules is about
+        # what sits between them: the latch the moved number lifts.
+        wanted = "public static void wanted(int asked) {\n    saidWhole = false;\n}\n"
+        end_world = (
             "public static void endWorld(RenderTarget main, CommandEncoder encoder) {\n"
             "    if (!swapped || main == null) {\n        return;\n    }\n"
             "    boolean available = commands.vitrail$metalFxAvailable();\n"
-            "    RenderPipeline fallback = BILINEAR.get(device);\n\t}\n", encoding="utf-8")
+            "    RenderPipeline fallback = BILINEAR.get(device);\n\t}\n"
+        )
+        # The two halves of the off position as the real file has them: the line that says what it means, and
+        # the latch around it. A fixture without them would let the rule be deleted from the tree.
+        message = "The render scale is 100%, so the world is drawn at the window's own size and MetalFX is off"
+        announce = (
+            "        if (!saidWhole) {\n"
+            "            saidWhole = true;\n"
+            "            Vitrail.logger().info(\"" + message.replace('"', '\\"') + "\");\n"
+            "        }\n"
+        )
+        gate = (
+            "    if (asked >= WHOLE) {\n" + announce
+            + "        standDown(main);\n        return false;\n    }\n"
+        )
+        body = (
+            "    ensure(width, height, main.width, main.height);\n"
+            "    resizeOutline(width, height, true);\n\t}\n"
+        )
+        def tree(begin_inner: str, latch: str = "    saidWhole = false;\n") -> str:
+            return ("public static void wanted(int asked) {\n" + latch + "}\n"
+                    + "public static boolean beginWorld(RenderTarget main) {\n" + begin_inner) + end_world
+
+        # The scaled set allocated before the gate: the rule this file exists for.
+        scale.write_text(tree(body + gate), encoding="utf-8")
         if not fires(lambda: check_render_scale(scale, PACK_CHOICE, PACK_FILE)):
             raise SystemExit("render scale self-test: a scaled set allocated before the 100 per cent gate passed")
 
-        # And on the file as it is, which is the reading that has to hold: patch only the gate's position.
-        scale.write_text(
-            "public static boolean beginWorld(RenderTarget main) {\n"
-            "    if (asked >= WHOLE) {\n        standDown(main);\n        return false;\n    }\n"
-            "    ensure(width, height, main.width, main.height);\n"
-            "    resizeOutline(width, height, true);\n\t}\n"
-            "public static void endWorld(RenderTarget main, CommandEncoder encoder) {\n"
-            "    if (!swapped || main == null) {\n        return;\n    }\n"
-            "    boolean available = commands.vitrail$metalFxAvailable();\n"
-            "    RenderPipeline fallback = BILINEAR.get(device);\n\t}\n", encoding="utf-8")
+        # And the file as it should be, which is the reading that has to hold.
+        scale.write_text(tree(gate + body), encoding="utf-8")
         check_render_scale(scale, PACK_CHOICE, PACK_FILE)
+
+        # A latch that is never lifted: a live move to the off position would say nothing.
+        scale.write_text(tree(gate + body, latch=""), encoding="utf-8")
+        if not fires(lambda: check_render_scale(scale, PACK_CHOICE, PACK_FILE)):
+            raise SystemExit("render scale self-test: an off position whose latch is never lifted passed")
+
+        # And a 100 per cent branch that says nothing at all.
+        silent = "    if (asked >= WHOLE) {\n        standDown(main);\n        return false;\n    }\n"
+        scale.write_text(tree(silent + body), encoding="utf-8")
+        if not fires(lambda: check_render_scale(scale, PACK_CHOICE, PACK_FILE)):
+            raise SystemExit("render scale self-test: a 100 per cent branch that says nothing passed")
 
         # The words, on a locale tree missing one key.
         lang = root / "lang"

@@ -44,6 +44,22 @@ The last row is the one the checkbox must never produce on its own: `auto` is ke
 diagnostic word, and what it has always answered is Metal 4 selected with the Metal 3 reference shell doing
 the encoding. A plain launch with the box off now reads metal3 on all three fields instead.
 
+**The word it writes is a preference, not a force.** Metallum reads four words - `metal3`, `prefer-metal4`,
+`metal4` and `auto` - and this row's stored `metal4` becomes `prefer-metal4`: Metal 4 where the device satisfies
+its core contract, Metal 3 where it does not, with the reason said out loud in Metallum's own log line
+(`Metal 4 was preferred by the user but was not selected: ... - falling back to Metal 3`). The strict word stays
+the developer's, typed by hand as `-Dmetallum.execution=metal4`, where a device that cannot run Metal 4 fails the
+launch instead - and that is the right behaviour for a harness and the wrong one for a checkbox, which is why the
+two are separate words now. Measured end to end with the file holding `metal4` and no JVM argument:
+
+```text
+Vitrail Metal preference: Metal4 (experimental) as prefer-metal4 (from vitrail/metal-execution.txt)
+Metal execution: metal4 selected, metal4 executes (Metal 4 was preferred by the player and this device
+                 satisfies its core contract)
+Metal execution seam: selectedGeneration=metal4 executingGeneration=metal4 requestedPreference=prefer-metal4
+                      mode=own-path referenceShell=false
+```
+
 The switch cannot change the session it is clicked in. Which generation encodes the frame, the
 command queue and the shader profile are all decided while the device is created, so the option
 carries Sodium's restart-required flag, and the whole of the click's effect is one file written by

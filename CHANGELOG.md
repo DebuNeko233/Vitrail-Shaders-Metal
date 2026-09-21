@@ -15,6 +15,10 @@ what the next one holds.
 
 ### Changed
 
+- **The Metal 4 switch asks rather than demands.** Turning it on and restarting now runs Metal 4 on a
+  device that can take it and stays on the stable Metal 3 path, saying why, on one that cannot - where
+  the strict form was a startup failure with the game left to the outer backend list. `-Dmetallum.execution=metal4`
+  keeps its strict meaning for anyone testing the experimental path deliberately.
 - **100% now says what it means in the log as well as on the slider.** A session that scales a world
   announces its size and the road the picture comes back on; the 100% position, which draws at the
   window's own size with MetalFX off, announced nothing at all. It now says so once, so a log can be

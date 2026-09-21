@@ -160,6 +160,13 @@ A pack compile holds the world back, so the screen used to be the frame from bef
 
 ## P1 - Performance, Metal 4 and MetalFX (see `docs/performance.md`)
 
+- [x] **The Metal 4 switch asks rather than demands, and the backend work that goes with it is done in companion
+  Metallum.** `prefer-metal4` is the row's word now; the same audit round there made `persistentMapping` a
+  generation's answer instead of the device's, stopped a forced Metal 3 startup from running the Metal 4
+  functional probe (about 145 ms of a launch), and took the Metal 4 scaler out of the core capability contract.
+  Found on the way: a mid-pass dynamic-uniform write makes the Metal 4 frame encoder end the pass the game still
+  has open, and the pass has no resume - a frame-killing bug on the render scale's fallback road, recorded in
+  `metallum/docs/metal4-full-frame-report.md` and owed a fix. (2026-09-21)
 - [x] **Manual Metal 4 selection is exposed and Metal 3 is the default.** `--vanilla-clouds` beside it now takes
   `on|fast|off` so the flat cloud can be measured; the cloud defect it helped find is companion Metallum's (a
   texel-buffer binding dropped on the Metal 4 path, fixed and pinned there). Open on this side: the Metal 4

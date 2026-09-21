@@ -23,9 +23,15 @@ import java.util.Locale;
  * <p>
  * <strong>This is a control-layer choice and nothing else.</strong> It says which generation a session is
  * created for; it does not decide whether that generation is usable, and it must not. Metallum verifies its
- * own minimum contract and refuses a forced generation the device cannot satisfy, and this mod neither fakes
- * "Metal 4 supported" nor keeps a list of chip names. A player who turns Metal 4 on for a device that cannot
- * run it gets Metallum's own refusal, which is the honest answer.
+ * own minimum contract, and this mod neither fakes "Metal 4 supported" nor keeps a list of chip names.
+ * <p>
+ * <strong>And the word it writes is a preference rather than a force</strong>, which is the difference
+ * between a player and a test. Metallum reads four words: {@code metal3}, {@code prefer-metal4},
+ * {@code metal4} and {@code auto}. A file saying {@code metal4} - what this mod's own settings row writes -
+ * becomes {@code prefer-metal4}, so a player who turns the row on gets Metal 4 where the device satisfies
+ * its core contract and Metal 3, said out loud, where it does not: the setting is an opt-in to an
+ * experimental path, not a demand that the launch fail. A developer who wants the strict form types
+ * {@code -Dmetallum.execution=metal4} themselves, and that word is left exactly as it was given.
  * <p>
  * <strong>Changing it never changes the running session.</strong> The value is read by the device creation of
  * the <em>next</em> launch, so the settings screen's job is to write the file and say that a restart is owed;
@@ -35,10 +41,10 @@ import java.util.Locale;
 public enum MetallumExecutionChoice {
 
 	/** The stable path, and what a fresh install, a missing file and an unreadable one all mean. */
-	METAL3("metal3"),
+	METAL3("metal3", "metal3"),
 
-	/** The experimental path, chosen deliberately by the player. */
-	METAL4("metal4");
+	/** The experimental path, chosen deliberately by the player, and asked for as a preference. */
+	METAL4("metal4", "prefer-metal4");
 
 	/** What every launch that asks for nothing runs. */
 	public static final MetallumExecutionChoice DEFAULT = METAL3;
@@ -55,14 +61,31 @@ public enum MetallumExecutionChoice {
 	/** One word, beside {@code graphics-api.txt}, under the game's own directory. */
 	private static final String FILE = "metal-execution.txt";
 
+	/** The word this choice is stored as, which is also the word the settings row shows the player. */
 	private final String word;
 
-	MetallumExecutionChoice(String word) {
+	/**
+	 * The word pushed into {@code metallum.execution} for this choice.
+	 * <p>
+	 * Separate from {@link #word} because the two answer different questions and only one of them is a
+	 * promise: the file says which generation the player picked, and the property says how strongly they
+	 * picked it. Metal 4 from this screen is a preference - the device is still the one that decides - while
+	 * Metal 3 is the same word either way, there being nothing to prefer about a path that needs no contract
+	 * question.
+	 */
+	private final String propertyWord;
+
+	MetallumExecutionChoice(String word, String propertyWord) {
 		this.word = word;
+		this.propertyWord = propertyWord;
 	}
 
 	public String word() {
 		return this.word;
+	}
+
+	public String propertyWord() {
+		return this.propertyWord;
 	}
 
 	/** Whether this is the experimental path, which is what the settings screen's tooltip is about. */
@@ -179,8 +202,8 @@ public enum MetallumExecutionChoice {
 		Path file = file();
 		boolean stored = Files.isRegularFile(file);
 		MetallumExecutionChoice choice = readIn(file);
-		System.setProperty(PROPERTY, choice.word);
-		Vitrail.logger().info("Vitrail Metal preference: {} ({})", described(choice),
+		System.setProperty(PROPERTY, choice.propertyWord());
+		Vitrail.logger().info("Vitrail Metal preference: {} as {} ({})", described(choice), choice.propertyWord(),
 				stored ? "from vitrail/" + FILE : "the default: no readable vitrail/" + FILE);
 
 		return choice;
@@ -200,7 +223,7 @@ public enum MetallumExecutionChoice {
 	 */
 	private static MetallumExecutionChoice known(String word) {
 		for (MetallumExecutionChoice choice : values()) {
-			if (choice.word.equals(word)) {
+			if (choice.word.equals(word) || choice.propertyWord.equals(word)) {
 				return choice;
 			}
 		}

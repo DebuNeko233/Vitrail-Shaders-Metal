@@ -5,6 +5,15 @@ Scope: `feat/backend-neutral-sodium-terrain-hook`
 
 ## Confirmed from the current checkout
 
+- **The player's Metal 4 is a preference; the developer's is still a force.** The settings row's stored `metal4`
+  is written into `metallum.execution` as `prefer-metal4`, which Metallum resolves as Metal 4 where the device
+  satisfies its core contract and Metal 3, said out loud, where it does not - a checkbox is not a demand that the
+  launch fail. `-Dmetallum.execution=metal4` stays the strict word. Measured end to end with the file holding
+  `metal4` and no JVM argument: `Vitrail Metal preference: Metal4 (experimental) as prefer-metal4 (from
+  vitrail/metal-execution.txt)`, then Metallum's `metal4 selected, metal4 executes (Metal 4 was preferred by the
+  player and this device satisfies its core contract)` and the seam line at
+  `requestedPreference=prefer-metal4 mode=own-path`. The fallback leg was not driven live - it needs a device
+  without the Metal 4 core contract - and is pinned instead. (2026-09-21)
 - **The Metal generation is now a player setting, and it is read before the device exists.** `Vitrail.initClient`
   applies `MetallumExecutionChoice` (`vitrail/metal-execution.txt`, one word, default `metal3`) to the
   `metallum.execution` property, and only where the JVM left that property unset - an explicit
