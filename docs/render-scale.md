@@ -111,6 +111,13 @@ is `WHOLE` until the pack's own arrives with the pack load, so the frames before
 100 percent, no scaled target, no MetalFX - and the line says so. It is a statement about those frames and not
 about the session's setting.
 
+**The blit road was not force-triggered live, and the reason is worth keeping.** The backend's only switch for
+this - `-Dmetallum.probeNoMetalFx=true` - answers no at device-contract time rather than per frame, so on a
+forced Metal 4 launch it makes the device fail the Metal 4 minimum contract and the launch fails before any
+frame is drawn (the game then picks OpenGL after the backend is refused). The road itself is intact and pinned:
+the fallback stands after the scaler attempt in `endWorld`, and the `!swapped` return above both is what keeps it
+from running on a frame that was never scaled.
+
 **A device without it gets a blit.** Where MetalFX is not there to be used - an older system, a GPU that
 refuses the scaler, a backend that is not this one - the picture is brought back with a plain bilinear
 pass instead. The slider keeps working and the picture keeps arriving; what it loses is the sharpness,
