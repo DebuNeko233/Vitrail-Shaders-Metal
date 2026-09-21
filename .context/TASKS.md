@@ -165,6 +165,15 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   texel-buffer binding dropped on the Metal 4 path, fixed and pinned there). Open on this side: the Metal 4
   overworld frame is lighter than Metal 3's (sky and clouds shifted toward white), which is **NOT MEASURED**
   beyond its description and is separate from the cloud geometry. (2026-09-21)
+- [x] **The selection matrix, the pack cloud regression and the two scale ends are all measured, not argued.**
+  Six launches over the five rows of the precedence table (absent, stored `metal3`, stored `metal4`, both `-D`
+  directions, `auto`) with the file's content as the variable; Photon v1.3b with the game's own fancy clouds at
+  render scale 55 on both generations - Metal 3 7.31 ms a frame against Metal 4 7.32, both reading their scaled
+  1056x660 target and the MetalFX road, the two captures carrying the same cloud placement; and both scale ends
+  on both generations, where 100 per cent writes the new `The render scale is 100%, so the world is drawn at the
+  window's own size and MetalFX is off` line exactly once and no scaled-size or road line at all. Still open and
+  named as such: a **live 55 to 100 transition** was not driven (nothing in the harness moves a slider), and the
+  Metal 4 lightening residual above. (2026-09-21)
 
 - [ ] **M3's render half: the frame-path move was tried and reverted, and what it cost is now measured.**
   Moving `MetalCommandEncoder`, `MetalRenderPass` and `MetalFence` into `com.metallum.render.metal3` as a
