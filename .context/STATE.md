@@ -42,9 +42,16 @@ Scope: `feat/backend-neutral-sodium-terrain-hook`
   the scaled size; at 55 per cent both write `The world renders at 1056x660 for a 1920x1200 window, render scale
   55%` and `The 55% render scale brings the picture back with MetalFX`. `tests/test_metal_selection_and_scale.py`
   pins the line, the latch, the gate-before-allocation ordering and the `!swapped` return, with the three
-  mutations that break them caught. **A live 55 to 100 move was not driven** - `wanted()` is the slider's call and
-  nothing in the harness can move a slider - so what is measured is the two end states and the per-frame question
-  between them, not a transition in one session. (2026-09-21)
+  mutations that break them caught. **The 100 to 55 direction was then measured live, twice**, each in one Metal 4
+  + Photon session: once through the pack reload key after `pack.txt` was changed from 100 to 55 mid-session
+  (`The render scale is 100% ...` at 16:45:09, `[CHAT] Shaders Reloaded!` and `The world renders at 1056x660 ...
+  render scale 55%` and `The 55% render scale brings the picture back with MetalFX` all at 16:45:51), and once
+  with no input at all - the pack's own world-move reload applying the stored number to a frame loop that had not
+  had one yet (100 percent at 16:47:20, 55 percent at 16:47:24). Both sessions' logs are in
+  `metallum/run/scale-live-evidence/`. **The 55 to 100 direction is NOT MEASURED live**: once a pack's scale is in
+  force the file is re-read only by the reload key or a world move, and the owner chose not to drive the key. Also
+  worth knowing when reading a log: a 55 percent session can open with the 100 percent line, because the value is
+  `WHOLE` until the pack's own arrives - those frames really are native. (2026-09-21)
 - **A real pack draws its own clouds on both generations, at the same cost, once the Metal 4 cloud defect was
   fixed.** Photon v1.3b, vanilla clouds fancy, `renderscale=55` (so MetalFX is live), fullscreen at 1920x1200,
   one window of 120 frames per arm, the two arms differing only in `-Dmetallum.execution=`: Metal 3 **7.31 ms a

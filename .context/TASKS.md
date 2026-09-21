@@ -173,7 +173,10 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   on both generations, where 100 per cent writes the new `The render scale is 100%, so the world is drawn at the
   window's own size and MetalFX is off` line exactly once and no scaled-size or road line at all. Still open and
   named as such: a **live 55 to 100 transition** was not driven (nothing in the harness moves a slider), and the
-  Metal 4 lightening residual above. (2026-09-21)
+  Metal 4 lightening residual above. The **100 to 55 live move is measured** (pack reload key, and again
+  automatically through the pack's own world-move reload); the **55 to 100 live move is NOT MEASURED**, the owner
+  having declined the one keypress that would drive it - the value can only go up in a session through the reload
+  key or a world move, and the harness cannot move a slider. (2026-09-21)
 
 - [ ] **M3's render half: the frame-path move was tried and reverted, and what it cost is now measured.**
   Moving `MetalCommandEncoder`, `MetalRenderPass` and `MetalFence` into `com.metallum.render.metal3` as a

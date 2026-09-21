@@ -86,6 +86,31 @@ FSR 1.0 pair took 2.31 ms of a frame at 1800x1019 and MetalFX's encode takes 0.3
 setting now returns more of what it saves. The numbers and the fits behind them are in the performance
 plan.
 
+**And the setting moves under a running frame, which was measured rather than argued.** Metal 4 and Photon
+v1.3b, one session per observation, fullscreen at 1920x1200, the pack's own clouds and a scaled target:
+
+```text
+[16:45:09] The render scale is 100%, so the world is drawn at the window's own size and MetalFX is off
+[16:45:51] [CHAT] Shaders Reloaded!                     <- the pack reload key, pressed in the world
+[16:45:51] The world renders at 1056x660 for a 1920x1200 window, render scale 55%
+[16:45:51] The 55% render scale brings the picture back with MetalFX
+```
+
+That is the 100-to-55 direction with no restart and no relaunch: the reload re-read `pack.txt`, the new number
+reached `RenderScale.wanted`, and the next frame had a scaled target and the MetalFX road. The same direction was
+measured a second time without any input at all, because the pack's own world-move reload applies the stored
+number to a frame loop that has not had one yet - `The render scale is 100% ...` at 16:47:20 and
+`The world renders at 1056x660 ... render scale 55%` at 16:47:24, one session. **The 55-to-100 direction was
+not measured live**: after the pack's scale is in force the only things that re-read the file are the reload key
+and a world move, and neither could be driven in this session. What stands for it is the contract below - the
+100 percent gate before anything is allocated, `endWorld`'s return before the scaler or the fallback, and the
+latch a moved number lifts.
+
+**One reading to expect and not misread: a 55 percent session can begin with the 100 percent line.** The value
+is `WHOLE` until the pack's own arrives with the pack load, so the frames before that are genuinely native -
+100 percent, no scaled target, no MetalFX - and the line says so. It is a statement about those frames and not
+about the session's setting.
+
 **A device without it gets a blit.** Where MetalFX is not there to be used - an older system, a GPU that
 refuses the scaler, a backend that is not this one - the picture is brought back with a plain bilinear
 pass instead. The slider keeps working and the picture keeps arriving; what it loses is the sharpness,
