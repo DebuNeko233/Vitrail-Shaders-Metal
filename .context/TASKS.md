@@ -202,9 +202,26 @@ A pack compile holds the world back, so the screen used to be the frame from bef
   `metallum/docs/metal4-full-frame-report.md` and owed a fix. (2026-09-21)
 - [x] **Manual Metal 4 selection is exposed and Metal 3 is the default.** `--vanilla-clouds` beside it now takes
   `on|fast|off` so the flat cloud can be measured; the cloud defect it helped find is companion Metallum's (a
-  texel-buffer binding dropped on the Metal 4 path, fixed and pinned there). Open on this side: the Metal 4
-  overworld frame is lighter than Metal 3's (sky and clouds shifted toward white), which is **NOT MEASURED**
-  beyond its description and is separate from the cloud geometry. (2026-09-21)
+  texel-buffer binding dropped on the Metal 4 path, fixed and pinned there). (2026-09-21)
+- [x] **The "Metal 4 overworld is lighter" description is now a measurement, and it is the sky's upper gradient.**
+  Phase J1 of the companion audit: one scene on both generations (no pack, the game's own fancy cloud, overworld,
+  camera pinned at `548.5,63,-248.5 yaw 0 pitch 20`, fullscreen exclusive 1920x1200, four arms in A/B/A/B order
+  with two Metal 3 arms as the same-code control, `run/j1-sky4`). The control reads 0.01 mean channel difference
+  and 0.02 per cent of pixels, so the cross-generation 0.82 mean and 2.34 per cent of pixels above eight levels
+  (worst 72) is a reading of the generations. By region, every pixel classified by the reference arm's colour:
+  **sky** (54487 px, 2.4 per cent) `(154.5,180.9,242.1)` to `(189.1,206.7,243.9)` a mean delta of 34.64 with
+  98.85 per cent above eight levels; **cloud** and **terrain** identical **to the byte**. So the residual is the
+  sky alone - not a global transform, not the present road, not the colour space, and not the fog, since the
+  clouds go through the same fog state and are equal. Per channel the sky moves 0.3446 (red) and 0.3482 (green)
+  of its headroom to white and 0.1424 (blue), which is a mix of about **34.5 per cent toward (255, 256, 247)**,
+  and the row bands place it: 0.353 at the top tenth of the frame, 0.301 in the next, **0.001 at the horizon**.
+  Root cause is **NOT MEASURED**; the next step is the sky draw's colour input on the two paths, and the one
+  generation-specific difference by construction is the shader compiler profile (`msl4.0` on Metal 4 against
+  `msl3.2` on the reference), which needs a pinned-profile diagnostic to separate. The session also produced two
+  measurement-integrity findings now in Metallum's `docs/performance-testing.md`: a fullscreen launch moves the
+  display's mode, and a *non-exclusive* fullscreen client is put in its own Space, so a photograph of the display
+  is of whatever Space is current - the first attempt captured the browser four times while `lsappinfo front`
+  answered `java`. (2026-09-21)
 - [x] **The selection matrix, the pack cloud regression and the two scale ends are all measured, not argued.**
   Six launches over the five rows of the precedence table (absent, stored `metal3`, stored `metal4`, both `-D`
   directions, `auto`) with the file's content as the variable; Photon v1.3b with the game's own fancy clouds at

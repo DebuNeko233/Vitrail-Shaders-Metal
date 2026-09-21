@@ -5,6 +5,26 @@ Scope: `feat/backend-neutral-sodium-terrain-hook`
 
 ## Confirmed from the current checkout
 
+- **The Metal 4 overworld is lighter because its sky gradient's upper end is mixed about a third of the way to
+  white; the clouds and the terrain are byte-identical.** Phase J1 of the companion audit, one scene both
+  generations (no pack, the game's fancy cloud, overworld, camera pinned, fullscreen exclusive 1920x1200, four
+  arms in A/B/A/B order with two Metal 3 arms as the same-code control, `run/j1-sky4`): the control reads 0.01
+  mean channel difference and 0.02 per cent of pixels, and the cross-generation pair reads 0.82 mean with 2.34
+  per cent of pixels above eight levels (worst 72). By region, classified by the reference arm's colour, the sky
+  goes `(154.5,180.9,242.1)` to `(189.1,206.7,243.9)` - a mean delta of 34.64 over 98.85 per cent of its pixels -
+  while the cloud and the terrain regions are equal to the byte. The sky's channels move 0.3446 (red) and 0.3482
+  (green) of their headroom toward white and 0.1424 (blue), i.e. a mix of about 34.5 per cent toward
+  `(255, 256, 247)`, and the row bands put it at the top of the frame (0.353 in the top tenth, 0.001 at the
+  horizon). That excludes everything global - present road, colour space, and the fog, since the clouds share the
+  fog state and are equal - and leaves the sky draw's own colour input. Root cause **NOT MEASURED**; the one
+  generation-specific difference by construction is the shader compiler profile (`msl4.0` against `msl3.2`), which
+  needs a pinned-profile diagnostic. Two measurement-integrity facts came out of the same session and now live in
+  Metallum's `docs/performance-testing.md`: a fullscreen launch moves the display's mode (`1800x1169@120` to
+  `1920x1200@120` at every requested size), and a *non-exclusive* fullscreen client sits in its own Space, so a
+  photograph of the display shows whichever Space is current - the first attempt's four captures were the
+  browser while `lsappinfo front` answered `java`. The staged dev instance is left windowed
+  (`fullscreen:false`, `exclusiveFullscreen:false`) so a manual launch of it never moves the owner's display, and
+  the harness now records and restores the mode and puts the instance's options back after a session. (2026-09-21)
 - **A frame's period on the packed scene is mostly the client's own work, and the second population is the client
   tick.** Phase C3 of the companion audit decomposes the period from the two spans the Metal 4 trace already
   writes: `wallUs` is `begin(N) - begin(N-1)` and `encodeUs` is `commit(N) - begin(N)`, so `between(N) = wall(N) -
