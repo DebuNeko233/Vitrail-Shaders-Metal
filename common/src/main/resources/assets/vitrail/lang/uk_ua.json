@@ -5,6 +5,8 @@
 	"options.vitrail.crash_graphics_api.vulkan": "Vulkan",
 	"options.vitrail.crash_graphics_api.opengl": "OpenGL",
 	"options.vitrail.crash_graphics_api.game": "Game default",
+	"options.vitrail.metal4": "Metal 4 (Experimental)",
+	"options.vitrail.metal4_tooltip": "Uses Metallum's experimental Metal 4 renderer.\nOff uses the stable Metal 3 path.\nChanges take effect after restarting the game.\nMetal 4 is experimental and may still have compatibility or performance issues.",
 	"options.vitrail.shadow_distance": "Макс. відстань тіней",
 	"options.vitrail.shadow_distance_tooltip": "Дозволяє змінювати максимальну відстань для тіней. Місцевість та сутності за межами цієї відстані не відкидають тіні. Зменшення відстані тіней може значно підвищити продуктивність.",
 	"options.vitrail.shadow_distance_forced": "Ваш поточний пакет шейдерів уже встановив відстань візуалізації для тіней; ви не можете змінити це.",

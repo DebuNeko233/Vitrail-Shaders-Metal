@@ -5,6 +5,8 @@
 	"options.vitrail.crash_graphics_api.vulkan": "Vulkan",
 	"options.vitrail.crash_graphics_api.opengl": "OpenGL",
 	"options.vitrail.crash_graphics_api.game": "Game default",
+	"options.vitrail.metal4": "Metal 4（實驗性）",
+	"options.vitrail.metal4_tooltip": "使用 Metallum 的實驗性 Metal 4 算繪路徑。\n關閉時使用穩定的 Metal 3。\n變更將在重新啟動遊戲後生效。\nMetal 4 仍處於實驗階段，可能存在相容性或效能問題。",
 	"options.vitrail.shadow_distance": "最大陰影距離",
 	"options.vitrail.shadow_distance_tooltip": "能讓您變更陰影的最大距離。超出此距離的地形和實體將不會有陰影。降低陰影距離能顯著提升效能。",
 	"options.vitrail.shadow_distance_forced": "您無法變更目前光影包所設定的陰影顯示距離。",

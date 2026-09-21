@@ -77,6 +77,14 @@ public final class ScreenText {
 	public static final String RENDER_SCALE = "options.vitrail.render_scale";
 	public static final String RENDER_SCALE_TOOLTIP = "options.vitrail.render_scale_tooltip";
 
+	/**
+	 * Whether the next launch runs Metallum's experimental Metal 4 renderer: the row that says so,
+	 * and the tooltip that has to carry three facts - what it does, that a restart is owed, and
+	 * that the path is experimental. This mod's own strings; the reference has no counterpart.
+	 */
+	public static final String METAL4 = "options.vitrail.metal4";
+	public static final String METAL4_TOOLTIP = "options.vitrail.metal4_tooltip";
+
 
 	/**
 	 * How large the compiled-shader disk store may grow. No counterpart in Iris, so both strings

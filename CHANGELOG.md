@@ -23,6 +23,16 @@ what the next one holds.
   those is missing says which one it is missing instead of asking for a flag, and a session already
   on Metal is never told to switch its graphics API.
 
+### Added
+
+- **Metal 4 is now a switch in the video settings, off by default.** "Metal 4 (Experimental)" on
+  Vitrail's own settings page writes the choice to `vitrail/metal-execution.txt`, and the next
+  launch runs Metallum's Metal 4 renderer. Off, a fresh install, a missing file and an unreadable
+  one all mean Metal 3, and Metallum still decides whether a device can run Metal 4 at all - a
+  device that cannot says so at startup rather than being quietly given the other path. The switch
+  is read before the graphics device is created, so it cannot take effect in the session in front of
+  you: turning it on or off asks for a restart, which the option says on its own row.
+
 ## 0.12.0-metal-beta
 
 ### Added

@@ -1,5 +1,6 @@
 package dev.vitrail;
 
+import dev.vitrail.compat.metallum.MetallumExecutionChoice;
 import dev.vitrail.platform.VitrailPlatform;
 
 import org.slf4j.Logger;
@@ -145,6 +146,12 @@ public final class Vitrail {
 		}
 
 		platform = loaderPlatform;
+
+		// Before anything else this mod does, and this method is the only place it can be: Metallum reads
+		// `metallum.execution` once, while it creates the Metal device, which is after this call on both
+		// loaders and before any settings screen could be built. The stored choice reaches the property only
+		// where the JVM did not name a generation of its own; see MetallumExecutionChoice.apply.
+		MetallumExecutionChoice.apply();
 
 		LOGGER.info("Vitrail {} starting on {} {}, Minecraft {}",
 				loaderPlatform.modVersion(),

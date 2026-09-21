@@ -5,6 +5,8 @@
 	"options.vitrail.crash_graphics_api.vulkan": "Vulkan",
 	"options.vitrail.crash_graphics_api.opengl": "OpenGL",
 	"options.vitrail.crash_graphics_api.game": "Game default",
+	"options.vitrail.metal4": "Metal 4 (Experimental)",
+	"options.vitrail.metal4_tooltip": "Uses Metallum's experimental Metal 4 renderer.\nOff uses the stable Metal 3 path.\nChanges take effect after restarting the game.\nMetal 4 is experimental and may still have compatibility or performance issues.",
 	"options.vitrail.shadow_distance": "Дальность теней",
 	"options.vitrail.shadow_distance_tooltip": "Позволяет изменять максимальное расстояние видимости теней. Блоки и сущности за его пределами не будут иметь теней. Снижая этот параметр, вы можете значительно улучшить производительность.",
 	"options.vitrail.shadow_distance_forced": "Ваш текущий набор шейдеров уже установил своё расстояние для теней; вы не сможете его изменить.",

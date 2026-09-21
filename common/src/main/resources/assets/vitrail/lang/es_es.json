@@ -5,6 +5,8 @@
 	"options.vitrail.crash_graphics_api.vulkan": "Vulkan",
 	"options.vitrail.crash_graphics_api.opengl": "OpenGL",
 	"options.vitrail.crash_graphics_api.game": "Game default",
+	"options.vitrail.metal4": "Metal 4 (Experimental)",
+	"options.vitrail.metal4_tooltip": "Uses Metallum's experimental Metal 4 renderer.\nOff uses the stable Metal 3 path.\nChanges take effect after restarting the game.\nMetal 4 is experimental and may still have compatibility or performance issues.",
 	"options.vitrail.shadow_distance": "Máxima Distancia de Sombras",
 	"options.vitrail.shadow_distance_tooltip": "Te permite cambiar la distáncia máxima para las sombras. El terreno y las entidades tras esta distáncia no emitirán sombras. Reducir la distáncia de sombras puede incrementar el rendimiento significativamente.",
 	"options.vitrail.shadow_distance_forced": "Tu shader pack ya ha establecido una distáncia de renderizado para las sombreas; no puedes cambiarla.",

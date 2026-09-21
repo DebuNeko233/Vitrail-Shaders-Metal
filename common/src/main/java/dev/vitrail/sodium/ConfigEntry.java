@@ -1,6 +1,7 @@
 package dev.vitrail.sodium;
 
 import dev.vitrail.cache.ModuleCache;
+import dev.vitrail.compat.metallum.MetallumExecutionChoice;
 import dev.vitrail.HostReport;
 import dev.vitrail.IrisBeside;
 import dev.vitrail.render.PackChoice;
@@ -15,6 +16,7 @@ import dev.vitrail.Vitrail;
 
 import net.caffeinemc.mods.sodium.api.config.ConfigEntryPoint;
 import net.caffeinemc.mods.sodium.api.config.ConfigState;
+import net.caffeinemc.mods.sodium.api.config.option.OptionFlag;
 import net.caffeinemc.mods.sodium.api.config.option.OptionImpact;
 import net.caffeinemc.mods.sodium.api.config.option.Range;
 import net.caffeinemc.mods.sodium.api.config.structure.ConfigBuilder;
@@ -89,6 +91,13 @@ public final class ConfigEntry implements ConfigEntryPoint {
 	private static final Identifier GRAPHICS_API =
 			Identifier.fromNamespaceAndPath(Vitrail.MOD_ID, "graphics_api");
 
+	/**
+	 * Which Metal generation the next launch runs, which is the one option here that is about the backend
+	 * rather than about what the pack draws.
+	 */
+	private static final Identifier METAL4 =
+			Identifier.fromNamespaceAndPath(Vitrail.MOD_ID, "metal4");
+
 	/** How large the compiled-shader disk store may grow, on the engine page. */
 	private static final Identifier MODULE_CACHE_CEILING =
 			Identifier.fromNamespaceAndPath(Vitrail.MOD_ID, "module_cache_ceiling");
@@ -123,9 +132,13 @@ public final class ConfigEntry implements ConfigEntryPoint {
 			options.addPage(builder.createOptionPage()
 					.setName(Component.translatable(ScreenText.PAGE_TITLE))
 					.addOptionGroup(builder.createOptionGroup()
+							// The backend first and the pack's own sliders after it: which generation encodes
+							// the frame is a more basic question than any of the numbers below it, and the
+							// page is read from the top.
+							.addOption(metal4(builder))
+							.addOption(renderScale(builder))
 							.addOption(shadowDistance(builder))
 							.addOption(shadowMapScale(builder))
-							.addOption(renderScale(builder))
 							.addOption(shadowAmortisation(builder))
 							.addOption(graphicsApi(builder))
 							.addOption(moduleCacheCeiling(builder))));
@@ -170,6 +183,48 @@ public final class ConfigEntry implements ConfigEntryPoint {
 						.setAllowedValuesProvider(
 								state -> TerrainDraw.asked() ? WITHOUT_RGSS : EVERY_METHOD,
 								ConfigState.UPDATE_ON_REBUILD));
+	}
+
+	/**
+	 * Whether the next launch runs Metallum's experimental Metal 4 renderer.
+	 * <p>
+	 * <strong>One word in a file of its own, and this option is the whole of its UI.</strong> The value is
+	 * read before the graphics device is created, so it cannot be a pack setting: {@code vitrail/pack.txt}
+	 * and {@code vitrail/options.txt} are both read long after that, and the second belongs to the shader
+	 * pack's own settings rather than to the backend. {@link MetallumExecutionChoice} owns the file and the
+	 * property Metallum reads; this option writes it and shows it.
+	 * <p>
+	 * <strong>The toggle never changes the running session.</strong> Clicking it writes the file and nothing
+	 * else: the backend, the command queue and the shader profile of the session in front of the player are
+	 * untouched, which is what {@link OptionFlag#REQUIRES_GAME_RESTART} says to the screen and to the player.
+	 * A live switch is not a thing this engine can do, and pretending otherwise would be a session whose log
+	 * and whose device disagreed.
+	 * <p>
+	 * <strong>It does not claim the device can run Metal 4.</strong> Metallum verifies its own minimum
+	 * contract at device creation and refuses a forced generation the device cannot satisfy; nothing here
+	 * reads a chip name or pre-empts that answer, so a player who turns this on for a device that cannot run
+	 * it gets Metallum's own refusal rather than a checkbox that lied.
+	 * <p>
+	 * No impact is declared, for the reason the crash-recovery choice below gives: this decides what a
+	 * <em>later</em> launch starts on and costs the running frame nothing, and Sodium's impact labels are
+	 * about the frame being drawn.
+	 */
+	private static OptionBuilder metal4(ConfigBuilder builder) {
+		return builder.createBooleanOption(METAL4)
+				.setName(Component.translatable(ScreenText.METAL4))
+				.setTooltip(_ -> Component.translatable(ScreenText.METAL4_TOOLTIP))
+				.setDefaultValue(MetallumExecutionChoice.DEFAULT.experimental())
+				.setBinding(chosen -> MetallumExecutionChoice.write(Vitrail.platform().gameDirectory(),
+								chosen ? MetallumExecutionChoice.METAL4 : MetallumExecutionChoice.METAL3),
+						() -> MetallumExecutionChoice.read() == MetallumExecutionChoice.METAL4)
+				// Empty for the same reason the two sliders below leave it empty, and required for the same
+				// reason: Sodium refuses to build a stateful option without one. The binding has written the
+				// file.
+				.setStorageHandler(() -> {})
+				// The screen's own restart-required UX, rather than a notification of ours: the option is
+				// about a decision the running process has already made, and Sodium already has the place a
+				// player is told that.
+				.setFlags(OptionFlag.REQUIRES_GAME_RESTART);
 	}
 
 	/**

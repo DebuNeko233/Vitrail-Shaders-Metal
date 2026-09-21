@@ -6,6 +6,8 @@
 	"options.vitrail.crash_graphics_api.vulkan": "Vulkan",
 	"options.vitrail.crash_graphics_api.opengl": "OpenGL",
 	"options.vitrail.crash_graphics_api.game": "Défaut du jeu",
+	"options.vitrail.metal4": "Metal 4 (Experimental)",
+	"options.vitrail.metal4_tooltip": "Uses Metallum's experimental Metal 4 renderer.\nOff uses the stable Metal 3 path.\nChanges take effect after restarting the game.\nMetal 4 is experimental and may still have compatibility or performance issues.",
 	"options.vitrail.shadow_distance": "Distance d'ombre",
 	"options.vitrail.shadow_distance_tooltip": "Le terrain et les entités au-delà ne projettent plus d'ombre.\nPlus bas, plus rapide. \"Désactivé\" saute la carte d'ombres.\nS'applique tout de suite. Pas de rechargement du pack.",
 	"options.vitrail.shadow_distance_forced": "Ce pack a déjà fixé sa distance d'ombre. Le curseur ne bouge pas.",

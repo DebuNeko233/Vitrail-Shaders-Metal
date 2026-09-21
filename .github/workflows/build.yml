@@ -47,6 +47,8 @@ jobs:
         run: |
           python3 tests/test_backend_neutrality_contract.py --self-test
           python3 tests/test_backend_neutrality_contract.py
+          python3 tests/test_metal_selection_and_scale.py --self-test
+          python3 tests/test_metal_selection_and_scale.py
           python3 tests/test_debug_entry_lines.py
           python3 tests/test_metallum_compute_bridge.py
           python3 tests/test_metallum_status.py

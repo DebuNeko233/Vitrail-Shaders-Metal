@@ -5,6 +5,8 @@
 	"options.vitrail.crash_graphics_api.vulkan": "Vulkan",
 	"options.vitrail.crash_graphics_api.opengl": "OpenGL",
 	"options.vitrail.crash_graphics_api.game": "Game default",
+	"options.vitrail.metal4": "Metal 4 (Experimental)",
+	"options.vitrail.metal4_tooltip": "Uses Metallum's experimental Metal 4 renderer.\nOff uses the stable Metal 3 path.\nChanges take effect after restarting the game.\nMetal 4 is experimental and may still have compatibility or performance issues.",
 	"options.vitrail.shadow_distance": "Massima Distanza delle ombre",
 	"options.vitrail.shadow_distance_tooltip": "Permette di cambiare la massima distanza per le ombre. Terreno ed entità oltre questa distanza non creeranno ombre. Abbassare questa opzione può aumentare la tua performance di molto.",
 	"options.vitrail.shadow_distance_forced": "La tua shader pack corrente ha già una distanza per le ombre e non puoi cambiarla.",
