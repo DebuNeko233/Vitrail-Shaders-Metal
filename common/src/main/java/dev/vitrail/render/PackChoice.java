@@ -935,6 +935,13 @@ public final class PackChoice {
 	 * the pack changes, only the size the world is handed.
 	 */
 	public static void renderScale(Path gameDirectory, int percent) {
+		// Named, because this is the only writer of the stored render scale in the tree and the file is the
+		// player's own setting. A slider the player moved and a caller nobody asked for write the same line
+		// here, so the difference is only visible if the caller is written down: measured, a 67 per cent
+		// scale was reset to 100 between one measurement client's exit and the next one's read, and the file
+		// watcher could say *when* but not *who*.
+		Vitrail.logger().info("Vitrail render scale written: {}% (was {}%), asked by {}",
+				percent, askedFor.renderScale(), whoAsked());
 		askedFor = askedFor.withRenderScale(percent);
 		RenderScale.wanted(askedFor.renderScale());
 
@@ -944,6 +951,24 @@ public final class PackChoice {
 		} catch (IOException | RuntimeException e) {
 			Vitrail.logger().error("Vitrail could not write the render scale to {}", file, e);
 		}
+	}
+
+	/**
+	 * The first caller outside this class that asked for the write, which is what the line above exists for.
+	 * <p>
+	 * The slider's binding is the only caller today, and it arrives through
+	 * {@code dev.vitrail.sodium.ConfigEntry}; anything else - a config rebuild applying an option's default,
+	 * a shutdown road - is the defect this names rather than a write to be argued about from timings.
+	 */
+	private static String whoAsked() {
+		StackTraceElement[] trace = Thread.currentThread().getStackTrace();
+		for (StackTraceElement frame : trace) {
+			String owner = frame.getClassName();
+			if (owner.startsWith("dev.vitrail.") && !owner.equals(PackChoice.class.getName())) {
+				return owner + "." + frame.getMethodName() + ":" + frame.getLineNumber();
+			}
+		}
+		return "a caller outside dev.vitrail (" + (trace.length > 3 ? trace[3].toString() : "unknown") + ")";
 	}
 
 	/**

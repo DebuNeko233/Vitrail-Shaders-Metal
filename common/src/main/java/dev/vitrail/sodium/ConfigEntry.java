@@ -247,7 +247,15 @@ public final class ConfigEntry implements ConfigEntryPoint {
 		return builder.createIntegerOption(RENDER_SCALE)
 				.setName(Component.translatable(ScreenText.RENDER_SCALE))
 				.setTooltip(_ -> Component.translatable(ScreenText.RENDER_SCALE_TOOLTIP))
-				.setDefaultValue(PackFile.DEFAULT_RENDER_SCALE)
+				// The default is what this engine already holds and not the file format's own default, and that
+				// is the difference between a no-op and a bug: Sodium applies an option's default through its
+				// setter, and the setter here writes the player's `pack.txt`. Measured, a client given 67 per
+				// cent wrote `renderscale=100` from this very road before its world loaded, reset the live
+				// scale to native and left a measurement arm refused - and for a player it is their stored
+				// setting moving on its own. With the default taken from the file, applying it writes back
+				// what was already there. The cost is that the page's own "reset" returns to the stored value
+				// for a setting whose storage *is* that file, which is what the getter below already says.
+				.setDefaultValue(PackChoice.renderScale())
 				.setRange(new Range(PackFile.MIN_RENDER_SCALE, PackFile.MAX_RENDER_SCALE, 5))
 				.setBinding(percent -> PackChoice.renderScale(Vitrail.platform().gameDirectory(),
 								percent),
@@ -281,7 +289,9 @@ public final class ConfigEntry implements ConfigEntryPoint {
 		return builder.createIntegerOption(SHADOW_MAP_SCALE)
 				.setName(Component.translatable(ScreenText.SHADOW_MAP_SCALE))
 				.setTooltip(_ -> Component.translatable(ScreenText.SHADOW_MAP_SCALE_TOOLTIP))
-				.setDefaultValue(PackFile.DEFAULT_SHADOW_MAP_SCALE)
+				// The slider above's reasons, and its defect: a default is applied through the setter, and the
+				// setter writes `pack.txt`.
+				.setDefaultValue(PackChoice.shadowMapScale())
 				.setRange(new Range(PackFile.MIN_SHADOW_MAP_SCALE, PackFile.MAX_SHADOW_MAP_SCALE, 5))
 				.setBinding(percent -> PackChoice.shadowMapScale(Vitrail.platform().gameDirectory(),
 								percent),
@@ -404,7 +414,11 @@ public final class ConfigEntry implements ConfigEntryPoint {
 						TerrainDraw.forcedShadowDistanceChunks().isPresent()
 								? ScreenText.SHADOW_DISTANCE_FORCED
 								: ScreenText.SHADOW_DISTANCE_TOOLTIP))
-				.setDefaultValue(PackFile.DEFAULT_SHADOW_DISTANCE)
+				// Same road as the two sliders below it, and its own getter is the live value the game was
+				// given rather than a field of `pack.txt`: the default is that value, clamped exactly as the
+				// getter clamps it, so an applied default writes back what is already in force.
+				.setDefaultValue(Math.clamp(TerrainDraw.shadowDistanceChunks(),
+						PackFile.MIN_SHADOW_DISTANCE, PackFile.MAX_SHADOW_DISTANCE))
 				.setRange(new Range(PackFile.MIN_SHADOW_DISTANCE, PackFile.MAX_SHADOW_DISTANCE, 1))
 				.setBinding(chunks -> PackChoice.shadowDistance(Vitrail.platform().gameDirectory(),
 								chunks),

@@ -217,6 +217,33 @@ def check_render_scale(render_scale: Path, pack_choice: Path, pack_file: Path) -
                          "meaning is documented as \"off\" is not reachable")
 
 
+def check_option_defaults(config_entry: Path) -> None:
+    """A Sodium default is applied through the option's setter, and these setters write `pack.txt`.
+
+    Measured: a client given 67 per cent wrote `renderscale=100` from this very road before its world loaded,
+    reset the live scale to native, and left a measurement arm refused - and for a player it is their stored
+    setting moving on its own. The three file-backed options therefore take their default from what the engine
+    already holds, so applying one writes back what was already there.
+    """
+    text = read(config_entry)
+    for wanted in (
+        ".setDefaultValue(PackChoice.renderScale())",
+        ".setDefaultValue(PackChoice.shadowMapScale())",
+        ".setDefaultValue(Math.clamp(TerrainDraw.shadowDistanceChunks(),",
+    ):
+        if wanted not in text:
+            raise SystemExit(f"render scale contract: {wanted} is not the option's default, so a Sodium default "
+                             "applied through the setter overwrites the player's stored setting")
+    for forbidden in (
+        ".setDefaultValue(PackFile.DEFAULT_RENDER_SCALE)",
+        ".setDefaultValue(PackFile.DEFAULT_SHADOW_MAP_SCALE)",
+        ".setDefaultValue(PackFile.DEFAULT_SHADOW_DISTANCE)",
+    ):
+        if forbidden in text:
+            raise SystemExit(f"render scale contract: {forbidden} is back, so the setting's default is the file "
+                             "format's rather than what the engine holds")
+
+
 def check_language(lang: Path, screen_text: Path) -> None:
     """Every key the screen can ask for exists in en_us, and no locale invents one."""
     en = json.loads((lang / "en_us.json").read_text(encoding="utf-8"))
@@ -476,6 +503,7 @@ def main() -> int:
     check_choice(CHOICE, VITRAIL)
     check_toggle(CONFIG_ENTRY)
     check_render_scale(RENDER_SCALE, PACK_CHOICE, PACK_FILE)
+    check_option_defaults(CONFIG_ENTRY)
     check_language(LANG, SCREEN_TEXT)
     check_scale_wording(LANG)
 
