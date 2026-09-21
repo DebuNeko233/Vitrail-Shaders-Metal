@@ -28,6 +28,14 @@ is off by default, and what it does is write one word - `metal3` or `metal4` - t
 decides for itself whether a device can run Metal 4, so the row never claims support it has not
 asked about and keeps no list of chip names.
 
+The precedence is measured, not just intended: with no file and no property the log reads
+`Vitrail Metal preference: Metal3 (the default: no readable vitrail/metal-execution.txt)` and Metallum's seam
+line reads `requestedPreference=metal3 selectedGeneration=metal3 executingGeneration=metal3`; with the file
+holding `metal4` both read Metal 4 and selected and executing agree; with the file holding `metal4` and
+`-Dmetallum.execution=metal3` on the command line the reference runs and the line says the stored choice was not
+applied; and `-Dmetallum.execution=auto` still hands the question to Metallum, which answers it the way its own
+diagnostic always has (`metal4 selected, metal3 executes`).
+
 The switch cannot change the session it is clicked in. Which generation encodes the frame, the
 command queue and the shader profile are all decided while the device is created, so the option
 carries Sodium's restart-required flag and the screen tells the player a restart is owed rather than

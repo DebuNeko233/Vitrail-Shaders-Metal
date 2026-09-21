@@ -161,21 +161,29 @@ public enum MetallumExecutionChoice {
 	public static MetallumExecutionChoice apply() {
 		String asked = System.getProperty(PROPERTY);
 		if (asked != null) {
+			// The property stays exactly as the JVM set it, whatever it says: Metallum is the one that reads
+			// it, and a word this setting does not know - `auto` is the one that exists - is Metallum's to
+			// answer rather than this class's to refuse. The line below is only a reading of what will happen.
 			MetallumExecutionChoice named = known(asked.trim().toLowerCase(Locale.ROOT));
 			Vitrail.logger().info("Vitrail Metal preference: {} (asked for by -D{}={}, so the stored choice is"
 					+ " not applied)", named == null
-							? DEFAULT.word + " for \"" + asked.trim() + "\", which is not one of metal3 or metal4"
+							? "left to Metallum, which does not answer \"" + asked.trim() + "\" with Metal 4"
 							: described(named),
 					PROPERTY, asked);
 
 			return named == null ? DEFAULT : named;
 		}
 
-		MetallumExecutionChoice stored = read();
-		System.setProperty(PROPERTY, stored.word);
-		Vitrail.logger().info("Vitrail Metal preference: {} (from vitrail/{})", described(stored), FILE);
+		// The file's absence is said as itself: a default and a stored choice are the same word and not the
+		// same fact, and a reader of this line has to be able to tell a fresh install from a setting.
+		Path file = file();
+		boolean stored = Files.isRegularFile(file);
+		MetallumExecutionChoice choice = readIn(file);
+		System.setProperty(PROPERTY, choice.word);
+		Vitrail.logger().info("Vitrail Metal preference: {} ({})", described(choice),
+				stored ? "from vitrail/" + FILE : "the default: no readable vitrail/" + FILE);
 
-		return stored;
+		return choice;
 	}
 
 	/** A generation as a log line and a tooltip say it, experimental paths named as such. */

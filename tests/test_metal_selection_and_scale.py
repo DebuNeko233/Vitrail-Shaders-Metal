@@ -76,7 +76,7 @@ def check_choice(choice: Path, vitrail: Path) -> None:
 
     # The precedence rule, in the order the method has to have it: the JVM's word is read first and answered
     # with, and the property is written only on the road where it was absent.
-    before("if (asked != null) {", "System.setProperty(PROPERTY, stored.word);", text,
+    before("if (asked != null) {", "System.setProperty(PROPERTY, choice.word);", text,
            "metal selection contract: an explicit -D would be overwritten by the stored setting, so a harness "
            "that asked for a generation could be handed the other one")
     if text.count("System.setProperty(") != 1:
@@ -252,7 +252,7 @@ def self_test() -> None:
             "public static MetallumExecutionChoice apply() {\n"
             "    String asked = System.getProperty(PROPERTY);\n"
             "    if (asked != null) {\n        return known(asked);\n    }\n"
-            "    System.setProperty(PROPERTY, stored.word);\n    return stored;\n}\n",
+            "    System.setProperty(PROPERTY, choice.word);\n    return choice;\n}\n",
             encoding="utf-8")
         vitrail.write_text(
             "platform = loaderPlatform;\nMetallumExecutionChoice.apply();\n"
@@ -279,7 +279,8 @@ def self_test() -> None:
             "public static MetallumExecutionChoice apply() {\n"
             "    String asked = System.getProperty(PROPERTY);\n"
             "    if (asked != null) {\n        return known(asked);\n    }\n"
-            "    System.setProperty(PROPERTY, stored.word);\n    return stored;\n}\n"
+            "    MetallumExecutionChoice choice = readIn(file());\n"
+            "    System.setProperty(PROPERTY, choice.word);\n    return choice;\n}\n"
             "    static { System.setProperty(PROPERTY, \"metal3\"); }\n", encoding="utf-8")
         if not fires(lambda: check_choice(choice, vitrail)):
             raise SystemExit("metal selection self-test: a second, unconditional property write passed")

@@ -14,7 +14,7 @@ Scope: `feat/backend-neutral-sodium-terrain-hook`
   flagged `REQUIRES_GAME_RESTART`, and its binding writes the file and takes nothing else - the running session's
   generation cannot change. `tests/test_metal_selection_and_scale.py` pins the storage, the precedence, the
   entry-point ordering, the restart flag, the inert binding, the 100 per cent scale semantics and the locale keys,
-  with a mutation-proving `--self-test`. (2026-09-21)
+  with a mutation-proving `--self-test`. The precedence is also measured live: no file and no property reads `the default: no readable vitrail/metal-execution.txt` with the seam line at metal3/metal3; a stored `metal4` runs Metal 4; a stored `metal4` with `-Dmetallum.execution=metal3` runs the reference and says the stored choice was not applied; and `-Dmetallum.execution=auto` keeps its old diagnostic answer (`metal4 selected, metal3 executes`). (2026-09-21)
 - **The performance harness had been staging the nether, and its scenes could not contain a sky or a cloud.**
   A player record carries the dimension it was last in; the staged world holds 81 records in the overworld and 9
   in the nether at the world spawn, and the nine are the profiles the dev instance joins as. `freeze-world.py`
