@@ -28,20 +28,32 @@ is off by default, and what it does is write one word - `metal3` or `metal4` - t
 decides for itself whether a device can run Metal 4, so the row never claims support it has not
 asked about and keeps no list of chip names.
 
-The precedence is measured, not just intended: with no file and no property the log reads
-`Vitrail Metal preference: Metal3 (the default: no readable vitrail/metal-execution.txt)` and Metallum's seam
-line reads `requestedPreference=metal3 selectedGeneration=metal3 executingGeneration=metal3`; with the file
-holding `metal4` both read Metal 4 and selected and executing agree; with the file holding `metal4` and
-`-Dmetallum.execution=metal3` on the command line the reference runs and the line says the stored choice was not
-applied; and `-Dmetallum.execution=auto` still hands the question to Metallum, which answers it the way its own
-diagnostic always has (`metal4 selected, metal3 executes`).
+The precedence is measured rather than intended - every row below is one launch of the dev instance, reading
+the two lines the startup writes, and the file's own content is the column rather than a description of it:
+
+| `vitrail/metal-execution.txt` | `-Dmetallum.execution=` | Vitrail's line | Metallum's seam line |
+| --- | --- | --- | --- |
+| absent | absent | `Metal3 (the default: no readable vitrail/metal-execution.txt)` | `requestedPreference=metal3 selectedGeneration=metal3 executingGeneration=metal3` |
+| `metal3` | absent | `Metal3 (from vitrail/metal-execution.txt)` | metal3 / metal3 |
+| `metal4` | absent | `Metal4 (experimental) (from vitrail/metal-execution.txt)` | metal4 / metal4 |
+| `metal4` | `metal3` | `Metal3 (asked for by -Dmetallum.execution=metal3, so the stored choice is not applied)` | metal3 / metal3 |
+| `metal3` | `metal4` | `Metal4 (experimental) (asked for by -Dmetallum.execution=metal4, so the stored choice is not applied)` | metal4 / metal4 |
+| `metal4` | `auto` | - (the property is left as the JVM wrote it) | `selectedGeneration=metal4 executingGeneration=metal3 requestedPreference=auto mode=reference-shell referenceShell=true` |
+
+The last row is the one the checkbox must never produce on its own: `auto` is kept as the harnesses'
+diagnostic word, and what it has always answered is Metal 4 selected with the Metal 3 reference shell doing
+the encoding. A plain launch with the box off now reads metal3 on all three fields instead.
 
 The switch cannot change the session it is clicked in. Which generation encodes the frame, the
 command queue and the shader profile are all decided while the device is created, so the option
-carries Sodium's restart-required flag and the screen tells the player a restart is owed rather than
-pretending the click did something. An explicit `-Dmetallum.execution=` on the command line outranks
-the stored choice in both directions, which is what keeps the development harnesses measuring the
-generation they asked for.
+carries Sodium's restart-required flag, and that flag is not decorative: Sodium's own
+`Config.processFlags` answers it with `Config.onGameNeedsRestart()`, which raises a warning through
+its console sink - `sodium.console.game_restart`, "The game must be restarted to apply one or more
+video settings!" - so the player is told a restart is owed rather than left thinking the click did
+something. Vitrail adds no notification of its own for this, because Sodium already has the place.
+
+An explicit `-Dmetallum.execution=` on the command line outranks the stored choice in both
+directions, which is what keeps the development harnesses measuring the generation they asked for.
 
 ## Two views, one screen
 

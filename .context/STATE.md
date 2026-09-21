@@ -14,13 +14,35 @@ Scope: `feat/backend-neutral-sodium-terrain-hook`
   flagged `REQUIRES_GAME_RESTART`, and its binding writes the file and takes nothing else - the running session's
   generation cannot change. `tests/test_metal_selection_and_scale.py` pins the storage, the precedence, the
   entry-point ordering, the restart flag, the inert binding, the 100 per cent scale semantics and the locale keys,
-  with a mutation-proving `--self-test`. The precedence is also measured live: no file and no property reads `the default: no readable vitrail/metal-execution.txt` with the seam line at metal3/metal3; a stored `metal4` runs Metal 4; a stored `metal4` with `-Dmetallum.execution=metal3` runs the reference and says the stored choice was not applied; and `-Dmetallum.execution=auto` keeps its old diagnostic answer (`metal4 selected, metal3 executes`). (2026-09-21)
+  with a mutation-proving `--self-test`. Six launches of the dev instance measure the precedence end to end, the
+  file's content being the variable: absent + no property reads `the default: no readable
+  vitrail/metal-execution.txt` with the seam line at metal3/metal3; a stored `metal3` reads `from
+  vitrail/metal-execution.txt` at metal3/metal3; a stored `metal4` runs Metal 4; a stored `metal4` under
+  `-Dmetallum.execution=metal3` runs the reference and says the stored choice was not applied; a stored `metal3`
+  under `-Dmetallum.execution=metal4` runs Metal 4 with the same sentence; and `-Dmetallum.execution=auto` keeps
+  its old diagnostic answer (`metal4 selected, metal3 executes`, `mode=reference-shell`, `referenceShell=true`) -
+  which is the combination a plain launch with the box off no longer produces. The
+  `REQUIRES_GAME_RESTART` flag was checked against Sodium's own code rather than assumed: `Config.processFlags`
+  answers it with `Config.onGameNeedsRestart()`, a WARN through the console sink (`sodium.console.game_restart`,
+  "The game must be restarted to apply one or more video settings!"), so the player is told. `docs/settings-screen.md`
+  carries the table. (2026-09-21)
 - **The performance harness had been staging the nether, and its scenes could not contain a sky or a cloud.**
   A player record carries the dimension it was last in; the staged world holds 81 records in the overworld and 9
   in the nether at the world spawn, and the nine are the profiles the dev instance joins as. `freeze-world.py`
   now pins every record's dimension (`--dimension`, default `minecraft:overworld`) and the harness passes it
   through, which is what made the vanilla-cloud defect reproducible at all: the same scene goes from no cloud
   pass to 683 in a 120-frame Metal 4 window. (2026-09-21)
+- **A real pack draws its own clouds on both generations, at the same cost, once the Metal 4 cloud defect was
+  fixed.** Photon v1.3b, vanilla clouds fancy, `renderscale=55` (so MetalFX is live), fullscreen at 1920x1200,
+  one window of 120 frames per arm, the two arms differing only in `-Dmetallum.execution=`: Metal 3 **7.31 ms a
+  frame (136.8 fps, 7.38 ms of GPU time a frame)** against Metal 4 **7.32 ms (+0.2 per cent, 7.33 ms of GPU
+  time)**. Both arms read `The world renders at 1056x660 for a 1920x1200 window, render scale 55%` - the value
+  stored before the MetalFX rename, still read as 55 - and both report the MetalFX spatial scaler available and
+  made. The two captures carry the same scene: same cloud placement and facets, same terrain, same horizon band.
+  The whole-frame pixel comparison is **not** a like-for-like reading here (mean channel difference 4.29, 94.54
+  per cent of pixels differing at all) because the known Metal 4 lightening residual is in it and the clouds
+  animate between two runs forty seconds apart; the frame is judged by the two captures, which are
+  indistinguishable. (2026-09-21)
 
 - The migration boundary remains strict: Vitrail owns shader-pack semantics, scheduling, fallback interpretation and compatibility status; Metallum owns generic Metal execution. Both requests are merged - companion `metallum#1` into `master` (`cc7e8905`) first, then this repository's `#1` - and `v0.12.0-metal-beta` is released from `main` at `55d6d6a8` with `dev` since opened to `0.13.0-dev`. The release promotes no pack: the compatibility matrix still carries no status for any row.
 - `#1` entered `dev` through a merge commit (`85b21157`) rather than the rebase `CONTRIBUTING.md` asks for, because this fork has no ruleset and no branch protection and leaves all three merge methods enabled, so nothing refused the wrong button. It was repaired the same day by resetting `dev` to the pull request's own head `b4da068d`, which is a strict descendant of the old `dev` and contains the whole batch, so the merge commit added no content at all - `git diff 85b21157 b4da068d` was empty. `main` was reset to the same commit in the same pass, because it had drifted one commit ahead of `dev` with an inlined copy of the migration plan in `AGENTS.md` (superseded by `.context/architecture/roadmap.md`), which made the documented `dev` to `main` fast-forward impossible. Both resets were `--force-with-lease` against an explicitly stated expected value. `dev` is linear again, `main` is contained in it, and the `prefix` check that exists to catch exactly this is green.
