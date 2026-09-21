@@ -5,6 +5,30 @@ Scope: `feat/backend-neutral-sodium-terrain-hook`
 
 ## Confirmed from the current checkout
 
+- **The Vitrail-to-Metallum seam costs 0.07-0.70 % of a frame, and the Metal 3 CPU micro-optimisation round is
+  closed by measurement.** Track D of the companion long-term plan: `dev.vitrail.compat.metallum.BridgeCensus`
+  counts every call across the seam by bridge, the arguments it hands over (one varargs `Object[]` a call), the
+  nanoseconds the call took, and the reflective resolutions apart from the calls. Measured over the plan's
+  corpus, one Metal 3 arm a scene, 600-frame windows: no-pack calls the seam not at all; MakeUp 11 calls a frame
+  at 0.70 % of the wall; Complementary 42 at 0.16 %; Photon 12 at 0.066 %. A call costs 1.4-6.2 us - ten to fifty
+  times a direct call - but the volume is what decides it, and every scene is under the plan's 1 % noise floor,
+  so replacing the reflective invoke with a `MethodHandle` is recorded as **MEASURED-BUT-NOT-WORTH-IT**. The
+  reflective *resolution* is already a startup cost: **2 lookups a session across seven bridges** (6 on Photon),
+  so the plan's "discover once, invoke directly" is proven here rather than pending and a capability snapshot
+  would remove no per-frame lookup because there is none. With round one's redundant-binding result (0.1-0.3 % of
+  a frame) this is the second consecutive CPU-side candidate under 1 %, which is the plan's own exit condition.
+  Companion Metallum's `docs/bridge-overhead.md` carries the table and the decision. (2026-09-21)
+- **The frame's own CPU is 13-17 % of its wall and it allocates 71-183 KiB a frame.** Companion Metallum's
+  window line now carries `frameCpuMs` (the render thread's CPU, from the JVM's thread MXBean) and `allocKiB`:
+  no-pack reads 136-144 ms of CPU over a 600-frame, ~1005 ms window and 37-43 MiB allocated; MakeUp 703 ms and
+  107 MiB. So the frame is GPU/pacing-bound, not CPU-bound, and the CPU-side number still large is the
+  allocation rate. Two instrument findings are recorded with it: JFR
+  (`-XX:StartFlightRecording=...,settings=profile`) kills this client with SIGABRT and leaves a zero-byte
+  recording in both arms of an A/B whose controls ran normally, so no verdict may rest on it; and `jcmd <pid>
+  Thread.print` costs 5.6 s on the running client (the attach's safepoint waits on a render thread that is in
+  native downcalls), so external stack sampling is not a profiler here either. One window in four read 1.9x the
+  CPU and 6.8x the allocation with every scene counter identical - cause NOT MEASURED, and written down rather
+  than averaged away. (2026-09-21)
 - **The Metal 4 overworld is lighter because its sky gradient's upper end is mixed about a third of the way to
   white; the clouds and the terrain are byte-identical.** Phase J1 of the companion audit, one scene both
   generations (no pack, the game's fancy cloud, overworld, camera pinned, fullscreen exclusive 1920x1200, four
