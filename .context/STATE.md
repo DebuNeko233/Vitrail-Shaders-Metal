@@ -1,10 +1,27 @@
 # Project State
 
-Updated: 2026-09-18
+Updated: 2026-09-21
 Scope: `feat/backend-neutral-sodium-terrain-hook`
 
 ## Confirmed from the current checkout
 
+- **The Metal 4 upload road is priced and it does not explain the frame's slow population.** Phase F1 of the
+  companion audit: Metal 4 stages and copies every CPU-written buffer where Metal 3 writes a dynamic buffer's
+  contents straight into its own CPU-visible backing, so the shape was the first candidate for the 4-5 ms bucket
+  that sits a handover quantum above the modal frame. Metallum's frame probe now counts and times each of the
+  three roads at its call site and prints `frame-probe uploads uploadCalls=… uploadMiB=… uploadCpuMs=…` once a
+  window, and `tools/vitrail-performance-compare.py` carries the counters, so the census is read beside the times
+  it is meant to explain in every session. Measured on this machine, forced Metal 4, fullscreen 1920x1200,
+  600-frame windows: MakeUp-UltraFast-9.5e **3.0 calls and 0.00021 MiB a frame for 0.081 ms of CPU** (1.4 per
+  cent of a 5.72 ms frame) and no pack with the game's own particles, mobs and block entities **5.0 calls and
+  0.2293 MiB a frame for 0.059 ms** (2.6 per cent of a 2.31 ms frame) - the second scene moving 1100 times the
+  bytes for less CPU, because what is timed is the staging memcpy and the encode. `copyToBuffer`, the game's own
+  staged vertex move, carries all but 0.2 MiB of the vanilla scene's bytes. So the road cannot build the slow
+  bucket even with the window's whole upload CPU moved into its slow tenth (0.81 ms against 4-5 ms): the
+  direct-write replacement is **REJECTED as a performance change** in
+  `metallum/docs/metal4-full-frame-report.md`, and what the gap *is* remains Phase C3's question - the clean
+  per-frame trace of the same scene puts the frame's wall mean (4.97 ms) at its driver interval (4.93 ms), which
+  is the pacing resource rather than any CPU road. (2026-09-21)
 - **The player's Metal 4 is a preference; the developer's is still a force.** The settings row's stored `metal4`
   is written into `metallum.execution` as `prefer-metal4`, which Metallum resolves as Metal 4 where the device
   satisfies its core contract and Metal 3, said out loud, where it does not - a checkbox is not a demand that the

@@ -160,6 +160,25 @@ A pack compile holds the world back, so the screen used to be the frame from bef
 
 ## P1 - Performance, Metal 4 and MetalFX (see `docs/performance.md`)
 
+- [x] **Phase F1: the Metal 4 upload road is counted, priced and refused as the explanation of the slow frame.**
+  Companion Metallum's frame probe counts and times the three roads CPU bytes take into a Metal 4 frame
+  (`writeToBuffer`, `copyToBuffer`, `writeToTexture`) at their call sites and prints them once a window, and this
+  repository's `tools/vitrail-performance-compare.py` carries the counters, so the census appears beside the
+  times it is meant to explain in every session rather than only in the session that asked for it. Measured on
+  this machine, forced Metal 4, fullscreen 1920x1200, 600-frame windows: MakeUp 3.0 calls and 0.00021 MiB a frame
+  for 0.081 ms of CPU (1.4 per cent of the frame) against the game's own renderer with particles, mobs and block
+  entities at 5.0 calls and 0.2293 MiB a frame for 0.059 ms (2.6 per cent of the frame) - 1100 times the bytes
+  for less CPU, which is what the staging shape is. The road cannot build the 4-5 ms bucket the pacing question
+  is about, so the direct-write replacement is rejected; the gap itself stays Phase C3's. Two contract mutations
+  prove the pins (a deleted call site, a deleted per-road accumulator), and the census's own reach is verified
+  end to end by a session whose comparison printed the renamed fields. (2026-09-21)
+- [ ] **The audit's remaining phases, in the plan's priority order.** D1's fixture gaps (no dedicated pack yet
+  for clear-to-copy, a partial view, or the frame-end flush), D2's pass-stitching census (attachment tuple,
+  load/store, depth, sample count, area, intervening copy or compute, candidate or reject reason), C3's
+  drawable-acquisition phase outside the frame encoder - where the ~10 ms inter-frame gap is now known *not* to
+  be the upload road - J1's overworld sky and cloud shading residual (its own diagnosis, with a same-code control
+  in the same session before any picture difference is attributed), then E, G, H, I, K and L, and the three
+  standing documents the plan's §25 names. (2026-09-21)
 - [x] **The Metal 4 switch asks rather than demands, and the backend work that goes with it is done in companion
   Metallum.** `prefer-metal4` is the row's word now; the same audit round there made `persistentMapping` a
   generation's answer instead of the device's, stopped a forced Metal 3 startup from running the Metal 4
