@@ -242,6 +242,16 @@ public final class RenderScale {
 	private static boolean saidRoad;
 
 	/**
+	 * Said once per setting: that 100 per cent means the window's own size and no MetalFX at all.
+	 * <p>
+	 * The engaged road announces itself twice - the scaled size and the road back - and the
+	 * disengaged one announced nothing, so a log could show that MetalFX ran but not that it was
+	 * asked not to. The latch is lifted by {@link #wanted} beside {@code refusedAtSize}, because a
+	 * number that moves is a new question: 55 to 100 says it again, and so does 100 to 55 and back.
+	 */
+	private static boolean saidWhole;
+
+	/**
 	 * Latched on an allocation failure at one size, and lifted when the size moves. Volatile for
 	 * the reason {@link #percent} is: {@link #wanted} writes it too, from the same callers.
 	 */
@@ -265,6 +275,7 @@ public final class RenderScale {
 		// very failure that latched it: lifted there, a refused size would be retried every frame.
 		if (clamped != percent) {
 			refusedAtSize = false;
+			saidWhole = false;
 		}
 
 		percent = clamped;
@@ -316,6 +327,20 @@ public final class RenderScale {
 		// or the very failure that stopped scaling would freeze the outline scaled for good; and a
 		// world no pack draws stands down with them, the promise of the None road being that the
 		// game is left untouched.
+		if (asked >= WHOLE) {
+			// The one road that owes a line and had none: 100 per cent is not "scaling with a
+			// factor of one", it is the scoped-out case - no scaled target, no capability
+			// question, no scaler and no fallback blit - and a log that cannot say so leaves the
+			// absence of a scale line to be argued about rather than read. Said under the same
+			// once-per-setting latch the engaged road uses, so a live move in either direction
+			// speaks again and a still frame does not.
+			if (!saidWhole) {
+				saidWhole = true;
+				Vitrail.logger().info("The render scale is 100%, so the world is drawn at the window's "
+						+ "own size and MetalFX is off");
+			}
+		}
+
 		if (asked >= WHOLE || !worldComing || !PackChain.drawingPack() || BILINEAR.refused) {
 			standDown(main);
 

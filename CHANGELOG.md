@@ -15,6 +15,10 @@ what the next one holds.
 
 ### Changed
 
+- **100% now says what it means in the log as well as on the slider.** A session that scales a world
+  announces its size and the road the picture comes back on; the 100% position, which draws at the
+  window's own size with MetalFX off, announced nothing at all. It now says so once, so a log can be
+  read for both states rather than only one.
 - **The Metal backend no longer needs a launch argument.** Vitrail used to draw a shader pack on
   Metal only when the session was started with `-Dvitrail.experimentalMetal=true`, which meant a
   working Metal setup still looked like a black screen unless whoever installed it knew the flag.

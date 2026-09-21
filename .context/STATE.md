@@ -32,6 +32,19 @@ Scope: `feat/backend-neutral-sodium-terrain-hook`
   now pins every record's dimension (`--dimension`, default `minecraft:overworld`) and the harness passes it
   through, which is what made the vanilla-cloud defect reproducible at all: the same scene goes from no cloud
   pass to 683 in a 120-frame Metal 4 window. (2026-09-21)
+- **Both ends of the MetalFX scale are now readable in a log, and the off position says so itself.** The
+  engaged road announced its scaled size and its road back; the off position announced nothing, so a 100 per cent
+  run was an absence to be argued about. `RenderScale.beginWorld` now writes
+  `The render scale is 100%, so the world is drawn at the window's own size and MetalFX is off` once per setting,
+  behind a latch lifted when the number moves. Measured on the M5 Pro, 60-frame windows, `--no-pack`, fullscreen,
+  fullscreen-size 3200x1800, one window per cell: Metal 3 at 100 per cent and Metal 4 at 100 per cent each write
+  that line **exactly once** and neither writes a scaled-size line, a road line or a colour-allocation line at
+  the scaled size; at 55 per cent both write `The world renders at 1056x660 for a 1920x1200 window, render scale
+  55%` and `The 55% render scale brings the picture back with MetalFX`. `tests/test_metal_selection_and_scale.py`
+  pins the line, the latch, the gate-before-allocation ordering and the `!swapped` return, with the three
+  mutations that break them caught. **A live 55 to 100 move was not driven** - `wanted()` is the slider's call and
+  nothing in the harness can move a slider - so what is measured is the two end states and the per-frame question
+  between them, not a transition in one session. (2026-09-21)
 - **A real pack draws its own clouds on both generations, at the same cost, once the Metal 4 cloud defect was
   fixed.** Photon v1.3b, vanilla clouds fancy, `renderscale=55` (so MetalFX is live), fullscreen at 1920x1200,
   one window of 120 frames per arm, the two arms differing only in `-Dmetallum.execution=`: Metal 3 **7.31 ms a

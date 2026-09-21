@@ -91,6 +91,17 @@ refuses the scaler, a backend that is not this one - the picture is brought back
 pass instead. The slider keeps working and the picture keeps arriving; what it loses is the sharpness,
 and the log says which of the two roads a session is on.
 
+**And the log says which of the three states, not two.** A session that scales announces itself twice -
+`The world renders at 1056x660 for a 1920x1200 window, render scale 55%` and `The 55% render scale
+brings the picture back with MetalFX` - and the off position used to announce nothing at all, so a run
+at 100 percent was a run with no scale line, which is an absence a reader has to argue about rather than
+read. It now says `The render scale is 100%, so the world is drawn at the window's own size and MetalFX
+is off`, once per setting rather than once per frame, and the latch is lifted when the number moves - so
+a live 55 to 100 says it, and so does 100 to 55 and back. Those three lines are the whole of what a log
+tells you about this slider, and each of them is pinned by `tests/test_metal_selection_and_scale.py`
+along with the ordering that makes it true: the 100 percent gate stands before the scaled set is
+allocated, and `endWorld` returns before it asks the device for MetalFX or reaches the bilinear fallback.
+
 **Temporal Fold is gone with the path it belonged to.** It took the thin detail a small picture loses
 from the frames before, by reprojecting the depth through the two cameras. But it consumed the
 *upscaled* frame and ran between the upsample and the sharpen, and a fused encode has no such slot -

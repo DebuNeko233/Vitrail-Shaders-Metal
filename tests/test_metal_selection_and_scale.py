@@ -148,6 +148,23 @@ def check_render_scale(render_scale: Path, pack_choice: Path, pack_file: Path) -
     before("if (asked >= WHOLE", "resizeOutline(", begin_body,
            "render scale contract: the outline is resized before the 100 per cent gate, so the off position "
            "would still move it")
+    # And the off position says so out loud, which is what makes a run readable rather than an absence to be
+    # argued about: the engaged road announces its scaled size and its road back, and this is the third line.
+    if "The render scale is 100%, so the world is drawn at the window's" not in begin_body:
+        raise SystemExit("render scale contract: 100 per cent no longer says that the world is native and "
+                         "MetalFX is off, so a run at the off position is indistinguishable from a run whose "
+                         "scale line was never reached")
+    before("if (asked >= WHOLE) {", "standDown(main)", begin_body,
+           "render scale contract: the 100 per cent line is said after the stand-down rather than at the gate, "
+           "so a frame that declined for another reason could claim the off position")
+    before("if (!saidWhole) {", "Vitrail.logger().info(", begin_body,
+           "render scale contract: the 100 per cent line is not behind its once-per-setting latch, so it would "
+           "be written every frame the setting is off")
+    # Once per setting, not once per frame, and lifted when the number moves - so a live 55 -> 100 says it and
+    # a still frame does not repeat it.
+    if "saidWhole = false;" not in text[text.index("public static void wanted("):text.index("public static boolean beginWorld(")]:
+        raise SystemExit("render scale contract: the 100 per cent line's latch is never lifted when the number "
+                         "moves, so a live move to the off position would say nothing")
 
     end = text.index("public static void endWorld(")
     end_body = text[end:text.index("\n\t}", end)]
