@@ -109,6 +109,7 @@ jobs:
           python3 tests/test_shader_platform_switch.py
           python3 tests/test_pack_chain_unread_copies.py
           python3 tests/test_backend_capability_reach.py
+          python3 tests/test_bridge_census.py
           python3 tests/test_entity_reference_default.py
           python3 tests/test_glsl_builtin_shadowing.py
           python3 tests/test_native_shared_compute_contract.py

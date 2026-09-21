@@ -6,6 +6,9 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 ADAPTER = ROOT / 'common/src/main/java/dev/vitrail/compat/metallum/MetallumComputeBridge.java'
+# The bridge counts what it costs, and the census is compiled in with the fixture because the fixture
+# names the real sources: a stand-in for it would be a stand-in for the road being measured.
+CENSUS = ROOT / 'common/src/main/java/dev/vitrail/compat/metallum/BridgeCensus.java'
 DEPTH_ADAPTER = ROOT / 'common/src/main/java/dev/vitrail/compat/metallum/MetallumDepthMipmapBridge.java'
 MIXIN_METALLUM = ROOT / 'common/src/main/java/dev/vitrail/mixin/metallum'
 
@@ -132,6 +135,7 @@ class ComputeBridgeTest(unittest.TestCase):
             'com/mojang/blaze3d/textures/GpuTextureView.java':
                 'package com.mojang.blaze3d.textures; public class GpuTextureView {}',
             'dev/vitrail/compat/metallum/MetallumComputeBridge.java': ADAPTER.read_text(),
+            'dev/vitrail/compat/metallum/BridgeCensus.java': CENSUS.read_text(),
             'dev/vitrail/compat/metallum/BridgeCheck.java': HARNESS,
         }
         if mode != 'missing':
@@ -146,6 +150,7 @@ class ComputeBridgeTest(unittest.TestCase):
             'com/mojang/blaze3d/textures/GpuTexture.java':
                 'package com.mojang.blaze3d.textures; public class GpuTexture {}',
             'dev/vitrail/compat/metallum/MetallumDepthMipmapBridge.java': DEPTH_ADAPTER.read_text(),
+            'dev/vitrail/compat/metallum/BridgeCensus.java': CENSUS.read_text(),
             'dev/vitrail/compat/metallum/DepthCheck.java': DEPTH_HARNESS,
         }
         if mode == 'valid':

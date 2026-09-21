@@ -40,8 +40,11 @@ public final class MetallumScaleBridge {
 			return false;
 		}
 
+		long began = System.nanoTime();
 		try {
-			return (boolean) found.available().invoke(null, encoder);
+			boolean answer = (boolean) found.available().invoke(null, encoder);
+			BridgeCensus.invoked(BridgeCensus.SCALE, 2, System.nanoTime() - began);
+			return answer;
 		} catch (ReflectiveOperationException | RuntimeException exception) {
 			giveUp(exception);
 			return false;
@@ -64,8 +67,11 @@ public final class MetallumScaleBridge {
 			return false;
 		}
 
+		long began = System.nanoTime();
 		try {
-			return (boolean) found.scale().invoke(null, encoder, from, to, contentWidth, contentHeight);
+			boolean scaled = (boolean) found.scale().invoke(null, encoder, from, to, contentWidth, contentHeight);
+			BridgeCensus.invoked(BridgeCensus.SCALE, 6, System.nanoTime() - began);
+			return scaled;
 		} catch (ReflectiveOperationException | RuntimeException exception) {
 			giveUp(exception);
 			return false;
@@ -78,6 +84,7 @@ public final class MetallumScaleBridge {
 		}
 
 		try {
+			BridgeCensus.lookedUp();
 			Class<?> encoder = Class.forName(ENCODER_CLASS);
 			surface = new Surface(
 					encoder.getMethod("available", Object.class),

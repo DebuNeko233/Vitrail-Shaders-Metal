@@ -34,6 +34,7 @@ public final class MetallumDepthMipmapBridge {
 		if (!resolved) {
 			resolved = true;
 			try {
+				BridgeCensus.lookedUp();
 				Class<?> bridge = Class.forName(CLASS_NAME, false,
 						MetallumDepthMipmapBridge.class.getClassLoader());
 				generate = bridge.getMethod("generate", Object.class, GpuTexture.class);
@@ -45,8 +46,11 @@ public final class MetallumDepthMipmapBridge {
 	}
 
 	private static Object invoke(Method method, Object... arguments) {
+		long began = System.nanoTime();
 		try {
-			return method.invoke(null, arguments);
+			Object result = method.invoke(null, arguments);
+			BridgeCensus.invoked(BridgeCensus.DEPTH, arguments.length, System.nanoTime() - began);
+			return result;
 		} catch (IllegalAccessException e) {
 			throw new IllegalStateException("Cannot access Metallum depth mipmap bridge", e);
 		} catch (InvocationTargetException e) {

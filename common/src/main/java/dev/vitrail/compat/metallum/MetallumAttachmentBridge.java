@@ -51,8 +51,10 @@ public final class MetallumAttachmentBridge {
 			return;
 		}
 
+		long began = System.nanoTime();
 		try {
 			found.setter().invoke(null, encoder, readAfterwards, overwritten);
+			BridgeCensus.invoked(BridgeCensus.ATTACHMENT, 3, System.nanoTime() - began);
 			announce(readAfterwards.length);
 		} catch (ReflectiveOperationException | RuntimeException exception) {
 			giveUp(exception);
@@ -72,8 +74,10 @@ public final class MetallumAttachmentBridge {
 			return;
 		}
 
+		long began = System.nanoTime();
 		try {
 			found.reads().invoke(null, encoder, reads);
+			BridgeCensus.invoked(BridgeCensus.ATTACHMENT, 2, System.nanoTime() - began);
 		} catch (ReflectiveOperationException | RuntimeException exception) {
 			giveUp(exception);
 		}
@@ -85,6 +89,7 @@ public final class MetallumAttachmentBridge {
 		}
 
 		try {
+			BridgeCensus.lookedUp();
 			Class<?> bridge = Class.forName(BRIDGE_CLASS, false,
 					MetallumAttachmentBridge.class.getClassLoader());
 			methods = new Methods(

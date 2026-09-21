@@ -36,6 +36,7 @@ public final class MetallumTextureBridge {
 
 	private static Method method(String name, Class<?>... parameterTypes) {
 		try {
+			BridgeCensus.lookedUp();
 			Class<?> bridge = Class.forName(CLASS_NAME, false,
 					MetallumTextureBridge.class.getClassLoader());
 			return bridge.getMethod(name, parameterTypes);
@@ -46,8 +47,11 @@ public final class MetallumTextureBridge {
 
 	@SuppressWarnings("unchecked")
 	private static <T> T invoke(Method method, Object... arguments) {
+		long began = System.nanoTime();
 		try {
-			return (T) method.invoke(null, arguments);
+			T result = (T) method.invoke(null, arguments);
+			BridgeCensus.invoked(BridgeCensus.TEXTURE, arguments.length, System.nanoTime() - began);
+			return result;
 		} catch (IllegalAccessException e) {
 			throw new IllegalStateException("Cannot access Metallum texture bridge", e);
 		} catch (InvocationTargetException e) {

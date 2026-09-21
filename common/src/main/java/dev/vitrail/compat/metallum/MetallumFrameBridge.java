@@ -55,6 +55,7 @@ public final class MetallumFrameBridge {
 
 	private static synchronized Methods methods() {
 		if (methods == null) {
+			BridgeCensus.lookedUp();
 			methods = new Methods(
 					method("supports", Object.class),
 					method("generateMipmaps", Object.class, GpuTexture.class),
@@ -89,8 +90,11 @@ public final class MetallumFrameBridge {
 	}
 
 	private static Object invoke(Method method, Object... arguments) {
+		long began = System.nanoTime();
 		try {
-			return method.invoke(null, arguments);
+			Object result = method.invoke(null, arguments);
+			BridgeCensus.invoked(BridgeCensus.FRAME, arguments.length, System.nanoTime() - began);
+			return result;
 		} catch (IllegalAccessException e) {
 			throw new IllegalStateException("Metallum frame bridge is not accessible", e);
 		} catch (InvocationTargetException e) {

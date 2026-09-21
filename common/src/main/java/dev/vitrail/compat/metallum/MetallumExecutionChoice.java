@@ -182,6 +182,10 @@ public enum MetallumExecutionChoice {
 	 * @return the generation this launch will run, whoever asked for it
 	 */
 	public static MetallumExecutionChoice apply() {
+		// The bridge census's one line needs a place to go, and this method is the mod's own start on both
+		// loaders - Vitrail.initClient calls it before anything else. The sink is installed here so nothing
+		// else in the engine has to know the census exists.
+		BridgeCensus.reporter(Vitrail.logger()::info);
 		String asked = System.getProperty(PROPERTY);
 		if (asked != null) {
 			// The property stays exactly as the JVM set it, whatever it says: Metallum is the one that reads
