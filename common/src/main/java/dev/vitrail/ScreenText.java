@@ -71,11 +71,23 @@ public final class ScreenText {
 	public static final String SHADOW_MAP_SCALE_TOOLTIP = "options.vitrail.shadow_map_scale_tooltip";
 
 	/**
-	 * What fraction of the window the world renders at before being upscaled, on the same page as
-	 * the two above. No counterpart in Iris, so both strings are this project's own.
+	 * What fraction of the window the world renders at before MetalFX upscales it back onto the
+	 * window, on the same page as the two above. No counterpart in Iris, so both strings are this
+	 * project's own.
+	 * <p>
+	 * The key still says {@code render_scale} because it is the same setting it always was - only
+	 * its name learned to say what does the upscaling - and renaming the key would be a change to
+	 * what a translation file is keyed by for no reader's benefit.
 	 */
 	public static final String RENDER_SCALE = "options.vitrail.render_scale";
 	public static final String RENDER_SCALE_TOOLTIP = "options.vitrail.render_scale_tooltip";
+
+	/**
+	 * What the row reads at 100 per cent, where the world is drawn at the window's own size and
+	 * nothing is upscaled. A word rather than the bare number, because the value a player is
+	 * looking for is "this is off" and the number alone does not say that.
+	 */
+	public static final String RENDER_SCALE_NATIVE = "options.vitrail.render_scale_native";
 
 	/**
 	 * Whether the next launch runs Metallum's experimental Metal 4 renderer: the row that says so,

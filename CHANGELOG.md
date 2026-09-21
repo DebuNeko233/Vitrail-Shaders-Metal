@@ -23,6 +23,14 @@ what the next one holds.
   those is missing says which one it is missing instead of asking for a flag, and a session already
   on Metal is never told to switch its graphics API.
 
+- **"Render Scale" is now "MetalFX Render Scale", and 100% is the position that turns MetalFX off.**
+  The slider always did two things at once - draw the world smaller and bring it back - and the row
+  now names the thing that brings it back. At 100% the world is drawn at the window's own
+  resolution: no scaled target is created, MetalFX is not asked for, and nothing is upscaled. Below
+  100% the world is drawn smaller and MetalFX fills the window; on a device without it, the regular
+  upscale still runs, because a world drawn small has to reach the window somehow. The stored value
+  and its name in `pack.txt` are unchanged, so an existing render scale survives the update.
+
 ### Added
 
 - **Metal 4 is now a switch in the video settings, off by default.** "Metal 4 (Experimental)" on

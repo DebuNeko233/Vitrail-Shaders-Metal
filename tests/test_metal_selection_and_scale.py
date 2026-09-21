@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Which Metal generation a session runs, as a contract rather than as remembered intent.
+"""The two product rules this round introduced, as contracts rather than as remembered intent.
 
 **Which Metal generation a session runs is the player's choice, and it is read before the device exists.**
 Metallum asks `metallum.execution` once, while it creates the Metal device; Vitrail persists the choice in
@@ -12,6 +12,12 @@ when broken, so they are read here:
   * the property is written only where the JVM left it unset, which is the same rule seen from the other
     side and the one a later refactor is most likely to lose;
   * toggling the setting never touches the running session - the binding writes a file and nothing else.
+
+**100 per cent of MetalFX Render Scale means native resolution and no MetalFX at all.** The gate is
+`RenderScale.beginWorld`'s `asked >= WHOLE`, and what makes it complete is that `endWorld` returns before it
+probes the scaler when the scaled set was never swapped in. Both are ordering facts inside two methods, which
+is exactly the kind of thing a later edit reverses while the picture still looks plausible, so both are
+pinned by position rather than by the presence of a string.
 
 And the words: this round renamed a row and added two, so every key the screen can ask for has to exist in
 `en_us` - the one locale the game falls back to, and therefore the only one whose absence shows a raw key to
@@ -36,6 +42,9 @@ LANG = ROOT / "common/src/main/resources/assets/vitrail/lang"
 CHOICE = COMMON / "compat/metallum/MetallumExecutionChoice.java"
 VITRAIL = COMMON / "Vitrail.java"
 CONFIG_ENTRY = COMMON / "sodium/ConfigEntry.java"
+RENDER_SCALE = COMMON / "render/RenderScale.java"
+PACK_CHOICE = COMMON / "render/PackChoice.java"
+PACK_FILE = COMMON / "settings/PackFile.java"
 SCREEN_TEXT = COMMON / "ScreenText.java"
 
 
@@ -124,6 +133,51 @@ def check_toggle(config_entry: Path) -> None:
            "metal selection contract: the Metal 4 row is not on the engine's own page")
 
 
+def check_render_scale(render_scale: Path, pack_choice: Path, pack_file: Path) -> None:
+    """100 per cent is native resolution: no scaled set, no probe, no encode, no fallback."""
+    text = read(render_scale)
+
+    begin = text.index("public static boolean beginWorld(")
+    begin_body = text[begin:text.index("\n\t}", begin)]
+    if "if (asked >= WHOLE" not in begin_body:
+        raise SystemExit("render scale contract: beginWorld no longer refuses at 100 per cent, so the world "
+                         "would be drawn small at the setting that means native")
+    before("if (asked >= WHOLE", "ensure(", begin_body,
+           "render scale contract: the scaled set is allocated before the 100 per cent gate, so the off "
+           "position would still create a scaled target")
+    before("if (asked >= WHOLE", "resizeOutline(", begin_body,
+           "render scale contract: the outline is resized before the 100 per cent gate, so the off position "
+           "would still move it")
+
+    end = text.index("public static void endWorld(")
+    end_body = text[end:text.index("\n\t}", end)]
+    before("if (!swapped || main == null)", "vitrail$metalFxAvailable()", end_body,
+           "render scale contract: the scaler is probed on a frame whose scaled set was never swapped in, so "
+           "100 per cent would still ask the device for MetalFX")
+    before("if (!swapped || main == null)", "BILINEAR.get(", end_body,
+           "render scale contract: the bilinear fallback runs on a frame that was never scaled, so 100 per "
+           "cent would still pay an upscale blit")
+
+    # Live, and stored where it always was.
+    choice = read(pack_choice)
+    scale_start = choice.index("public static void renderScale(Path gameDirectory, int percent)")
+    scale_body = choice[scale_start:choice.index("\n\t}", scale_start)]
+    before("RenderScale.wanted(", "PackFile.write(", scale_body,
+           "render scale contract: the new value is written to disk before this session takes it, so a folder "
+           "that cannot be written would leave the slider showing a value the frame is not using")
+    if "RenderScale.wanted(" not in scale_body:
+        raise SystemExit("render scale contract: the slider no longer reaches the running frame, so the "
+                         "setting would need a reload")
+
+    stored = read(pack_file)
+    if "RENDER_SCALE_KEY" not in stored or "renderscale" not in stored:
+        raise SystemExit("render scale contract: the stored key changed, so every existing installation would "
+                         "lose its render scale on upgrade")
+    if "public static final int MAX_RENDER_SCALE = 100;" not in stored:
+        raise SystemExit("render scale contract: 100 is no longer the top of the slider, so the value whose "
+                         "meaning is documented as \"off\" is not reachable")
+
+
 def check_language(lang: Path, screen_text: Path) -> None:
     """Every key the screen can ask for exists in en_us, and no locale invents one."""
     en = json.loads((lang / "en_us.json").read_text(encoding="utf-8"))
@@ -150,6 +204,7 @@ def check_language(lang: Path, screen_text: Path) -> None:
     for key, why in (
         ("options.vitrail.metal4", "the Metal 4 row has no caption in en_us"),
         ("options.vitrail.metal4_tooltip", "the Metal 4 row has no tooltip in en_us"),
+        ("options.vitrail.render_scale_native", "100 per cent has no name of its own in en_us"),
     ):
         if key not in en:
             raise SystemExit("language contract: " + why)
@@ -158,6 +213,29 @@ def check_language(lang: Path, screen_text: Path) -> None:
                 raise SystemExit(f"language contract: {path.name} does not carry {key}, so that locale shows "
                                  "the key this round added as untranslated rather than falling back to en_us")
 
+
+
+def check_scale_wording(lang: Path) -> None:
+    """What the two rows say, which is the half of this round a reader of the screen sees."""
+    en = json.loads((lang / "en_us.json").read_text(encoding="utf-8"))
+    zh = json.loads((lang / "zh_cn.json").read_text(encoding="utf-8"))
+
+    if "MetalFX" not in en["options.vitrail.render_scale"]:
+        raise SystemExit("language contract: the render scale row does not say which upscaler it is about")
+    if "MetalFX" not in zh["options.vitrail.render_scale"]:
+        raise SystemExit("language contract: the render scale row's Chinese name does not say MetalFX")
+    if "100%" not in en["options.vitrail.render_scale_tooltip"]:
+        raise SystemExit("language contract: the render scale tooltip does not say what 100 per cent means")
+    if "100%" not in zh["options.vitrail.render_scale_tooltip"]:
+        raise SystemExit("language contract: the Chinese tooltip does not say what 100 per cent means")
+    if "restart" not in en["options.vitrail.metal4_tooltip"].lower():
+        raise SystemExit("language contract: the Metal 4 tooltip does not say that a restart is owed")
+    if "experimental" not in en["options.vitrail.metal4_tooltip"].lower():
+        raise SystemExit("language contract: the Metal 4 tooltip does not say that the path is experimental")
+    for word in ("faster", "recommended", "best"):
+        if word in en["options.vitrail.metal4_tooltip"].lower():
+            raise SystemExit(f"language contract: the Metal 4 tooltip says \"{word}\", which the measurements "
+                             "do not support")
 
 
 def self_test() -> None:
@@ -228,6 +306,32 @@ def self_test() -> None:
             "\t}\naddOption(metal4(builder))\naddOption(graphicsApi(builder))\n", encoding="utf-8")
         check_toggle(config)
 
+        # The scale, on a tree where 100 per cent still allocates.
+        scale = root / "RenderScale.java"
+        scale.write_text(
+            "public static boolean beginWorld(RenderTarget main) {\n"
+            "    ensure(width, height, main.width, main.height);\n"
+            "    if (asked >= WHOLE) {\n        standDown(main);\n        return false;\n    }\n"
+            "    resizeOutline(width, height, true);\n\t}\n"
+            "public static void endWorld(RenderTarget main, CommandEncoder encoder) {\n"
+            "    if (!swapped || main == null) {\n        return;\n    }\n"
+            "    boolean available = commands.vitrail$metalFxAvailable();\n"
+            "    RenderPipeline fallback = BILINEAR.get(device);\n\t}\n", encoding="utf-8")
+        if not fires(lambda: check_render_scale(scale, PACK_CHOICE, PACK_FILE)):
+            raise SystemExit("render scale self-test: a scaled set allocated before the 100 per cent gate passed")
+
+        # And on the file as it is, which is the reading that has to hold: patch only the gate's position.
+        scale.write_text(
+            "public static boolean beginWorld(RenderTarget main) {\n"
+            "    if (asked >= WHOLE) {\n        standDown(main);\n        return false;\n    }\n"
+            "    ensure(width, height, main.width, main.height);\n"
+            "    resizeOutline(width, height, true);\n\t}\n"
+            "public static void endWorld(RenderTarget main, CommandEncoder encoder) {\n"
+            "    if (!swapped || main == null) {\n        return;\n    }\n"
+            "    boolean available = commands.vitrail$metalFxAvailable();\n"
+            "    RenderPipeline fallback = BILINEAR.get(device);\n\t}\n", encoding="utf-8")
+        check_render_scale(scale, PACK_CHOICE, PACK_FILE)
+
         # The words, on a locale tree missing one key.
         lang = root / "lang"
         lang.mkdir()
@@ -260,7 +364,14 @@ def self_test() -> None:
         (lang / "en_us.json").write_text(json.dumps(keys), encoding="utf-8")
         (lang / "zh_cn.json").write_text(json.dumps(keys), encoding="utf-8")
 
-    print("metal selection contract: self-test PASS")
+        check_scale_wording(lang)
+        promising = dict(keys)
+        promising["options.vitrail.metal4_tooltip"] = "Metal 4 is faster and recommended. Restart."
+        (lang / "en_us.json").write_text(json.dumps(promising), encoding="utf-8")
+        if not fires(lambda: check_scale_wording(lang)):
+            raise SystemExit("language self-test: a tooltip promising Metal 4 is faster passed")
+
+    print("metal selection and render scale contract: self-test PASS")
 
 
 def fires(check) -> bool:
@@ -280,11 +391,13 @@ def main() -> int:
 
     check_choice(CHOICE, VITRAIL)
     check_toggle(CONFIG_ENTRY)
+    check_render_scale(RENDER_SCALE, PACK_CHOICE, PACK_FILE)
     check_language(LANG, SCREEN_TEXT)
+    check_scale_wording(LANG)
 
     locales = len(list(LANG.glob("*.json")))
-    print(f"metal selection contract: PASS ({locales} locales, the stored choice applied at the entry point, "
-          f"and an explicit -D still outranking it)")
+    print(f"metal selection and render scale contract: PASS ({locales} locales, the stored choice applied at "
+          f"the entry point, and 100 per cent refusing before anything is allocated)")
     return 0
 
 

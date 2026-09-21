@@ -249,7 +249,9 @@ public final class ConfigEntry implements ConfigEntryPoint {
 				.setBinding(percent -> PackChoice.renderScale(Vitrail.platform().gameDirectory(),
 								percent),
 						PackChoice::renderScale)
-				.setValueFormatter(percent -> Component.literal(percent + "%"))
+				.setValueFormatter(percent -> percent >= PackFile.MAX_RENDER_SCALE
+						? Component.translatable(ScreenText.RENDER_SCALE_NATIVE)
+						: Component.literal(percent + "%"))
 				// Sodium refuses to build an option without one, at the loading screen and not at
 				// compile time. The binding above has already written pack.txt.
 				.setStorageHandler(() -> {})
