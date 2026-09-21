@@ -113,6 +113,40 @@ public final class ShadowAmortisation {
 	 */
 	private static final String SETTING_FILE = "amortise-shadow";
 
+	/**
+	 * The interval a launch asks for, which is the setting's own range plus an arm beyond it.
+	 * <p>
+	 * <strong>Two uses, and only the first is a legal setting.</strong> Values from nought to
+	 * {@link #MAX_FRAMES} are exactly what the selector offers the player, and the property is then
+	 * only a way to write one of them before a launch: the file below holds one value for a whole
+	 * session, while the arms of an A/B are launches of the same session and have to differ. Above
+	 * {@link #MAX_FRAMES} - up to {@link #PROBE_MAX_FRAMES} - the arm is a measurement and NOT
+	 * SEMANTICALLY CORRECT, since the ground in the map is older than the engine's own selector
+	 * allows; the picture on such an arm is as wrong as the age of that ground, which is the cost
+	 * being measured.
+	 * <p>
+	 * What it exists for is the question the removal arms cannot answer. They take the terrain
+	 * raster out of the frame, which prices it at the interval this engine ships - one, so the
+	 * raster is drawn every OTHER frame on every pack of the corpus that does not voxelise. What
+	 * the shipped reuse is worth against no reuse at all is therefore a difference between two
+	 * arms and not a component of one, and it is the number that decides whether the interval or
+	 * the reuse itself is worth more work.
+	 * <p>
+	 * A JVM property rather than a line in the file because it is read before the first frame of a
+	 * launch and cannot be moved afterwards: {@link #setFrames} is the screen's road and stays the
+	 * screen's, and nothing here is reachable from it.
+	 */
+	private static final int PROBE_FRAMES = Integer.getInteger("vitrail.probeShadowInterval", -1);
+
+	/**
+	 * The most frames an arm beyond the selector may ask for, so that a typo cannot leave every
+	 * frame of a session with a map old enough to be a freeze rather than a measurement.
+	 */
+	private static final int PROBE_MAX_FRAMES = 6;
+
+	/** Said once, at the first ask: a probe that announced itself per frame would be a cost itself. */
+	private static boolean saidProbe;
+
 	/** Read from the file the first time it is asked for, and authoritative from then on. */
 	private static int frames = -1;
 
@@ -313,6 +347,31 @@ public final class ShadowAmortisation {
 	 * was. Read from the file the first time, and from memory after that.
 	 */
 	public static int frames() {
+		// Ahead of the setting and not beside it, read on every ask and answered from the property
+		// rather than cached: the file the setting lives in is written by the screen, and a probe arm
+		// that a later screen write could lift out of is not a controlled arm. Read once per frame,
+		// which is what this method already costs.
+		if (PROBE_FRAMES >= 0) {
+			int asked = Math.min(PROBE_FRAMES, PROBE_MAX_FRAMES);
+			if (!saidProbe) {
+				saidProbe = true;
+				// Said in the two words the two uses deserve: a value the selector already offers is
+				// the setting written before the launch, and one past its cap is a measurement arm
+				// whose picture is wrong by construction. A session reading the log has to be able to
+				// tell which of the two it is looking at without knowing what was asked for.
+				Vitrail.logger().info("Shadow map kept for {} frame(s) after the one that draws it "
+								+ "(-Dvitrail.probeShadowInterval={}, this build's selector stopping at {}): {}",
+						asked, PROBE_FRAMES, MAX_FRAMES,
+						asked > MAX_FRAMES
+								? "a measurement arm beyond the selector, so the ground in the map is "
+										+ "older than any setting allows and the picture is wrong by construction"
+								: "the setting's own value, written before the launch because the arms of one "
+										+ "session have to differ");
+			}
+
+			return asked;
+		}
+
 		if (frames < 0) {
 			frames = clamp(read());
 			// Said once, and only when it is on: a shadow one frame late is the first thing to

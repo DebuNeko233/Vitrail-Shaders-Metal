@@ -19,6 +19,7 @@ MIXIN_CONFIG = ROOT / "common/src/main/resources/vitrail.mixins.json"
 SHADOW_FRAME_PROBE = ROOT / "common/src/main/java/dev/vitrail/render/timing/ShadowFrameProbe.java"
 SHADOW_MATRIX_VALUES = ROOT / "common/src/main/java/dev/vitrail/uniform/values/ShadowMatrixValues.java"
 SHADOW_GEOMETRY_VALUES = ROOT / "common/src/main/java/dev/vitrail/uniform/values/ShadowGeometryValues.java"
+SHADOW_AMORTISATION = ROOT / "common/src/main/java/dev/vitrail/render/ShadowAmortisation.java"
 
 
 def text(path):
@@ -234,6 +235,42 @@ class ShadowTerrainContractTest(unittest.TestCase):
             terrain.index("restoreCameraWalk(access, restoreViewport, restoreFog, cameraFrame,"),
             terrain.index("ShadowFrameProbe.frame(lightSections,"),
         )
+
+    def test_shadow_interval_probe_is_off_by_default_and_capped(self):
+        """The interval an arm asks for, and the ways it must not become a setting.
+
+        The removal arms take the terrain raster out of the frame, which prices it at the interval
+        this engine ships - one, so the raster is drawn every other frame. What a longer arm would
+        save is a different question and needs both of its arms in one session, so the interval has
+        to be settable per LAUNCH while the arming file holds one value for a whole session. It must
+        stay unreachable from the screen and bounded, because an interval nobody bounded is a
+        session whose map never changes.
+        """
+        amortisation = compact(SHADOW_AMORTISATION)
+
+        # Off unless a property names it, and the setting is what answers when none does.
+        self.assertIn('Integer.getInteger("vitrail.probeShadowInterval", -1)', amortisation)
+        self.assertIn("if (PROBE_FRAMES >= 0) {", amortisation)
+        self.assertIn("int asked = Math.min(PROBE_FRAMES, PROBE_MAX_FRAMES);", amortisation)
+        self.assertIn("private static final int PROBE_MAX_FRAMES = 6;", amortisation)
+
+        # And the log says which of the two uses an arm is: a value the selector already offers, or
+        # one past its cap whose picture is wrong by construction.
+        self.assertIn("asked > MAX_FRAMES", amortisation)
+        self.assertIn("a measurement arm beyond the selector", amortisation)
+        self.assertIn("the setting's own value, written before the launch", amortisation)
+
+        # Ahead of the setting, so a screen write cannot lift an arm out of its own interval, and
+        # answered from the property rather than from the cached field the setting lives in.
+        self.assertLess(
+            amortisation.index("if (PROBE_FRAMES >= 0) {"),
+            amortisation.index("if (frames < 0) {"),
+        )
+        self.assertNotIn("setFrames(PROBE_FRAMES", amortisation)
+
+        # The screen's own road still clamps to the selector's cap and never to the probe's.
+        self.assertIn("frames = clamp(asked);", amortisation)
+        self.assertIn("return Math.min(Math.max(asked, MIN_FRAMES), MAX_FRAMES);", amortisation)
 
     def test_shadow_target_is_forward_d32_render_to_sample_image(self):
         targets = compact(SHADOW_TARGETS)
