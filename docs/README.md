@@ -23,6 +23,7 @@ The short version lives in the [README](../README.md) and the install steps in
 | Know what a compatibility claim needs, and what has been recorded | [PHASE 17 compatibility](phase17-compatibility.md) |
 | See the plan that port is tracked against, and where the implementation left it | [The migration roadmap](roadmap.md) |
 | Make the Metal path faster, adopt Metal 4, or work out what MetalFX may touch | [Performance and Metal 4](performance.md) |
+| See what the performance programme measured, arm by arm, and what each candidate was worth | [Performance optimisation status](performance-report.md) |
 | Work on the engine | [Developing](developing.md) |
 
 ### Going deeper

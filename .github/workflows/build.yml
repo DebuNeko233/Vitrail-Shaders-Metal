@@ -50,6 +50,8 @@ jobs:
           python3 tests/test_metal_selection_and_scale.py --self-test
           python3 tests/test_metal_selection_and_scale.py
           python3 tests/test_debug_entry_lines.py
+          python3 tests/test_docs_index.py --self-test
+          python3 tests/test_docs_index.py
           python3 tests/test_metallum_compute_bridge.py
           python3 tests/test_metallum_status.py
           python3 tests/test_mrt_smoke_fixture.py
