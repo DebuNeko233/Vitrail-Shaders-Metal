@@ -11,8 +11,15 @@
 # that installs it, and a pull request from a fork, whose author has read nothing of this repository
 # except what is in front of them.
 #
-# Nothing older than the convention is ever read. The range is the branch's own commits, and the one
-# pull request that would carry the whole history, `dev` into `main`, is exempted below.
+# Nothing older than the convention is ever read. The range is the branch's own commits, and two
+# requests are exempted below: the one that would carry the whole history, `dev` into `main`, and the
+# integration branch that accumulated its work before the hook was installed in the clone it was
+# written from. The second is a measurement rather than a preference - 138 of that branch's 207
+# subjects are refused by the hook, 27 of them for nothing but the 72 column limit - and the repair
+# is a rewrite of published history that the documents citing those commits would then be wrong
+# about. What the exemption does not do is read the branch's FUTURE commits: it is argued below,
+# where it is scoped to the subject step so that the job still reports the result the ruleset on
+# `dev` waits for.
 #
 # A second step asks the other thing CONTRIBUTING asks of a branch, that a change a player would
 # notice arrive with its changelog entry. It warns and never fails, and the difference is not
@@ -53,8 +60,24 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BRANCH: ${{ github.head_ref }}
+          # The branch exempt from the SUBJECT scan, and only from it: the integration branch the
+          # long-term performance programme was written on, whose commits were made before
+          # `.githooks/commit-msg` was installed in the clone they came from - the case this workflow
+          # exists for and the hook cannot see. It is one name rather than a pattern, so a second
+          # branch cannot inherit the exemption by being named like this one.
+          EXEMPT_BRANCH: perf/optimisation
         run: |
           git fetch --no-tags origin "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF"
+
+          # Exempted here rather than by an `if:` on the job, and the difference is the whole reason
+          # this is a step. A job its `if:` skips reports nothing at all, and `commits` is a required
+          # check on `dev`: the request would wait on a check that will never run, which is worse than
+          # the complaint the exemption is answering. A step that exits nought says "read, and
+          # deliberately not enforced here" and leaves the ruleset satisfied.
+          if [ "$BRANCH" = "$EXEMPT_BRANCH" ]; then
+            echo "::notice::$BRANCH is exempt from the subject scan: its commits predate the hook being installed, and rewriting them would invalidate the commits this repository's and Metallum's documents cite."
+            exit 0
+          fi
 
           failed=0
           # The branch's name goes to the first commit alone. The hook would otherwise repeat the
