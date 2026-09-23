@@ -271,9 +271,9 @@ final class BackendComputePass implements AutoCloseable {
 				}
 
 				ModuleCache.building(this.label);
-				// The same zeroes the game's compiler road gets in GlslCompilerMixin: this road has
-				// its own shaderc call, so it has to ask for them itself, and before the reflection
-				// and the store, so a kept blob carries them too. Compiled at the performance level,
+				// The same zeroes a graphics stage gets from the backend's shader-module seam: this
+				// road has its own shaderc call, so it has to ask for them itself, and before the
+				// reflection and the store, so a kept blob carries them too. Compiled at the performance level,
 				// this module has mostly values where that road has variables, and its undefined
 				// reads are what the pass turns into zeroes here. The patch takes over the buffer it
 				// is handed, freeing it where it replaces it, and the buffer it hands on is filled

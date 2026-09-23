@@ -9,10 +9,10 @@ import java.util.Set;
  * reflection hands back and throws
  * {@code Sampled texture (X) must have type of SpvDim2D or SpvDimCube} for anything whose
  * dimensionality is neither of those two, so one {@code sampler3D} anywhere in a program stops that
- * program's whole pipeline from being built. It is bent in one place and for one shape:
- * {@code GlslCompilerMixin} makes that walk read {@code SpvDim3D} as {@code SpvDim2D}, so the
- * volumes an {@code image} directive fills reach a pipeline. Every other dimensionality is refused
- * as it always was, and so is a {@code sampler3D} with nothing behind it, which
+ * program's whole pipeline from being built. On the road this engine draws on the walk is the
+ * backend's, and it takes a 3D dimension as it comes, so the volumes an {@code image} directive
+ * fills reach a pipeline without anything being bent for them. Every other dimensionality is
+ * refused as it always was, and so is a {@code sampler3D} with nothing behind it, which
  * {@code PackProgram.unbindable} decides off this list.
  * <p>
  * Two things measured in 26.2 make the declaration alone enough, and both are worth knowing before

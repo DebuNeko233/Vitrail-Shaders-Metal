@@ -1,8 +1,11 @@
 package dev.vitrail.compat.metallum;
 
+import dev.vitrail.cache.ModuleCache;
+import dev.vitrail.glsl.LoadClock;
 import dev.vitrail.render.PackNames;
 import dev.vitrail.render.RawLocals;
 import dev.vitrail.render.SamplerReach;
+import dev.vitrail.render.ShaderDebugInfo;
 import dev.vitrail.Vitrail;
 
 import java.lang.reflect.InvocationHandler;
@@ -99,6 +102,16 @@ public final class MetallumShaderBridge {
 	/** One handler for every method of the seam: a name and two arguments, and no shared state. */
 	private static final class Dispatch implements InvocationHandler {
 
+		/**
+		 * When the compile in flight on this thread started, or unset.
+		 * <p>
+		 * On the thread because compiles run on the render thread and on this engine's own pool at
+		 * once. It is what makes the module clock cover every compile rather than the successful
+		 * ones: a compile that threw reaches no {@code endCompile} and is closed by the next
+		 * {@code beginCompile} on that thread, which is the same thread the span belongs to.
+		 */
+		private static final ThreadLocal<Long> STARTED = new ThreadLocal<>();
+
 		@Override
 		public Object invoke(Object proxy, Method method, Object[] arguments) {
 			long began = System.nanoTime();
@@ -107,6 +120,45 @@ public final class MetallumShaderBridge {
 						RawLocals.patch((String) arguments[0], (ByteBuffer) arguments[1]));
 				case "unreachedSampledImages" -> SamplerReach.unreached((String) arguments[0],
 						(ByteBuffer) arguments[1], declared(arguments[2]));
+				case "moduleType" -> {
+					ModuleCache.attachModuleType((Class<?>) arguments[0]);
+					yield null;
+				}
+				case "wantsShaderDebugInfo" -> {
+					ShaderDebugInfo.announce();
+					yield ShaderDebugInfo.asked();
+				}
+				case "beginCompile" -> {
+					// A compile that threw reached no endCompile, so its span is closed here rather
+					// than lost: the cost belongs to the compile that paid it, and this is the only
+					// place left that can attribute it.
+					closeSpan();
+					RawLocals.end();
+					RawLocals.begin();
+					STARTED.set(System.nanoTime());
+					yield null;
+				}
+				case "moduleKey" -> ModuleCache.keyOf((String) arguments[1], (String) arguments[2]);
+				case "cachedModule" -> {
+					Object served = ModuleCache.lookup((String) arguments[0], (String) arguments[1]);
+					if (served == null) {
+						// Counted here and not after the compile, which is where the original road
+						// counted it: a unit a pack broke throws out of the compile, and counting on
+						// the way back would leave that load short by exactly the units somebody is
+						// reading the log to find.
+						ModuleCache.building((String) arguments[1]);
+					}
+					yield served;
+				}
+				case "keepModule" -> {
+					ModuleCache.store((String) arguments[0], arguments[2]);
+					yield null;
+				}
+				case "endCompile" -> {
+					closeSpan();
+					RawLocals.end();
+					yield null;
+				}
 				case "toString" -> "VitrailShaderModuleHook";
 				case "hashCode" -> System.identityHashCode(proxy);
 				case "equals" -> proxy == arguments[0];
@@ -124,6 +176,20 @@ public final class MetallumShaderBridge {
 		@SuppressWarnings("unchecked")
 		private static List<String> declared(Object argument) {
 			return argument instanceof List<?> names ? (List<String>) names : List.of();
+		}
+
+		/**
+		 * Charges this thread's open span to the module clock, once, whether the compile that opened
+		 * it returned or threw.
+		 */
+		private static void closeSpan() {
+			Long began = STARTED.get();
+			if (began == null) {
+				return;
+			}
+
+			STARTED.remove();
+			LoadClock.module(System.nanoTime() - began);
 		}
 	}
 }

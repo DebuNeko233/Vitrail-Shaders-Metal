@@ -99,9 +99,10 @@ final class VolumeFlattening {
 	 * list at optimisation level zero, so one declared in a shared include and never read costs the
 	 * program its pipeline exactly as one sampled on every pixel does. Supplying a real volume is
 	 * not the way out here either: a texture a pack ships is uploaded flat and there is no 3D view
-	 * to put behind the name. The game's own walk no longer refuses the type,
-	 * {@code GlslCompilerMixin} making {@code GlslCompiler.addToBindGroup} read {@code SpvDim3D} as
-	 * {@code SpvDim2D} for the volumes an {@code image} directive fills.
+	 * to put behind the name. The backend's own walk does not refuse the type either, taking a 3D
+	 * dimension as it comes for the volumes an {@code image} directive fills - which is what this
+	 * rewrite is for: it is not the pipeline the declaration costs, it is the binding, and a name
+	 * with nothing behind it is a binding the backend will not make.
 	 * <p>
 	 * <strong>Every program carrying the declaration is rewritten, and Iris rewrites only the stage
 	 * the directive names.</strong> Its {@code TextureTransformer} runs per stage, so under it

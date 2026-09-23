@@ -27,7 +27,6 @@
 		"CustomSubmitMixin",
 		"DebugScreenEntriesMixin",
 		"DebugScreenEntryListMixin",
-		"GlslCompilerMixin",
 		"metallum.MetalBackendMixin",
 		"metallum.MetalDeviceMixin",
 		"MinecraftStartupGuardMixin",

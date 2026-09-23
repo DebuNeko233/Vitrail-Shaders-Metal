@@ -31,13 +31,15 @@ shader-pack contract rather than a backend detail, there is no API to read the m
 it therefore carries an inline `no-vulkan-contract-allow:` marker with its reason. A marker and not a
 path, because a path exemption outlives the reason it was granted for.
 
-**The inventory is a migration counter, and it is meant to reach zero.** A few files still reach the
-game's shader-compiler package, because the pack-visible half of that integration - zeroing locals
-before the reflection reads them, letting a 3D sampler through the bind-group walk, and knowing what
-the pack's uniforms and samplers are - needs a seam that does not exist yet on the backend's side. They
-are listed by path with the reason each one is still there. A file that is *not* listed and names the
-deleted API fails this contract; a listed file that no longer names it is reported so the entry is
-retired, and the list reaching empty is the migration finishing rather than a target that moves.
+**The inventory is a migration counter, and it has reached zero.** It once listed the files that
+still reached the game's shader-compiler package, because the pack-visible half of that integration -
+zeroing locals before the reflection reads them, narrowing a stage's declared samplers to the ones it
+reaches, keeping a compiled module on disk - needed a seam that did not exist on the backend's side
+yet. The seam exists now (`MetallumShaderModules`), the last entry went with the mixin that wrapped
+the compiler, and the list is empty. It is kept as an empty mapping rather than deleted because the
+rule it enforces is the one worth having: a file that is *not* listed and names the deleted API fails
+this contract, a listed file that no longer names it is reported so the entry is retired, and the
+self-test puts an entry in for the length of its own run so the mechanism cannot rot unnoticed.
 
 Run `--self-test` to prove each rule fires: it writes synthetic trees under a temporary directory and
 points the same checkers at them, so a guard that cannot fail fails the self-test instead of passing
@@ -106,14 +108,7 @@ MARKER = "no-vulkan-contract-allow:"
 # module type from its caller and derives everything else from that type's own record components; and
 # the font-sheet intensity mapping became a capability the backend answers, with the unserved case
 # said out loud rather than passed over.
-INVENTORY = {
-    "common/src/main/java/dev/vitrail/mixin/GlslCompilerMixin.java":
-        "wraps the game's stage compile for this engine's compiled-module disk store and turns off "
-        "shaderc's debug information, so it names the compiler and the module record. Both duties "
-        "are performance rather than pack semantics and both would have to move behind the backend's "
-        "shader-module seam - which needs a hook pair the seam does not have yet - for this file to "
-        "go. Nothing else in the tree names either type.",
-}
+INVENTORY = {}
 
 # Vendored, generated or historical paths that are not this repository's own surface. Empty on
 # purpose: every exemption above is a marker or an inventory entry with a reason, and a path-based
@@ -351,16 +346,39 @@ def self_test() -> None:
         _write(root, "common/src/main/resources/vitrail.mixins.json", '{\n\t"client": []\n}\n')
 
         # 6. An inventory entry is a counter, not a blanket exemption: it is keyed on the exact file,
-        #    so a listed path is not residue while an unlisted one always is.
-        listed = sorted(INVENTORY)[0]
-        _sources(root, "package dev.vitrail;\n\nfinal class Probe {\n}\n")
-        _write(root, listed, "package dev.vitrail;\n\nfinal class Stub {\n}\n")
-        if listed in unexpected(root):
-            raise SystemExit("no-Vulkan self-test failed: an inventory entry was treated as residue")
-        for name in INVENTORY:
-            _write(root, name, "package dev.vitrail;\n\nfinal class Stub {\n}\n")
-        if evaluate(root)[0]:
-            raise SystemExit("no-Vulkan self-test failed: a retired inventory entry failed the run")
+        #    so a listed path is not residue while an unlisted one always is. The list is empty now
+        #    that the migration is over, so this puts one entry in for the duration rather than
+        #    skipping the rule: a mechanism that stopped being exercised the day it emptied is one
+        #    nobody would notice breaking.
+        listed = next(iter(INVENTORY), "common/src/main/java/dev/vitrail/ProbeEntry.java")
+        borrowed = listed not in INVENTORY
+        if borrowed:
+            INVENTORY[listed] = "self-test: an entry that exists only for the length of this check"
+        try:
+            _sources(root, "package dev.vitrail;\n\nfinal class Probe {\n}\n")
+            _write(root, listed, "package dev.vitrail;\n\nfinal class Stub {\n}\n")
+            if listed in unexpected(root):
+                raise SystemExit("no-Vulkan self-test failed: an inventory entry was treated as "
+                                 "residue")
+            if listed not in evaluate(root)[1]:
+                raise SystemExit("no-Vulkan self-test failed: a clean inventory entry was not named "
+                                 "as retired, so the counter would never shrink")
+            # The entry exempts the file it names and no other: the same residue in a path nobody
+            # listed is still a finding, which is what stops the list being a blanket exemption.
+            _write(root, listed,
+                   "package dev.vitrail;\n\nimport com.mojang.blaze3d.vulkan.VulkanDevice;\n")
+            if listed in unexpected(root):
+                raise SystemExit("no-Vulkan self-test failed: an inventory entry was treated as "
+                                 "residue")
+            _write(root, "common/src/main/java/dev/vitrail/Unlisted.java",
+                   "package dev.vitrail;\n\nimport com.mojang.blaze3d.vulkan.VulkanDevice;\n")
+            if "common/src/main/java/dev/vitrail/Unlisted.java" not in " ".join(unexpected(root)):
+                raise SystemExit("no-Vulkan self-test failed: the same residue in an unlisted file "
+                                 "was not reported, so the inventory is a blanket exemption")
+            (root / "common/src/main/java/dev/vitrail/Unlisted.java").unlink()
+        finally:
+            if borrowed:
+                del INVENTORY[listed]
 
     print("no-Vulkan surface contract: self-test PASS (an imported type, a prose mention, an "
           "unreasoned marker, a named file and a mixin entry are each caught, and a marked line and "
