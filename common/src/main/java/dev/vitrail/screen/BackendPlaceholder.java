@@ -26,7 +26,8 @@ import org.jspecify.annotations.Nullable;
  * <strong>This screen never writes the graphics API.</strong> An earlier shape of it offered a button
  * that switched the game to the other backend and closed it, which was the reference's gesture for the
  * same situation the other way round: Iris opens such a screen in place of its pack screen on a
- * renderer it cannot use ({@code IrisConfig.java:50-51}, {@code IrisVKOnly.java:24}), and the layout,
+ * renderer it cannot use ({@code IrisConfig.java:50-51}, {@code MixinMinecraft_Keybinds.java:23-27}),
+ * and the layout,
  * the words with the two backends swapped and what the switch did were
  * {@code ShaderPackScreenPlaceholder.java}'s, line for line. There is no other backend to switch to
  * here, and the preference the Metal path is selected through belongs to the game and to Metallum

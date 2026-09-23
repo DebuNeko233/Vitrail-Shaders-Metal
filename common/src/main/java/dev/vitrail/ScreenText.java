@@ -232,7 +232,8 @@ public final class ScreenText {
 	 * <p>
 	 * The layout is the reference's screen for the same situation the other way round: Iris opens one
 	 * in place of its pack screen on a renderer it cannot use ({@code IrisConfig.java:50-51},
-	 * {@code IrisVKOnly.java:24}), and this follows it. The button that switched the backend and
+	 * {@code MixinMinecraft_Keybinds.java:23-27}), and this follows it. The button that switched the
+	 * backend and
 	 * closed the game is gone with the second backend.
 	 */
 	public static final String BACKEND_PLACEHOLDER = "options.vitrail.backend_placeholder";

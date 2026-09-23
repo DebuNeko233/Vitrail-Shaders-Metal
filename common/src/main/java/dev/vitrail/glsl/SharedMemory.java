@@ -18,7 +18,7 @@ import java.util.regex.Pattern;
  * {@code Threadgroup memory size (36864) exceeds the maximum threadgroup memory allowed (32768)}.
  * That is Photon's sky light, {@code shared vec3 shared_memory[256][9]} at sixteen bytes a
  * {@code float3}, and without it everything the sky lights renders dark. The cap is Metal's own,
- * so the figure is the one its refusal names rather than a device limit this seam can ask for.
+ * so the figure is the one its refusal names and not an answer asked of the device.
  * <p>
  * <strong>Why a buffer is the same memory, and when it is not.</strong> A shared variable is one
  * copy for the invocations of one local work group, and a buffer is one copy for every invocation of

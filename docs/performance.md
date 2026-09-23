@@ -294,7 +294,7 @@ rather than by hand, so they can be re-taken after every change.
    file in the game directory, off by default. Read `ShadowFrameProbe.java:26-37` and copy the
    property and marker handling rather than inventing a second convention.
 2. Extend the existing census machinery rather than adding a parallel one.
-   `PassTimings` already has `armCensus()`, `censusArmed()`, `censusSubmit()`, `censusClear()`,
+   `PassTimings` already has `armCensus()`, `censusArmed()`, `censusClear()`,
    `finishCensus()`, `resetCensus()` and `censusReopen(Supplier<String>, String)`. The new counters
    are three more things a census reports, not a new census.
 3. Counter one: **render encoder boundaries per frame**, split into "the attachment configuration

@@ -156,13 +156,6 @@ public final class PassTimings {
 	private static int censusClears;
 	private static int censusCopies;
 
-	/**
-	 * Command-buffer submissions to the backend's queue, which is the number a capture tool reports
-	 * and the one issue 161 is about. Counted rather than inferred: a pass, a clear and a copy each
-	 * tend to cost one, but the backend decides that and not this class, so the totals beside it
-	 * say which of them the count is made of.
-	 */
-	private static int censusSubmits;
 	private static Supplier<String> censusOpenLabel;
 	private static final Map<String, Integer> censusLabels = new HashMap<>();
 
@@ -324,7 +317,6 @@ public final class PassTimings {
 		censusSlices = 0;
 		censusProgramWalks = 0;
 		censusFarSections = 0;
-		censusSubmits = 0;
 		censusOpenLabel = null;
 		censusLabels.clear();
 		censusReopens.clear();
@@ -370,7 +362,6 @@ public final class PassTimings {
 		censusSlices = 0;
 		censusProgramWalks = 0;
 		censusFarSections = 0;
-		censusSubmits = 0;
 		lastCensus = 0L;
 		// The interval that spans a pack load is the load itself, seconds of it, and left in the
 		// window it would be the worst frame of the next reading and a late frame in its count.
@@ -478,16 +469,6 @@ public final class PassTimings {
 			return seconds > 0 ? seconds : ARMED_BY_FILE_SECONDS;
 		} catch (IOException | RuntimeException ignored) {
 			return ARMED_BY_FILE_SECONDS;
-		}
-	}
-
-	/**
-	 * One submit to the backend's queue, counted where the backend really makes it rather than
-	 * guessed from what was recorded into it.
-	 */
-	public static void censusSubmit() {
-		if (censusArmed) {
-			censusSubmits++;
 		}
 	}
 
@@ -651,10 +632,13 @@ public final class PassTimings {
 	 * as three different rows rather than one pile.
 	 */
 	private static void printCensus() {
-		Vitrail.logger().info("{} opened {} render passes, cleared {} textures and copied {}, for {} "
-						+ "queue submits",
+		// Submissions to the backend's queue are deliberately NOT counted here any more, and the
+		// number is not inferred from what was recorded either: a pass, a clear and a copy each tend
+		// to cost one, but the backend decides that and not this class, so an inference would be a
+		// plausible figure nobody measured. The count belongs to the backend's own telemetry.
+		Vitrail.logger().info("{} opened {} render passes, cleared {} textures and copied {}",
 				censusSeconds() > 0 ? "A frame of this pack" : "This pack's first full frame",
-				censusPasses, censusClears, censusCopies, censusSubmits);
+				censusPasses, censusClears, censusCopies);
 		Vitrail.logger().info("  and redid {} uniform slices, {} terrain program walks and {} far "
 				+ "terrain sections", censusSlices, censusProgramWalks, censusFarSections);
 		printRate();
