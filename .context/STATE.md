@@ -1,8 +1,9 @@
 # Project State
 
-Updated: 2026-09-22
-Scope: `dev`, after the long-term performance programme was merged (it came from `perf/optimisation`; the backend
-half is on companion Metallum `master` at `5debcb9`)
+Updated: 2026-09-23
+Scope: `dev` plus the Metal-only conversion branch; the seam it needs is on companion Metallum
+`feat/shader-module-seam`. The previous scope line named `perf/optimisation` and Metallum
+`master` at `5debcb9`.
 
 Short by design. The long form of almost everything here is in `docs/` - `docs/README.md` routes it - and this file
 names the document rather than restating it. The exception is a section of findings whose long form is nowhere else,
@@ -17,6 +18,34 @@ so is the Metal port that preceded it. What is left is a short list of open veri
 companion's first release.
 
 ## Confirmed now
+
+**The removal is verified on a real device, not only by contract.** Three Apple-Silicon runs on
+2026-09-23 with `M:tools/run-vitrail-smoke.sh` against a build of that branch:
+the game came up on Metal 4 (`Apple M5 Pro`, `macOS 27.0`), `Vitrail.initClient` installed the
+shader-module seam, and the seam's hook fired hundreds of times a second across the compile workers.
+With **Complementary Reimagined r5.9.1** loaded it dropped **867 unreached samplers across 41 pack
+modules**, zeroed locals in 4 of them, stripped 9625 debug names, served **188 modules from the disk
+cache**, and compiled **62 of 62** warm-up pipelines with none refused, over a 600-frame window at
+`wallP50=16.72 ms`. With **compute-storage-contract** loaded into `PerfWorld` it compiled and
+dispatched both compute programs through the backend (`Dispatched compute composite/a through the
+active backend: groups=(1,1,1), local=(1,1,1)`), bound `Phase15Buffer` as a storage buffer and
+`phase15Tex` as a storage image, and opened 9 render passes in the pack's first full frame. No
+Vitrail error appeared in any run.
+
+Three things that run proved and no static check could: the Metallum-side mixin's three
+`require = 1` injection points all apply; the hook works on the compile-worker threads, not only the
+render thread; and the seam's contract is *called*, not merely installed.
+
+What it did **not** reach: a screenshot-level check of any §36.4 family (MRT, per-attachment blend,
+comparison sampler, mipmap, 3D texture, threadgroup fallback, argument buffer). Those need the
+per-fixture launchers and an F2, so they remain open. The compute run's log is kept at
+`M:run/logs/vitrail-metal-validation-compute.log`; the earlier two runs' logs were rotated.
+
+**The font-sheet intensity mapping is a known, reported gap.** `GlyphIntensity` asks the backend for
+a view that reads one channel four times and names it once when nothing answers. On this platform the
+mapping is fixed when a resource is described rather than when a view is made, so the road that used
+to write it never applied here - which means a pack's intensity text has been drawing red. Fixing it
+needs a backend that can describe such a resource; no run has shown it working.
 
 **Metal is the only path, and the tree is Metal-only.** `AGENTS.md` states that as a current
 architecture fact rather than a migration: macOS on Apple Silicon, Metallum and Apple Metal is the
