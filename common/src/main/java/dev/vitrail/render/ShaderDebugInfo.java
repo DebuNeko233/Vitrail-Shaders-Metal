@@ -11,7 +11,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * every module: the whole GLSL text is carried in {@code OpSource} and an {@code OpLine} stands in
  * front of nearly every instruction, which on the corpus is a module two to three times the size it
  * needs to be. That size is paid again at every warm load, in bytes read off the store, in the
- * digest that answers for them, and in what the driver walks at {@code vkCreateShaderModule}.
+ * digest that answers for them, and in what Apple's compiler walks when it builds the pipeline from
+ * the MSL.
  * <p>
  * <strong>What it buys is line information INSIDE the module</strong>, which is what a validation
  * layer or a driver message points at when it names a place in a shader. A compile error is not

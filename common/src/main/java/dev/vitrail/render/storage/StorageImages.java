@@ -1,11 +1,8 @@
 package dev.vitrail.render.storage;
 
-import dev.vitrail.mixin.access.CommandEncoderAccessor;
 import dev.vitrail.mixin.access.GpuDeviceAccessor;
-import dev.vitrail.mixin.access.VulkanCommandEncoderAccessor;
 import dev.vitrail.pack.model.ImageInformation;
 import dev.vitrail.pack.model.PackTexture;
-import dev.vitrail.pack.model.TargetFormat;
 import dev.vitrail.Vitrail;
 
 import com.mojang.blaze3d.GpuDeviceLossException;
@@ -17,40 +14,32 @@ import com.mojang.blaze3d.systems.GpuDeviceBackend;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.GpuTexture;
 import com.mojang.blaze3d.textures.GpuTextureView;
-import com.mojang.blaze3d.vulkan.VulkanCommandEncoder;
-import com.mojang.blaze3d.vulkan.VulkanDevice;
-import com.mojang.blaze3d.vulkan.VulkanUtils;
 import org.jspecify.annotations.Nullable;
-import org.lwjgl.PointerBuffer;
-import org.lwjgl.system.MemoryStack;
-import org.lwjgl.util.vma.Vma;
-import org.lwjgl.util.vma.VmaAllocationCreateInfo;
-import org.lwjgl.vulkan.VK12;
-import org.lwjgl.vulkan.VkClearColorValue;
-import org.lwjgl.vulkan.VkCommandBuffer;
-import org.lwjgl.vulkan.VkImageCopy;
-import org.lwjgl.vulkan.VkImageCreateInfo;
-import org.lwjgl.vulkan.VkImageMemoryBarrier;
-import org.lwjgl.vulkan.VkImageSubresourceRange;
-import org.lwjgl.vulkan.VkImageViewCreateInfo;
 
-import java.nio.IntBuffer;
-import java.nio.LongBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import dev.vitrail.render.Backends;
 
 /**
  * The storage images a pack declared with {@code image.NAME}.
  * <p>
  * Minecraft 26.2's public texture creation path has no storage bit and cannot distinguish a true
- * three-dimensional texture from array layers. Vulkan therefore keeps the direct VMA allocation it
- * has always used, while another backend may provide {@link StorageImageBackend} and keep the
- * resource inside Minecraft's {@link GpuTexture}/{@link GpuTextureView} facade. The pack-facing
- * policy is shared: clear timing, persistence, relative sizing, camera following and scratch-copy
- * decisions are made here and not in a backend.
+ * three-dimensional texture from array layers. There is exactly one road, and it goes through the
+ * backend: a backend implementing {@link StorageImageBackend} allocates the shader-writable texture
+ * and keeps it inside Minecraft's {@link GpuTexture}/{@link GpuTextureView} facade, and the same
+ * backend's encoder records the clears and the exact region copies through
+ * {@link StorageImageCommands}. Nothing native crosses the seam and nothing here names a handle.
+ * The pack-facing policy is shared: clear timing, persistence, relative sizing, camera following
+ * and scratch-copy decisions are made here and not in a backend.
+ * <p>
+ * A backend that cannot serve one of those operations refuses explicitly, and the refusal reaches
+ * the colour targets as the frame's own failure. A declared name quietly left unserved would be a
+ * shader reading whatever the allocator handed back, which is a wrong picture rather than a
+ * missing optimisation.
  *
  * @see <a href="https://github.com/IrisShaders/Iris">Iris GlImage, LGPL-3.0</a>
  */
@@ -89,11 +78,13 @@ public final class StorageImages implements AutoCloseable {
 	 * and BSL two.
 	 * <p>
 	 * <strong>Two comments of this engine disagree on why that device was lost, and this budget
-	 * takes the cautious side of both rather than choosing.</strong> The Vulkan road used to blame
-	 * the SIZE, a five hundred mebibyte clear beside a 773 MiB storage-buffer fill on one command
-	 * buffer; {@link GpuRecording#afterTransfer} records the fence whose absence was the other
-	 * explanation. A backend-native clear has its own ordering, but the same allocation-pass budget
-	 * remains the conservative policy until the large-volume case has been measured there too.
+	 * takes the cautious side of both rather than choosing.</strong> One blamed the SIZE, a five
+	 * hundred mebibyte clear beside a 773 MiB storage-buffer fill on one command buffer; the other
+	 * blamed a fence that a transfer never recorded behind it. {@link GpuRecording} is where the
+	 * division is written down now - ordering is stated as intent and the backend's own fence chain
+	 * carries it, so a backend-native clear has its own ordering - but the same allocation-pass
+	 * budget remains the conservative policy until the large-volume case has been measured there
+	 * too.
 	 * <p>
 	 * <strong>What it still cuts, and it stays a debt.</strong> Photon's volumes at its own default
 	 * and below fit inside it twice over; at its two largest settings one volume alone is over it,
@@ -105,14 +96,17 @@ public final class StorageImages implements AutoCloseable {
 	private final List<Allocated> allocated = new ArrayList<>();
 
 	/**
-	 * Every name a Vulkan descriptor push may ask for, resolved to the native view it gets, rebuilt
-	 * whenever {@link #allocated} changes. Backends that expose a real Minecraft texture facade use
-	 * {@link #facadeBindings} instead, leaving this ABI unchanged for the Vulkan mixins.
+	 * The backend-owned texture view every name a pack may bind resolves to, under both the image
+	 * uniform and its optional sampler alias, rebuilt whenever {@link #allocated} changes.
 	 */
-	private Map<String, Bound> bindings = Map.of();
-
-	/** Backend-owned texture views, under both the image uniform and its optional sampler alias. */
 	private Map<String, GpuTextureView> facadeBindings = Map.of();
+
+	/**
+	 * Which of those names is the image uniform rather than a sampler written beside it on the same
+	 * {@code image.} line. Both resolve to the very same view, so this is the one thing a binding
+	 * layout cannot read off the map: see {@link #storageBinding}.
+	 */
+	private Set<String> storageNames = Set.of();
 	private int lastWidth;
 	private int lastHeight;
 	private boolean laidOut;
@@ -134,34 +128,27 @@ public final class StorageImages implements AutoCloseable {
 	}
 
 	/**
-	 * The Vulkan image currently allocated for this name, whether the pack wrote it as the image
-	 * uniform or as the sampler on the same {@code image.} line. Vulkan mixins look it up while
-	 * pushing descriptors.
-	 */
-	public static Bound bound(String name) {
-		return current.lookup(name);
-	}
-
-	/**
-	 * The backend-owned Minecraft view for this name, or null when the active resource is the direct
-	 * Vulkan allocation. The public {@link com.mojang.blaze3d.systems.RenderPass} seam substitutes
-	 * this view before the backend sees the bind.
+	 * The backend-owned Minecraft view for this name, or null where nothing is allocated under it.
+	 * The public {@link com.mojang.blaze3d.systems.RenderPass} seam substitutes this view before the
+	 * backend sees the bind, so the pack's own name is the only thing that has to travel.
 	 */
 	public static @Nullable GpuTextureView facadeView(String name) {
 		return current.facadeBindings.get(name);
 	}
 
+	/**
+	 * Whether this name is the storage image itself rather than a sampler hanging off its line.
+	 * <p>
+	 * A layout built from the pack's declaration has to tell the two apart: both names answer with
+	 * the same view, and only the image uniform is one a shader stores into. The first image that
+	 * claims a name answers for it, the image uniform before the sampler on the same line.
+	 */
 	public static boolean storageBinding(String name) {
-		Bound bound = bound(name);
-		return bound != null && bound.storage();
+		return current.storageNames.contains(name);
 	}
 
 	void install() {
 		current = this;
-	}
-
-	private Bound lookup(String name) {
-		return this.bindings.get(name);
 	}
 
 	/**
@@ -169,32 +156,25 @@ public final class StorageImages implements AutoCloseable {
 	 * the same line, which is the order the walk this replaces read them in.
 	 */
 	private void rebind() {
-		Map<String, Bound> bound = new HashMap<>();
 		Map<String, GpuTextureView> facade = new HashMap<>();
+		Set<String> storage = new HashSet<>();
 		for (Allocated image : this.allocated) {
-			boolean integer = image.declared.internalFormat().used().integer();
-			if (image.view != 0L) {
-				bound.putIfAbsent(image.declared.name(), new Bound(image.view, true, integer));
-				image.declared.sampler().ifPresent(sampler ->
-						bound.putIfAbsent(sampler, new Bound(image.view, false, integer)));
+			GpuTextureView view = image.facadeView;
+			if (view == null) {
+				continue;
 			}
 
-			if (image.facadeView != null) {
-				facade.putIfAbsent(image.declared.name(), image.facadeView);
-				image.declared.sampler().ifPresent(sampler ->
-						facade.putIfAbsent(sampler, image.facadeView));
+			// A null answer means the name was free and this image's uniform is what answers for
+			// it. A name already taken keeps the image that took it, sampler aliases included.
+			if (facade.putIfAbsent(image.declared.name(), view) == null) {
+				storage.add(image.declared.name());
 			}
+
+			image.declared.sampler().ifPresent(sampler -> facade.putIfAbsent(sampler, view));
 		}
 
-		this.bindings = Map.copyOf(bound);
 		this.facadeBindings = Map.copyOf(facade);
-	}
-
-	/**
-	 * One Vulkan native view. {@code storage} is the image uniform ({@code voxel_img}); a sampler
-	 * name hanging off the same directive is sampled, not stored.
-	 */
-	public record Bound(long view, boolean storage, boolean integer) {
+		this.storageNames = Set.copyOf(storage);
 	}
 
 	/** Whether the last refusal was of an image no screen size can change, see {@link #ensure}. */
@@ -205,6 +185,11 @@ public final class StorageImages implements AutoCloseable {
 	/**
 	 * Allocates every absolute image once, and rebuilds the relative ones when the screen moves.
 	 * A failure is the whole set given back and the frame refused, see {@link #refused}.
+	 * <p>
+	 * A device whose backend does not serve {@link StorageImageBackend} is one this engine cannot
+	 * draw a pack with at all, and it is told so plainly rather than having the images skipped: the
+	 * pack's shaders were compiled against these names, so an engine that cannot allocate them has
+	 * no frame to draw.
 	 */
 	public void ensure(int screenWidth, int screenHeight) {
 		install();
@@ -224,21 +209,19 @@ public final class StorageImages implements AutoCloseable {
 		}
 
 		GpuDeviceBackend deviceBackend = ((GpuDeviceAccessor) device).vitrail$backend();
-		VulkanDevice vulkan = deviceBackend instanceof VulkanDevice activeVulkan
-				? activeVulkan : null;
-		StorageImageBackend storageBackend = deviceBackend instanceof StorageImageBackend storage
-				? storage : null;
-		if (vulkan == null && storageBackend == null) {
-			return;
+		if (!(deviceBackend instanceof StorageImageBackend storageBackend)) {
+			throw new IllegalStateException("The " + device.getDeviceInfo().backendName()
+					+ " backend does not serve shader storage images, which "
+					+ this.declared.images().size() + " of this pack declares");
 		}
 
 		// Everything or nothing: a refusal halfway through gives back what was allocated, so the
 		// next screen size the colour targets try again at starts from the first image rather
 		// than skipping the one that failed as already dealt with.
 		try {
-			allocate(device, vulkan, storageBackend, first, resized, screenWidth, screenHeight);
+			allocate(device, storageBackend, first, resized, screenWidth, screenHeight);
 		} catch (RuntimeException e) {
-			this.allocated.forEach(image -> image.destroy(vulkan));
+			this.allocated.forEach(Allocated::close);
 			this.allocated.clear();
 			this.laidOut = false;
 			rebind();
@@ -249,9 +232,9 @@ public final class StorageImages implements AutoCloseable {
 		this.lastHeight = screenHeight;
 		rebind();
 		try {
-			layoutIfNeeded();
+			layoutIfNeeded(device);
 		} catch (RuntimeException e) {
-			this.allocated.forEach(image -> image.destroy(vulkan));
+			this.allocated.forEach(Allocated::close);
 			this.allocated.clear();
 			this.laidOut = false;
 			rebind();
@@ -259,9 +242,8 @@ public final class StorageImages implements AutoCloseable {
 		}
 	}
 
-	private void allocate(GpuDevice device, @Nullable VulkanDevice vulkan,
-			@Nullable StorageImageBackend storageBackend, boolean first, boolean resized,
-			int screenWidth, int screenHeight) {
+	private void allocate(GpuDevice device, StorageImageBackend storageBackend, boolean first,
+			boolean resized, int screenWidth, int screenHeight) {
 		if (first) {
 			for (ImageInformation image : this.declared.images()) {
 				if (image.relative()) {
@@ -270,7 +252,7 @@ public final class StorageImages implements AutoCloseable {
 
 				boolean movable = movable(image);
 				try {
-					this.allocated.add(Allocated.create(device, vulkan, storageBackend, image,
+					this.allocated.add(Allocated.create(device, storageBackend, image,
 							image.width(), image.height(), Math.max(image.depth(), 1), movable));
 					// Which volumes follow the camera and which do not, said once per pack rather
 					// than left to be guessed from the picture: a volume left behind keeps a frame
@@ -295,7 +277,7 @@ public final class StorageImages implements AutoCloseable {
 			List<Allocated> kept = new ArrayList<>();
 			for (Allocated image : this.allocated) {
 				if (image.relative) {
-					image.destroy(vulkan);
+					image.close();
 					this.laidOut = false;
 				} else {
 					kept.add(image);
@@ -314,7 +296,7 @@ public final class StorageImages implements AutoCloseable {
 				try {
 					// Never movable: a relative image is a screen and not a volume, and it goes
 					// back and is built again on every resize.
-					this.allocated.add(Allocated.create(device, vulkan, storageBackend, image,
+					this.allocated.add(Allocated.create(device, storageBackend, image,
 							width, height, 1, false));
 					Vitrail.logger().info("storage image {} at {}x{}", image.describe(), width,
 							height);
@@ -347,37 +329,25 @@ public final class StorageImages implements AutoCloseable {
 	 * Empties every image the pack asked to clear, which Complementary's voxel volume is. Called
 	 * at the top of the shadow stage, before geometry writes, matching Iris clearing custom images
 	 * before the shadow map is drawn.
+	 * <p>
+	 * Nothing is recorded when no image asks for it, which is most packs: the capability is
+	 * demanded only where there is work for it.
 	 */
 	public void clearMarked(CommandEncoder encoder) {
 		GpuRecording.endPass(encoder);
-		VkCommandBuffer commands = commands(encoder);
-		if (commands != null) {
-			try (MemoryStack stack = MemoryStack.stackPush()) {
-				// The volume being emptied was sampled by the previous frame's gbuffers and stored by
-				// the previous dispatch, and nothing else orders those against a transfer write.
-				GpuRecording.beforeTransfer(commands, stack);
-				for (Allocated image : this.allocated) {
-					if (!image.declared.clear()) {
-						continue;
-					}
-
-					clearImage(commands, stack, image);
-				}
-
-				GpuRecording.afterTransfer(commands, stack);
-			}
-			return;
-		}
-
-		StorageImageCommands storageCommands = storageCommands(encoder);
-		if (storageCommands == null) {
-			return;
-		}
-
+		List<Allocated> marked = new ArrayList<>();
 		for (Allocated image : this.allocated) {
 			if (image.declared.clear() && image.texture != null) {
-				clearImage(storageCommands, image);
+				marked.add(image);
 			}
+		}
+		if (marked.isEmpty()) {
+			return;
+		}
+
+		StorageImageCommands commands = storageCommands(encoder);
+		for (Allocated image : marked) {
+			clearImage(commands, image);
 		}
 	}
 
@@ -453,104 +423,67 @@ public final class StorageImages implements AutoCloseable {
 	 * The {@code |d|} leading planes keep what they held rather than being emptied. They sit at the
 	 * far edge of the volume and are the conservative choice: a stale identity there blocks light
 	 * where an emptied one would leak it.
+	 * <p>
+	 * A volume with no scratch beside it is left where it is and keeps the frame of lag its failed
+	 * allocation already logged; a volume whose move the backend refuses ends in
+	 * {@link #commandRefused} rather than half moved.
 	 */
 	public void reanchor(CommandEncoder encoder, int dx, int dy, int dz) {
 		if (dx == 0 && dy == 0 && dz == 0) {
 			return;
 		}
 
-		GpuRecording.endPass(encoder);
-		VkCommandBuffer commands = commands(encoder);
-		if (commands != null) {
-			try (MemoryStack stack = MemoryStack.stackPush()) {
-				GpuRecording.beforeTransfer(commands, stack);
-				for (Allocated image : this.allocated) {
-					if (image.scratch == 0L) {
-						continue;
-					}
-
-					// Past the extent nothing of the volume survives the move, which is a teleport
-					// rather than a step. Emptied and not moved: the pack's own floodfill reprojection
-					// is just as lost there, and identities from the world the player has left would
-					// block light all over the one they arrived in.
-					if (Math.abs(dx) >= image.width || Math.abs(dy) >= image.height
-							|| Math.abs(dz) >= image.depth) {
-						clearImage(commands, stack, image);
-						continue;
-					}
-
-					move(commands, stack, image, dx, dy, dz);
-				}
-
-				GpuRecording.afterTransfer(commands, stack);
-			}
-			return;
-		}
-
-		StorageImageCommands storageCommands = storageCommands(encoder);
-		if (storageCommands == null) {
-			return;
-		}
-
+		List<Allocated> movable = new ArrayList<>();
 		for (Allocated image : this.allocated) {
-			if (image.scratchTexture == null) {
-				continue;
+			if (image.scratchTexture != null) {
+				movable.add(image);
 			}
+		}
+		if (movable.isEmpty()) {
+			return;
+		}
 
+		GpuRecording.endPass(encoder);
+		StorageImageCommands commands = storageCommands(encoder);
+		for (Allocated image : movable) {
+			// Past the extent nothing of the volume survives the move, which is a teleport
+			// rather than a step. Emptied and not moved: the pack's own floodfill reprojection
+			// is just as lost there, and identities from the world the player has left would
+			// block light all over the one they arrived in.
 			if (Math.abs(dx) >= image.width || Math.abs(dy) >= image.height
 					|| Math.abs(dz) >= image.depth) {
-				clearImage(storageCommands, image);
+				clearImage(commands, image);
 				continue;
 			}
 
-			move(storageCommands, image, dx, dy, dz);
+			move(commands, image, dx, dy, dz);
 		}
 	}
 
 	/**
 	 * The move itself, in two copies through the image's own scratch because an in-place overlapping
-	 * copy has no portable meaning. Both backends therefore carry the same region through a second
-	 * image; Vitrail owns the arithmetic and the backend owns how each exact copy is encoded.
+	 * copy has no portable meaning. The backend carries the same region through a second image;
+	 * Vitrail owns the arithmetic and the backend owns how each exact copy is encoded.
 	 * <p>
 	 * Both copies carry the SAME region, the one the second reads, and the scratch keeps whatever an
 	 * earlier move left outside it: no reader of any kind ever names the scratch, so a texel there
 	 * that the second copy will not read is a texel the first one has no reason to write. That is
 	 * {@code |d|} planes an axis, a plane at a walking pace and a large part of the volume at speed.
+	 * <p>
+	 * <strong>The dependency between the two copies is not this class's to record, and the road this
+	 * replaces recorded one.</strong> The second copy reads what the first has just written, and the
+	 * machinery that used to say so - a barrier between two transfers - is gone with the backend it
+	 * was written for. {@link StorageImageCommands} offers one verb for an exact region copy and none
+	 * for an ordering between two of them, so this method does not order them and cannot claim to.
+	 * What makes the pair correct is the capability's own contract, which is written for exactly this
+	 * caller: a shift in place is a scratch and two non-overlapping copies, the backend that records
+	 * both is the one whose encoder orders the commands inside it, and where that backend cannot
+	 * record the copy at all it answers false - which this method turns into a refusal rather than a
+	 * volume left half moved.
 	 */
-	private static void move(VkCommandBuffer commands, MemoryStack stack, Allocated image,
-			int dx, int dy, int dz) {
-		int fromX = Math.max(dx, 0);
-		int fromY = Math.max(dy, 0);
-		int fromZ = Math.max(dz, 0);
-		int spanX = image.width - Math.abs(dx);
-		int spanY = image.height - Math.abs(dy);
-		int spanZ = image.depth - Math.abs(dz);
-
-		VkImageCopy.Buffer kept = VkImageCopy.calloc(1, stack);
-		VkImageCopy carried = kept.get(0);
-		layers(carried);
-		carried.srcOffset().set(fromX, fromY, fromZ);
-		carried.dstOffset().set(fromX, fromY, fromZ);
-		carried.extent().set(spanX, spanY, spanZ);
-		VK12.vkCmdCopyImage(commands, image.image, VK12.VK_IMAGE_LAYOUT_GENERAL,
-				image.scratch, VK12.VK_IMAGE_LAYOUT_GENERAL, kept);
-
-		GpuRecording.betweenTransfers(commands, stack);
-
-		VkImageCopy.Buffer shifted = VkImageCopy.calloc(1, stack);
-		VkImageCopy region = shifted.get(0);
-		layers(region);
-		region.srcOffset().set(fromX, fromY, fromZ);
-		region.dstOffset().set(Math.max(-dx, 0), Math.max(-dy, 0), Math.max(-dz, 0));
-		region.extent().set(spanX, spanY, spanZ);
-		VK12.vkCmdCopyImage(commands, image.scratch, VK12.VK_IMAGE_LAYOUT_GENERAL,
-				image.image, VK12.VK_IMAGE_LAYOUT_GENERAL, shifted);
-	}
-
-	private static void move(StorageImageCommands commands, Allocated image,
-			int dx, int dy, int dz) {
+	private static void move(StorageImageCommands commands, Allocated image, int dx, int dy, int dz) {
 		if (image.texture == null || image.scratchTexture == null) {
-			return;
+			throw commandRefused(image, "copy it through its scratch image");
 		}
 
 		int fromX = Math.max(dx, 0);
@@ -578,69 +511,15 @@ public final class StorageImages implements AutoCloseable {
 		}
 	}
 
-	private static void layers(VkImageCopy region) {
-		region.srcSubresource().set(VK12.VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1);
-		region.dstSubresource().set(VK12.VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1);
-	}
-
-	private void layoutIfNeeded() {
+	private void layoutIfNeeded(GpuDevice device) {
 		if (this.laidOut || this.allocated.isEmpty()) {
-			return;
-		}
-
-		GpuDevice device = RenderSystem.tryGetDevice();
-		if (device == null) {
 			return;
 		}
 
 		CommandEncoder encoder = device.createCommandEncoder();
 		GpuRecording.endPass(encoder);
-		VkCommandBuffer commands = commands(encoder);
-		if (commands != null) {
-			List<Allocated> born = newlyBorn();
-			try (MemoryStack stack = MemoryStack.stackPush()) {
-				for (Allocated image : born) {
-					// The scratch beside its image and in the same breath: it is a transfer end of the
-					// same volume, so it has to leave UNDEFINED before the first copy names it, and a
-					// copy is the only thing that ever will.
-					int count = image.scratch == 0L ? 1 : 2;
-					VkImageMemoryBarrier.Buffer barriers = VkImageMemoryBarrier.calloc(count, stack)
-							.sType$Default();
-					for (int at = 0; at < count; at++) {
-						VkImageMemoryBarrier barrier = barriers.get(at);
-						barrier.sType$Default();
-						barrier.oldLayout(VK12.VK_IMAGE_LAYOUT_UNDEFINED);
-						barrier.newLayout(VK12.VK_IMAGE_LAYOUT_GENERAL);
-						barrier.srcAccessMask(0);
-						barrier.dstAccessMask(VK12.VK_ACCESS_SHADER_READ_BIT
-								| VK12.VK_ACCESS_SHADER_WRITE_BIT
-								| VK12.VK_ACCESS_TRANSFER_WRITE_BIT
-								| VK12.VK_ACCESS_TRANSFER_READ_BIT);
-						barrier.srcQueueFamilyIndex(VK12.VK_QUEUE_FAMILY_IGNORED);
-						barrier.dstQueueFamilyIndex(VK12.VK_QUEUE_FAMILY_IGNORED);
-						barrier.image(at == 0 ? image.image : image.scratch);
-						barrier.subresourceRange().set(VK12.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1);
-					}
-
-					VK12.vkCmdPipelineBarrier(commands, VK12.VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-							VK12.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, null, null, barriers);
-				}
-
-				clearBornImages(commands, stack, born);
-			}
-
-			markBornPrepared(born);
-			this.laidOut = true;
-			return;
-		}
-
-		StorageImageCommands storageCommands = storageCommands(encoder);
-		if (storageCommands == null) {
-			return;
-		}
-
 		List<Allocated> born = newlyBorn();
-		clearBornImages(storageCommands, born);
+		clearBornImages(encoder, born);
 		markBornPrepared(born);
 		this.laidOut = true;
 	}
@@ -667,34 +546,24 @@ public final class StorageImages implements AutoCloseable {
 	 * Empties the volumes that have just been created and that nothing else will ever empty, which
 	 * is every one the pack did not mark {@code clear}.
 	 * <p>
-	 * Vulkan orders the transfer clear through the barriers around this call. A backend-native road
-	 * provides the same dependency through its own encoder ordering; the decision about WHICH born
-	 * images receive zeros remains shared in {@link #birthClears}.
+	 * <strong>The zeros are visible to the pack's first dispatch because the backend says so, and
+	 * not because a fence is recorded beside them.</strong> There is no image layout to be brought
+	 * out of undefined here, the clear goes through {@code vitrail$clearStorageImage} into the same
+	 * command stream as the dispatch that reads it, and what a later reader waits on is the
+	 * backend's own fence chain - {@link GpuRecording} is where that division is written down. The
+	 * decision about WHICH born images receive zeros remains here, in {@link #birthClears}.
 	 */
-	private void clearBornImages(VkCommandBuffer commands, MemoryStack stack, List<Allocated> born) {
+	private void clearBornImages(CommandEncoder encoder, List<Allocated> born) {
 		List<Allocated> emptying = birthClears(born);
 		if (emptying.isEmpty()) {
 			return;
 		}
 
-		for (Allocated image : emptying) {
-			clearImage(commands, stack, image);
-		}
-
-		// The one fence between these zeros and the pack's first dispatch. See the javadoc above.
-		GpuRecording.afterTransfer(commands, stack);
-		logBornCleared(emptying.size());
-	}
-
-	private void clearBornImages(StorageImageCommands commands, List<Allocated> born) {
-		List<Allocated> emptying = birthClears(born);
-		if (emptying.isEmpty()) {
-			return;
-		}
-
+		StorageImageCommands commands = storageCommands(encoder);
 		for (Allocated image : emptying) {
 			clearImage(commands, image);
 		}
+
 		logBornCleared(emptying.size());
 	}
 
@@ -749,20 +618,6 @@ public final class StorageImages implements AutoCloseable {
 				* image.declared.internalFormat().used().bytesPerPixel();
 	}
 
-	private static void clearImage(VkCommandBuffer commands, MemoryStack stack, Allocated image) {
-		VkClearColorValue colour = VkClearColorValue.calloc(stack);
-		if (image.declared.internalFormat().used().integer()) {
-			IntBuffer ints = colour.int32();
-			ints.put(0, 0).put(1, 0).put(2, 0).put(3, 0);
-		} else {
-			colour.float32().put(0, 0.0F).put(1, 0.0F).put(2, 0.0F).put(3, 0.0F);
-		}
-
-		VkImageSubresourceRange range = VkImageSubresourceRange.calloc(stack);
-		range.set(VK12.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1);
-		VK12.vkCmdClearColorImage(commands, image.image, VK12.VK_IMAGE_LAYOUT_GENERAL, colour, range);
-	}
-
 	private static void clearImage(StorageImageCommands commands, Allocated image) {
 		if (image.texture == null
 				|| !commands.vitrail$clearStorageImage(image.texture, dimensions(image.declared.shape()))) {
@@ -775,14 +630,29 @@ public final class StorageImages implements AutoCloseable {
 				+ " was allocated by the active backend but that backend could not " + operation);
 	}
 
-	private static VkCommandBuffer commands(CommandEncoder encoder) {
-		return ((CommandEncoderAccessor) encoder).vitrail$backend() instanceof VulkanCommandEncoder vulkan
-				? ((VulkanCommandEncoderAccessor) vulkan).vitrail$commandBuffer()
-				: null;
-	}
+	/**
+	 * The clear and copy commands of the active encoder, or a refusal that names what was asked of
+	 * which backend.
+	 * <p>
+	 * The capability is asked of the backend behind the encoder wrapper, for the reason
+	 * {@link Backends} records: the wrapper is a new object per call and answers no capability ever.
+	 * A backend that hands out a storage image and cannot then clear or copy one is not a backend
+	 * this engine can keep a pack's volumes on, and saying so is the point: a clear that was quietly
+	 * skipped is a pack reading the previous frame, and a skipped copy is a volume standing at the
+	 * wrong anchor.
+	 */
+	private static StorageImageCommands storageCommands(CommandEncoder encoder) {
+		Object capabilities = Backends.capabilities(encoder);
+		if (capabilities instanceof StorageImageCommands commands) {
+			return commands;
+		}
 
-	private static @Nullable StorageImageCommands storageCommands(CommandEncoder encoder) {
-		return Backends.capabilities(encoder) instanceof StorageImageCommands commands ? commands : null;
+		CommandEncoderBackend backend = Backends.encoder(encoder);
+		throw new IllegalStateException("the storage images this pack declares need clears and "
+				+ "region copies from the active command encoder, and "
+				+ (backend == null
+						? "this encoder has no backend this engine can ask for them"
+						: "the " + backend.getClass().getName() + " backend does not serve them"));
 	}
 
 	int count() {
@@ -795,27 +665,19 @@ public final class StorageImages implements AutoCloseable {
 			current = none();
 		}
 
-		VulkanDevice vulkan = vulkan();
-		this.allocated.forEach(image -> image.destroy(vulkan));
+		this.allocated.forEach(Allocated::close);
 		this.allocated.clear();
-		this.bindings = Map.of();
 		this.facadeBindings = Map.of();
+		this.storageNames = Set.of();
 		this.lastWidth = 0;
 		this.lastHeight = 0;
 		this.laidOut = false;
 	}
 
-	private static @Nullable VulkanDevice vulkan() {
-		GpuDevice device = RenderSystem.tryGetDevice();
-		if (device == null) {
-			return null;
-		}
-
-		GpuDeviceBackend backend = ((GpuDeviceAccessor) device).vitrail$backend();
-		return backend instanceof VulkanDevice vulkan ? vulkan : null;
-	}
-
-	/** One allocated image, either direct Vulkan handles or a backend-owned Minecraft facade. */
+	/**
+	 * One allocated image: a backend-owned Minecraft texture behind the game's own facade, with the
+	 * scratch beside it for the volumes {@link #reanchor} moves.
+	 */
 	private static final class Allocated {
 
 		private final ImageInformation declared;
@@ -823,49 +685,34 @@ public final class StorageImages implements AutoCloseable {
 		private final int width;
 		private final int height;
 		private final int depth;
-		private long image;
-		private long allocation;
-		private long view;
 		private @Nullable GpuTexture texture;
 		private @Nullable GpuTextureView facadeView;
 
 		/**
-		 * A second image of the same shape, for the volumes {@link #reanchor} moves, and nought/null
-		 * for every other. It carries no view: nothing samples it and nothing stores into it, it is
+		 * A second image of the same shape, for the volumes {@link #reanchor} moves, and null for
+		 * every other. It carries no view: nothing samples it and nothing stores into it, it is
 		 * one end of a copy and no more.
 		 */
-		private long scratch;
-		private long scratchAllocation;
 		private @Nullable GpuTexture scratchTexture;
 
 		/** Whether backend birth preparation for this allocation has already been recorded. */
 		private boolean laidOut;
 
-		private Allocated(ImageInformation declared, boolean relative, int width, int height,
-				int depth, long image, long allocation, long view) {
+		private Allocated(ImageInformation declared, int width, int height, int depth) {
 			this.declared = declared;
-			this.relative = relative;
+			this.relative = declared.relative();
 			this.width = width;
 			this.height = height;
 			this.depth = depth;
-			this.image = image;
-			this.allocation = allocation;
-			this.view = view;
 		}
 
-		private static Allocated create(GpuDevice device, @Nullable VulkanDevice vulkan,
-				@Nullable StorageImageBackend backend, ImageInformation declared, int width,
-				int height, int depth, boolean movable) {
-			if (vulkan != null) {
-				return createVulkan(vulkan, declared, width, height, depth, movable);
-			}
-			if (backend != null) {
-				return createFacade(device, backend, declared, width, height, depth, movable);
-			}
-			throw new IllegalStateException("Active backend exposes no storage-image allocation path");
-		}
-
-		private static Allocated createFacade(GpuDevice device, StorageImageBackend backend,
+		/**
+		 * Asks the active backend for the texture, and for the scratch beside it where the volume
+		 * may be moved. A failure of the texture is the caller's to turn into a refused frame; a
+		 * failure of the scratch is not, because a volume without one keeps the frame of lag it
+		 * carried before rather than dropping the pack's lighting.
+		 */
+		private static Allocated create(GpuDevice device, StorageImageBackend backend,
 				ImageInformation declared, int width, int height, int depth, boolean movable) {
 			int extentWidth = Math.max(width, 1);
 			int extentHeight = Math.max(height, 1);
@@ -876,7 +723,8 @@ public final class StorageImages implements AutoCloseable {
 					"Vitrail storage image " + declared.name(), format,
 					extentWidth, extentHeight, extentDepth, dimensions);
 			if (texture == null) {
-				throw new IllegalStateException("Backend returned null for storage image " + declared.name());
+				throw new IllegalStateException("Backend returned null for storage image "
+						+ declared.name());
 			}
 
 			GpuTextureView view;
@@ -887,8 +735,7 @@ public final class StorageImages implements AutoCloseable {
 				throw e;
 			}
 
-			Allocated allocated = new Allocated(declared, declared.relative(), extentWidth,
-					extentHeight, extentDepth, 0L, 0L, 0L);
+			Allocated allocated = new Allocated(declared, extentWidth, extentHeight, extentDepth);
 			allocated.texture = texture;
 			allocated.facadeView = view;
 			if (movable) {
@@ -909,86 +756,12 @@ public final class StorageImages implements AutoCloseable {
 			return allocated;
 		}
 
-		private static Allocated createVulkan(VulkanDevice vulkan, ImageInformation declared,
-				int width, int height, int depth, boolean movable) {
-			int vkFormat = vkFormat(declared.internalFormat().used());
-			int type = imageType(declared.shape());
-			int viewType = viewType(declared.shape());
-			int extentWidth = Math.max(width, 1);
-			int extentHeight = Math.max(height, 1);
-			int extentDepth = Math.max(depth, 1);
-			try (MemoryStack stack = MemoryStack.stackPush()) {
-				VkImageCreateInfo imageInfo = VkImageCreateInfo.calloc(stack).sType$Default();
-				imageInfo.imageType(type);
-				imageInfo.extent().set(extentWidth, extentHeight, extentDepth);
-				imageInfo.mipLevels(1);
-				imageInfo.arrayLayers(1);
-				imageInfo.format(vkFormat);
-				imageInfo.tiling(VK12.VK_IMAGE_TILING_OPTIMAL);
-				imageInfo.initialLayout(VK12.VK_IMAGE_LAYOUT_UNDEFINED);
-				imageInfo.usage(VK12.VK_IMAGE_USAGE_STORAGE_BIT
-						| VK12.VK_IMAGE_USAGE_SAMPLED_BIT
-						| VK12.VK_IMAGE_USAGE_TRANSFER_SRC_BIT
-						| VK12.VK_IMAGE_USAGE_TRANSFER_DST_BIT);
-				imageInfo.sharingMode(VK12.VK_SHARING_MODE_EXCLUSIVE);
-				imageInfo.samples(VK12.VK_SAMPLE_COUNT_1_BIT);
-				VmaAllocationCreateInfo allocationInfo = VmaAllocationCreateInfo.calloc(stack);
-				allocationInfo.usage(8);
-				LongBuffer imagePtr = stack.callocLong(1);
-				PointerBuffer allocationPtr = stack.callocPointer(1);
-				VulkanUtils.crashIfFailure(vulkan,
-						Vma.vmaCreateImage(vulkan.vma(), imageInfo, allocationInfo, imagePtr,
-								allocationPtr, null),
-						"storage image " + declared.name());
-				long image = imagePtr.get(0);
-				long allocation = allocationPtr.get(0);
-
-				VkImageViewCreateInfo viewInfo = VkImageViewCreateInfo.calloc(stack).sType$Default();
-				viewInfo.image(image);
-				viewInfo.viewType(viewType);
-				viewInfo.format(vkFormat);
-				viewInfo.subresourceRange().set(VK12.VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1);
-				LongBuffer viewPtr = stack.callocLong(1);
-				try {
-					VulkanUtils.crashIfFailure(vulkan,
-							VK12.vkCreateImageView(vulkan.vkDevice(), viewInfo, null, viewPtr),
-							"storage image view " + declared.name());
-				} catch (RuntimeException e) {
-					Vma.vmaDestroyImage(vulkan.vma(), image, allocation);
-					throw e;
-				}
-
-				Allocated allocated = new Allocated(declared, declared.relative(), extentWidth,
-						extentHeight, extentDepth, image, allocation, viewPtr.get(0));
-
-				// A failure of scratch is not the image's failure. The volume stays bound and merely
-				// keeps the frame of lag it carried before, rather than dropping the pack's lighting.
-				if (movable) {
-					try {
-						VulkanUtils.crashIfFailure(vulkan,
-								Vma.vmaCreateImage(vulkan.vma(), imageInfo, allocationInfo, imagePtr,
-										allocationPtr, null),
-								"storage image scratch " + declared.name());
-						allocated.scratch = imagePtr.get(0);
-						allocated.scratchAllocation = allocationPtr.get(0);
-					} catch (GpuDeviceLossException e) {
-						throw e;
-					} catch (RuntimeException e) {
-						Vitrail.logger().warn("storage image {} keeps a frame of lag, its scratch "
-								+ "could not be allocated: {}", declared.name(), e.toString());
-					}
-				}
-
-				return allocated;
-			}
-		}
-
 		/**
-		 * Frees backend-owned facades through their own close path and direct Vulkan handles through
-		 * the game's deferred queue. The latter may still be named by in-flight descriptors, so they
-		 * retain the existing delayed destruction rule.
+		 * Gives the facades back through their own close path. Nothing native is held here, so there
+		 * is no handle of this engine's to defer: the game's own texture release is where an
+		 * allocation still named by in-flight work already waits.
 		 */
-		private void destroy(@Nullable VulkanDevice vulkan) {
+		private void close() {
 			GpuTextureView facade = this.facadeView;
 			GpuTexture texture = this.texture;
 			GpuTexture scratchTexture = this.scratchTexture;
@@ -1004,34 +777,6 @@ public final class StorageImages implements AutoCloseable {
 			if (scratchTexture != null) {
 				scratchTexture.close();
 			}
-
-			long view = this.view;
-			long image = this.image;
-			long allocation = this.allocation;
-			long scratch = this.scratch;
-			long scratchAllocation = this.scratchAllocation;
-			this.view = 0L;
-			this.image = 0L;
-			this.allocation = 0L;
-			this.scratch = 0L;
-			this.scratchAllocation = 0L;
-			if (vulkan == null) {
-				return;
-			}
-
-			GpuRecording.destroyLater(() -> {
-				if (view != 0L) {
-					VK12.vkDestroyImageView(vulkan.vkDevice(), view, null);
-				}
-
-				if (image != 0L) {
-					Vma.vmaDestroyImage(vulkan.vma(), image, allocation);
-				}
-
-				if (scratch != 0L) {
-					Vma.vmaDestroyImage(vulkan.vma(), scratch, scratchAllocation);
-				}
-			});
 		}
 	}
 
@@ -1040,66 +785,6 @@ public final class StorageImages implements AutoCloseable {
 			case TEXTURE_1D -> 1;
 			case TEXTURE_3D -> 3;
 			case TEXTURE_2D, TEXTURE_RECTANGLE -> 2;
-		};
-	}
-
-	private static int imageType(PackTexture.Shape shape) {
-		return switch (shape) {
-			case TEXTURE_1D -> VK12.VK_IMAGE_TYPE_1D;
-			case TEXTURE_3D -> VK12.VK_IMAGE_TYPE_3D;
-			case TEXTURE_2D, TEXTURE_RECTANGLE -> VK12.VK_IMAGE_TYPE_2D;
-		};
-	}
-
-	private static int viewType(PackTexture.Shape shape) {
-		return switch (shape) {
-			case TEXTURE_1D -> VK12.VK_IMAGE_VIEW_TYPE_1D;
-			case TEXTURE_3D -> VK12.VK_IMAGE_VIEW_TYPE_3D;
-			case TEXTURE_2D, TEXTURE_RECTANGLE -> VK12.VK_IMAGE_VIEW_TYPE_2D;
-		};
-	}
-
-	private static int vkFormat(TargetFormat format) {
-		return switch (format) {
-			case R8_UNORM -> VK12.VK_FORMAT_R8_UNORM;
-			case R8_SNORM -> VK12.VK_FORMAT_R8_SNORM;
-			case RG8_UNORM -> VK12.VK_FORMAT_R8G8_UNORM;
-			case RG8_SNORM -> VK12.VK_FORMAT_R8G8_SNORM;
-			case RGBA8_UNORM -> VK12.VK_FORMAT_R8G8B8A8_UNORM;
-			case RGBA8_SNORM -> VK12.VK_FORMAT_R8G8B8A8_SNORM;
-			case R16_UNORM -> VK12.VK_FORMAT_R16_UNORM;
-			case R16_SNORM -> VK12.VK_FORMAT_R16_SNORM;
-			case RG16_UNORM -> VK12.VK_FORMAT_R16G16_UNORM;
-			case RG16_SNORM -> VK12.VK_FORMAT_R16G16_SNORM;
-			case RGBA16_UNORM -> VK12.VK_FORMAT_R16G16B16A16_UNORM;
-			case RGBA16_SNORM -> VK12.VK_FORMAT_R16G16B16A16_SNORM;
-			case R8_UINT -> VK12.VK_FORMAT_R8_UINT;
-			case R8_SINT -> VK12.VK_FORMAT_R8_SINT;
-			case RG8_UINT -> VK12.VK_FORMAT_R8G8_UINT;
-			case RG8_SINT -> VK12.VK_FORMAT_R8G8_SINT;
-			case RGBA8_UINT -> VK12.VK_FORMAT_R8G8B8A8_UINT;
-			case RGBA8_SINT -> VK12.VK_FORMAT_R8G8B8A8_SINT;
-			case R16_UINT -> VK12.VK_FORMAT_R16_UINT;
-			case R16_SINT -> VK12.VK_FORMAT_R16_SINT;
-			case RG16_UINT -> VK12.VK_FORMAT_R16G16_UINT;
-			case RG16_SINT -> VK12.VK_FORMAT_R16G16_SINT;
-			case RGBA16_UINT -> VK12.VK_FORMAT_R16G16B16A16_UINT;
-			case RGBA16_SINT -> VK12.VK_FORMAT_R16G16B16A16_SINT;
-			case R32_UINT -> VK12.VK_FORMAT_R32_UINT;
-			case R32_SINT -> VK12.VK_FORMAT_R32_SINT;
-			case RG32_UINT -> VK12.VK_FORMAT_R32G32_UINT;
-			case RG32_SINT -> VK12.VK_FORMAT_R32G32_SINT;
-			case RGBA32_UINT -> VK12.VK_FORMAT_R32G32B32A32_UINT;
-			case RGBA32_SINT -> VK12.VK_FORMAT_R32G32B32A32_SINT;
-			case R16_FLOAT -> VK12.VK_FORMAT_R16_SFLOAT;
-			case RG16_FLOAT -> VK12.VK_FORMAT_R16G16_SFLOAT;
-			case RGBA16_FLOAT -> VK12.VK_FORMAT_R16G16B16A16_SFLOAT;
-			case R32_FLOAT -> VK12.VK_FORMAT_R32_SFLOAT;
-			case RG32_FLOAT -> VK12.VK_FORMAT_R32G32_SFLOAT;
-			case RGBA32_FLOAT -> VK12.VK_FORMAT_R32G32B32A32_SFLOAT;
-			case RGB10A2_UNORM -> VK12.VK_FORMAT_A2B10G10R10_UNORM_PACK32;
-			case RGB10A2_UINT -> VK12.VK_FORMAT_A2B10G10R10_UINT_PACK32;
-			case RG11B10_FLOAT -> VK12.VK_FORMAT_B10G11R11_UFLOAT_PACK32;
 		};
 	}
 }

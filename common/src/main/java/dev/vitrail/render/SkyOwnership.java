@@ -233,12 +233,11 @@ public final class SkyOwnership {
 			} finally {
 				BufferBlending.building(false);
 			}
-			// A Vulkan device that can run a pack geometry stage has to run the same one here too:
-			// it is part of the mesh's position. On Metal the only geometry stages admitted here are
-			// pass-through stages already folded away, so there is no filed stage to copy.
-			GeometryStage.noteBeside(pipeline, owner);
-			// A vertex stage may itself read a comparison sampler. The binding decision is keyed on
-			// the pipeline object, so carry that note even though the claim fragment samples nothing.
+			// Metal admits no geometry stage at all, the pass-through ones being folded into the
+			// fragment stage at build time, so there is no filed stage to copy onto a rebuilt variant.
+			// A vertex stage may itself read a comparison sampler, though, and the binding decision is
+			// keyed on the pipeline object: carry that note even though the claim fragment samples
+			// nothing.
 			ShadowCompare.noteBeside(pipeline, owner);
 
 			// Keep only the vertex identifier, not owner, in the source closure. CLAIMS is weak on

@@ -105,7 +105,7 @@ public final class PackChain {
 
 	/**
 	 * The quad a pack expects under a full screen pass, from (0,0) to (1,1), as two triangles.
-	 * Vulkan has no quad topology and going through an index buffer to get one would add a
+	 * Metal has no quad topology and going through an index buffer to get one would add a
 	 * moving part for four vertices.
 	 */
 	private static final float[] QUAD = {
@@ -729,7 +729,7 @@ public final class PackChain {
 	 *         frame nothing
 	 */
 	public static boolean beforeLevel() {
-		// Off Vulkan nothing is loaded for the world to move under, and the road is not named either:
+		// Off Metal no chain is loaded for the world to move under, and the road is not named either:
 		// beside Iris that line would be about a pack Iris is the one drawing.
 		if (HostReport.otherBackend()) {
 			return false;
@@ -968,10 +968,10 @@ public final class PackChain {
 			// for the same reason.
 			throw e;
 		} catch (RuntimeException e) {
-			// A pipeline the driver will not build throws out of precompilePipeline rather than coming
-			// back invalid, which is what MoltenVK does with a stage Metal refuses, and nothing between
-			// here and the game loop caught it. The reference stops drawing the pack and draws the
-			// game's own picture on an exception while it builds its pipeline, and so does this.
+			// A pipeline the backend will not build throws out of precompilePipeline rather than coming
+			// back invalid, which is what Apple's compiler does with MSL it refuses, and nothing
+			// between here and the game loop caught it. The reference stops drawing the pack and draws
+			// the game's own picture on an exception while it builds its pipeline, and so does this.
 			stop();
 			Vitrail.logger().error("Vitrail stopped drawing this pack after an error", e);
 			chain.release();
@@ -1212,7 +1212,7 @@ public final class PackChain {
 		// allocation's initial contents; flush its deferred load-op clears before setup so no later
 		// render pass can erase an imageStore made by setup. The same command stream then changes
 		// encoder type as Metal requires: the clear encoder is ended before PackCompute starts its
-		// compute encoder, with ordering supplied by the command buffer rather than a Vulkan barrier.
+		// compute encoder, with ordering supplied by the command buffer rather than a barrier.
 		if (this.compute.hasSetup()
 				&& (main.width != this.setupWidth || main.height != this.setupHeight)) {
 			this.targets.flushPending(encoder);
@@ -1305,7 +1305,6 @@ public final class PackChain {
 		DistantDraw.close();
 		ConstantTextures.close();
 		ShadowCompare.close();
-		GeometryStage.close();
 	}
 
 	/**
@@ -1456,9 +1455,9 @@ public final class PackChain {
 				: -1;
 
 		// Each pass opens and closes its own render pass. Closing one is what makes the next able
-		// to read it: the Vulkan backend ends a pass with a full memory barrier, so the cost of
-		// the chain is one whole serialisation of the GPU per program and there is no way around
-		// it short of knowing which passes do not overlap.
+		// to read it: the backend ends a pass on a full memory barrier, so the cost of the chain
+		// is one whole serialisation of the GPU per program and there is no way around it short
+		// of knowing which passes do not overlap.
 		CommandEncoder encoder = device.createCommandEncoder();
 		GpuBuffer buffer = this.block.currentBuffer();
 		// The chains this walk has filled and nothing has written over since, by target and side.
@@ -2790,9 +2789,9 @@ public final class PackChain {
 		// entering a world with Complementary Unbound: one shaderc compile is about half a second
 		// and a frame is worth sixteen milliseconds, so there is no per-frame budget it fits in
 		// and spreading it only spaces the stalls out. What removed the stalls rather than moving
-		// them is the worker: precompilePipeline is not safe off the render thread, its caches
-		// and its compiler being shared and unguarded, but the create calls under it are once
-		// those are bypassed, and FamilyWarmup says how the two halves are split.
+		// them is the worker: the compiles run on threads of this engine's own, through the
+		// backend's public precompile road, and FamilyWarmup says which capability has to be
+		// advertised before a single task is spawned.
 		if (compileNext(device, this.terrain.programs())) {
 			return false;
 		}
@@ -3335,10 +3334,12 @@ public final class PackChain {
 	}
 
 	void release() {
-		// The worker's flag first, so a compile still running for this chain stores nothing more
-		// into programs nothing will ever draw again; what it already stored is destroyed with the
-		// walk below, which is safe for objects nothing ever bound. Only families the worker
-		// finished translating are walked, for the reason rotate() gives.
+		// The worker's flag first, so a compile still running for this chain stops at its next
+		// program. What it already compiled is not this chain's to free: every pipeline it built
+		// went into the backend's own cache through the public precompile call, and the cache is
+		// what frees them, on the same purge that frees every other pipeline a resource reload
+		// drops. Only families the worker finished translating are walked, for the reason rotate()
+		// gives.
 		this.warmup.release();
 		int ready = Math.min(this.warmup.familiesReady(), this.families.size());
 		for (int family = 0; family < ready; family++) {
@@ -3382,17 +3383,18 @@ public final class PackChain {
 		// against them. The reload's cost is therefore named and left: it is a few hundred
 		// kilobytes of SPIR-V a reload, against the hundred megabytes of targets freed above.
 		//
-		// What frees them afterwards is not one answer any more, and the line says which it is. A
-		// release on the way out of a world leaves this chain live, because it draws again the
-		// moment one is joined, and the next device purge carries its pipelines over itself
-		// (VulkanDeviceMixin). A release because the chain is being replaced or has been stopped
-		// leaves it neither, and there the purge frees them as it always did.
+		// What frees them afterwards is the device's own cache, which both roads reach and which
+		// frees them the same way. The line says what the session loses rather than what the cache
+		// does: a release on the way out of a world leaves this chain live, because it draws again
+		// the moment one is joined, so what the purge takes comes back with its first draw. A
+		// release because the chain is being replaced or has been stopped leaves it neither, and
+		// there they are gone for good.
 		if (this.programs != null && !this.programs.isEmpty()) {
 			boolean stillLive = active == this && !disabled;
 			Vitrail.logger().info("{} pipelines and {} shader modules of load {} stay in the device "
 					+ "cache, and the next purge {}", this.programs.size(),
 					2 * this.programs.size(), this.load,
-					stillLive ? "carries them, this chain being the one that draws again"
+					stillLive ? "takes them, and this chain compiles them again"
 							: "frees them");
 		}
 	}

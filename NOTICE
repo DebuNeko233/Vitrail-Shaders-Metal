@@ -22,7 +22,7 @@ GNU Lesser General Public License version 3
   common/src/main/java/dev/vitrail/pack/model/TargetFormat.java transcribes the colour format table
   of net.irisshaders.iris.gl.texture.InternalTextureFormat, so that a pack is read against the names
   it was written for. The promotion of the three component formats and the replacement of the
-  fixed function relics are this project's own, and are needed because Vulkan attaches neither.
+  fixed function relics are this project's own, and are needed because the backend attaches neither.
 
   common/src/main/java/dev/vitrail/pack/target/ConstDirectives.java and
   common/src/main/java/dev/vitrail/pack/target/DrawBuffers.java follow the grammars of
@@ -119,7 +119,7 @@ GNU Lesser General Public License version 3
   net.irisshaders.iris.gl.program.ProgramBuilder, whose begin builds a third shader out of the
   .gsh at lines 44 and 45 and hands it to the link at line 55. The rule is what packs are written
   against: a stage that renames the varyings between the two others is only correct in a pipeline
-  that carries it. Everything under it is this engine's own, Vulkan asking for a device feature,
+  that carries it. Everything under it is this engine's own, the backend asking for a device feature,
   a shaderc kind, a bind group and a stage description where OpenGL asks for a link.
 
   common/src/main/java/dev/vitrail/render/HorizonCone.java takes the shape of the horizon geometry
@@ -288,14 +288,14 @@ GNU Lesser General Public License version 3
   net.irisshaders.iris.vertices.sodium.GlyphExtVertexSerializer, where the four formats 26.2 really
   binds reach the stage untouched; GlyphVertex writes out what that costs.
 
-  common/src/main/java/dev/vitrail/render/GlyphIntensity.java and
-  common/src/main/java/dev/vitrail/mixin/VulkanGpuTextureViewMixin.java reproduce Iris's answer for
+  common/src/main/java/dev/vitrail/render/GlyphIntensity.java, together with the view this engine
+  builds over the game's image, reproduces Iris's answer for
   a font sheet holding one channel, read in September 2026: the image a pack samples as gtexture is
   presented with red in all four components, which is what
   net.irisshaders.iris.pipeline.programs.ExtendedShader lines 198 to 201 set on the albedo texture
   for the rows ShaderKey.isIntensity names at line 128, and undone at the next program use by
   net.irisshaders.iris.gl.IrisRenderSystem lines 527 to 533. The mechanism is not Iris's: OpenGL
-  carries the swizzle on the texture object and Vulkan carries it on the image view, so a view of
+  carries the swizzle on the texture object and Metal carries it on the texture view, so a view of
   this engine's own is built over the game's image instead of a state being set and unset.
   GlyphIntensity writes out what that changes and why the rows are read off the pipeline.
 
@@ -462,8 +462,8 @@ GNU Lesser General Public License version 3
   status written only while the entry has none so that the player's own choice stands, and the
   wording of the version, shaderpack and shaders-disabled lines. What is said when a pack is not
   drawn is this project's own, following how its loader keeps the three reasons apart. Iris's lines
-  show only off Vulkan, net.irisshaders.iris.mixin.IrisMixinPlugin applying the registering mixin
-  there alone, and this entry says nothing on a backend other than Vulkan, the same line held from
+  show only where Iris draws, net.irisshaders.iris.mixin.IrisMixinPlugin applying the registering mixin
+  there alone, and this entry says nothing on a backend other than Metal, the same line held from
   the other side.
 
   common/src/main/java/dev/vitrail/glsl/LegacyGlsl.java reproduces what Iris puts in place of the
@@ -921,16 +921,16 @@ GNU Lesser General Public License version 3
   and iris.keybind.shaderPackSelection, on I as Iris binds it, Iris.java:811 and 813; the two it
   binds that have no counterpart here are toggleShaders on K and an unbound wireframe. On a backend
   this engine does not draw on both keys do nothing and Iris's mapping is left alone, so beside Iris
-  each press is Iris's own. On Vulkan, the press of the I both bind is taken from Iris's mapping at
-  the start of the tick, before Iris asks it at the end, VKOnly_InitKeys.java:27, so the screen Iris
-  opens there, IrisVKOnly.java:24, does not open over this one.
+  each press is Iris's own. On Metal, the press of the I both bind is taken from Iris's mapping at
+  the start of the tick, before Iris asks it at the end, so the screen Iris would open there does not
+  open over this one.
   common/src/main/java/dev/vitrail/screen/BackendPlaceholder.java transcribes
-  net.irisshaders.iris.compat.sodium.config.ShaderPackScreenPlaceholder mirrored for the other
-  backend: its title, its message with OpenGL and Vulkan swapped, its two buttons and their bounds,
-  and the closing sequence of its switch, which sets Vulkan here where Iris sets OpenGL. The pages
+  net.irisshaders.iris.compat.sodium.config.ShaderPackScreenPlaceholder mirrored for this engine's
+  own backend: its title, its message with OpenGL and Metal swapped, its two buttons and their bounds,
+  and the closing sequence of its switch, which sets Metal here where Iris sets OpenGL. The pages
   PackScreens stands behind open it on any backend this engine does not draw on, and the settings
   page of Sodium's video settings is left out there, Iris drawing there or not, both as
-  net.irisshaders.iris.compat.sodium.config.IrisConfig does on Vulkan.
+  net.irisshaders.iris.compat.sodium.config.IrisConfig does where Iris draws.
   common/src/main/java/dev/vitrail/ScreenText.java keeps the English of these screens word
   for word wherever Iris has a string for the same thing, so that a player who has configured a
   pack before reads the words they already know; what Iris has no string for is this project's
@@ -973,8 +973,8 @@ GNU Lesser General Public License version 3
   letter order, with a memory barrier after, reading and writing the colour targets on the halves
   that pass reads. The shadow computes run at the head of the frame here where Iris runs them
   inside its shadow render, ShadowRenderer lines 631 and 632, and the file says what that
-  translation costs. The pipeline they are built into, shaderc's compute kind reached past the
-  game's facade with push descriptors and a storage image through VMA, is this project's own.
+  translation costs. The pipeline they are built into is this project's own: shaderc's compute kind
+  is reached past the game's facade, and the storage image is a backend-owned writable texture.
 
   Nothing else in Vitrail is derived from Iris. Of its GLSL transformation machinery, which links
   against glsl-transformer (AGPL-3.0), only the values named above are reproduced: none of that

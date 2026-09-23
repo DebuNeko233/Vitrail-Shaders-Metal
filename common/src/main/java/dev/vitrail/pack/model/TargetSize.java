@@ -29,9 +29,10 @@ public record TargetSize(boolean relative, float width, float height) {
 
 	/**
 	 * How wide a side of a target this engine will allocate, the same ceiling the shadow map keeps
-	 * and for the same reason: it is what Vulkan guarantees of a 2D image, and the number is the
-	 * pack's own with nothing between it and the allocator. {@code size.buffer.colortex0 = 100000
-	 * 100000} asks for forty gigabytes on one target, and the whole corpus writes fractions.
+	 * and for the same reason: it is what the graphics API guarantees of a 2D image, and the
+	 * number is the pack's own with nothing between it and the allocator.
+	 * {@code size.buffer.colortex0 = 100000 100000} asks for forty gigabytes on one target, and
+	 * the whole corpus writes fractions.
 	 */
 	public static final int MAX_DIMENSION = 16384;
 

@@ -3,8 +3,6 @@ package dev.vitrail.render;
 import dev.vitrail.uniform.WorldState;
 
 import com.mojang.blaze3d.systems.GpuDevice;
-import com.mojang.blaze3d.vulkan.VulkanDevice;
-import com.mojang.blaze3d.vulkan.glsl.GlslCompiler;
 
 /**
  * What {@link PackDump} needs of a program to be able to name it and read it back.
@@ -56,23 +54,18 @@ interface DumpedProgram {
 	}
 
 	/**
-	 * Compiles this program's pipeline on the pack-load worker, so its first draw finds the work
-	 * already paid instead of paying shaderc on the render thread. {@link FamilyProgram} hands it
-	 * to the program for the six on-demand families; the terrain turns it off, compiling while
-	 * the world is still held back.
-	 *
-	 * @param compiler the worker's own compiler, never the device's: the device's belongs to the
-	 *                 render thread along with the caches around it
-	 * @return true when a compiled pipeline is now waiting for {@link #compile} to adopt it
-	 */
-	default boolean warmAhead(VulkanDevice device, GlslCompiler compiler) {
-		return false;
-	}
-
-	/**
-	 * The chain released before anything drew this program, so no {@link #compile} will ever adopt
-	 * what the worker prepared: what waits is destroyed, and a worker still running stores nothing
-	 * more here.
+	 * The chain released before anything drew this program, so no {@link #compile} will ever come
+	 * for what the warm-up prepared.
+	 * <p>
+	 * <strong>There is nothing left to release, and the empty body is the answer rather than an
+	 * omission.</strong> The warm-up compiles through {@link #compile}, exactly as a first draw
+	 * does, and that hands the compiled pipeline to the device's own cache: from that moment the
+	 * cache owns it, and {@code PackChain.release()} lets go of what a chain compiled the way it
+	 * lets go of every other pipeline of that chain, at the next purge. There used to be an object
+	 * here that the cache had never taken, and this method destroyed it; the road that built it is
+	 * gone, so no such object exists. Evicting the cached pipeline instead would free nothing the
+	 * purge does not, and would cost a release that leaves its chain live - which draws again the
+	 * moment a world is joined - the pipelines it had just warmed.
 	 */
 	default void discardAhead() {
 	}

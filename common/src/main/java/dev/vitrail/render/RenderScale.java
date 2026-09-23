@@ -179,10 +179,10 @@ public final class RenderScale {
 			} catch (GpuDeviceLossException e) {
 				throw e;
 			} catch (RuntimeException e) {
-				// A stage the driver refuses throws out of precompilePipeline rather than coming back
-				// invalid, which is what MoltenVK does with one Metal will not build, and endWorld
-				// runs outside every catch of the frame. The same latch as an invalid pipeline, so the
-				// fallback and the abandonment below it take over from here.
+				// A stage the backend refuses throws out of precompilePipeline rather than coming back
+				// invalid, which is what Apple's compiler does with MSL it will not build, and
+				// endWorld runs outside every catch of the frame. The same latch as an invalid
+				// pipeline, so the fallback and the abandonment below it take over from here.
 				Vitrail.logger().error("The {} pass of the render scale did not compile",
 						this.fragment.getPath(), e);
 			}

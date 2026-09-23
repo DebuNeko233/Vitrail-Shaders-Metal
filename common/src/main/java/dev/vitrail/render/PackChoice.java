@@ -138,15 +138,15 @@ public final class PackChoice {
 		// The storage blocks the translator files away, emptied at the head of a load and NOT beside
 		// the CustomImages line in release(), though the two are installed on the same line.
 		//
-		// What parts them is not when they are asked. VulkanBindGroupLayoutMixin asks both in the
-		// same method, while the layout is built. It is that only this one is asked again on the
-		// OTHER side of the same decision: the layout takes VK_DESCRIPTOR_TYPE_STORAGE_BUFFER from
-		// StorageBuffers.named and the descriptor write takes it from StorageBuffers.bound, and both
-		// of those come back here. A layout is cached with its pipeline and a release does not empty
-		// that cache, so emptying this between the two makes the write go in as a uniform buffer
-		// against a slot the layout already declared storage. The image half cannot do that: the
-		// write side reads StorageImages.bound, which walks an allocation of its own and never asks
-		// CustomImages, so an empty table there costs a filter mode for a frame and no more. The road
+		// What parts them is not when they are asked. The backend asks both in the same method, while
+		// the layout is built. It is that only this one is asked again on the OTHER side of the same
+		// decision: the layout's storage-buffer entry is resolved from StorageBuffers.named when the
+		// pipeline is built and the binding is resolved from the same table when the pass is
+		// recorded, and each of those reads comes back here. A layout is cached with its pipeline and
+		// a release does not empty that cache, so emptying this between the two makes the write go in
+		// as a uniform buffer against a slot the layout already declared storage. The image half
+		// cannot do that: the write side reads StorageImages' own allocation and never asks this
+		// table, so an empty table there costs a filter mode for a frame and no more. The road
 		// that used to reach it was leaving a world, which releases the chain and does NOT replace
 		// it, so the first frame of the next world was drawn by that same chain before the question
 		// of whether the world had moved was reached at all; PackChain.beforeLevel asks it at the
@@ -262,22 +262,23 @@ public final class PackChoice {
 			}
 
 			// Chosen, and neither read, drawn nor offered for picking. On a backend this engine is not
-			// written for, its pages open the offer to switch to Vulkan instead (PackScreens) and its
-			// keys do nothing (SettingsKey), so nothing asks for the pack's settings, and every switch
-			// here stays down so that nothing of the pack reaches a mesh or a frame: the programs are
-			// translated against Vulkan's depth and clip conventions, and what they drew when let run
-			// elsewhere was a picture credible and wrong, which reads as a pack fault. The game's own
-			// image is the better answer. Asked before the pack is opened rather than after it, so
-			// that beside Iris the log carries no reading of a pack Iris is not the one drawing.
-			// HostReport says it once in the log at startup and, unless Iris draws there, once in chat
-			// on entering a world; lastError is kept all the same, for whatever asks it next.
+			// written for, its pages report which of the Metal path's facts is missing (PackScreens,
+			// BackendPlaceholder) and its keys do nothing (SettingsKey), so nothing asks for the pack's
+			// settings, and every switch here stays down so that nothing of the pack reaches a mesh or
+			// a frame: the programs are translated against Metal's depth and clip conventions, and
+			// what they drew when let run elsewhere was a picture credible and wrong, which reads as a
+			// pack fault. The game's own image is the better answer. Asked before the pack is opened
+			// rather than after it, so that beside Iris the log carries no reading of a pack Iris is
+			// not the one drawing. HostReport says it once in the log at startup and, unless Iris draws
+			// there, once in chat on entering a world; lastError is kept all the same, for whatever
+			// asks it next.
 			if (HostReport.otherBackend()) {
 				TerrainDraw.wanted(false);
 				EntityDraw.wanted(false);
 				HandDraw.wanted(false);
 				lastError = ShaderPackSource.nameOf(pack) + " is not drawn on the "
-						+ HostReport.backend() + " backend: set Graphics API to \"Prefer Vulkan "
-						+ "(Experimental)\" under Options, Video Settings, and restart";
+						+ HostReport.backend() + " backend: select Metallum's \"Prefer Metal\" "
+						+ "graphics API preference and restart";
 				OpenedPack.forgetKept();
 				return;
 			}
@@ -398,9 +399,9 @@ public final class PackChoice {
 			// it is built, and the expander's liveness is that copy. The translator writes the
 			// live machine() table back out as #define lines. Installed after the copy, the two
 			// disagree: DISTANT_HORIZONS lands in the header, the DH uniforms stay in the body
-			// because liftUniforms will not move a dead line, and Vulkan refuses a non-opaque
-			// uniform outside a block. Complementary's deferred1 died that way on a DH toggle.
-			// Iris has one table for both jobs, StandardMacros.java:64-65.
+			// because liftUniforms will not move a dead line, and the compilation refuses a
+			// non-opaque uniform outside a block. Complementary's deferred1 died that way on a DH
+			// toggle. Iris has one table for both jobs, StandardMacros.java:64-65.
 			PackDefines.install();
 			report(pack);
 
@@ -1144,21 +1145,21 @@ public final class PackChoice {
 			try {
 				previous.release();
 			} catch (GpuDeviceLossException e) {
-				// The one thing a failed free can raise that is not about the free. The game's
-				// Vulkan backend raises it wherever a call comes back VK_ERROR_DEVICE_LOST
-				// (VulkanUtils.crashIfFailure) and catches it in no place at all, which is what
-				// makes it the end of the session rather than the end of a release: the load below
-				// would allocate its targets against a device that is gone. Rethrown as it stands,
-				// so the report opens on the lost device rather than on a line about video memory.
+				// The one thing a failed free can raise that is not about the free. The game's own
+				// GPU facade raises it wherever a backend call reports that the device is gone, and
+				// catches it in no place at all, which is what makes it the end of the session rather
+				// than the end of a release: the load below would allocate its targets against a
+				// device that is gone. Rethrown as it stands, so the report opens on the lost device
+				// rather than on a line about video memory.
 				throw e;
 			} catch (RuntimeException e) {
 				// Said here rather than left to whatever comes next, and said once: the chain is
 				// unreachable by the time this is caught, so nothing frees the rest of it later and
 				// no other line would ever name what it still holds. What it holds is buffers and
 				// images; the pipelines and shader modules of that load are not part of it, since
-				// the next device purge frees them whether a release reached them or not. That
-				// purge carries the LIVE load over itself now (VulkanDeviceMixin), and the load
-				// being replaced here is not the live one by the time it runs.
+				// they live in the device's own caches and are freed with the device rather than
+				// with this chain, whether a release reached them or not. The load being replaced
+				// here is not the live one by the time that happens.
 				Vitrail.logger().error("Vitrail could not hand back everything the pack being "
 						+ "replaced held, so the buffers and images its release had not reached "
 						+ "stay allocated until the game is closed", e);

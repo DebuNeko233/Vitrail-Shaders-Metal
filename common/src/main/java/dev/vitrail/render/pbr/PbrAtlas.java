@@ -112,7 +112,7 @@ final class PbrAtlas implements AutoCloseable {
 	@Override
 	public void close() {
 		// The views first: closing a texture does not close the views onto it, and nothing on the
-		// Vulkan backend checks that a bound view is still alive.
+		// Metal backend checks that a bound view is still alive.
 		this.views.values().forEach(GpuTextureView::close);
 		this.views.clear();
 		this.textures.values().forEach(GpuTexture::close);
@@ -150,10 +150,10 @@ final class PbrAtlas implements AutoCloseable {
 			this.views.put(map, device.createTextureView(texture));
 
 			CommandEncoder encoder = device.createCommandEncoder();
-			// Every level of the chain and not only the base: the backend's clear takes a level count
-			// of the whole texture, VulkanCommandEncoder:350-359. This is what a sprite with no map
-			// of its own reads, and it has to reach the levels too, since a chain whose tail was
-			// never written holds whatever the driver left there rather than a coarser image.
+			// Every level of the chain and not only the base, since the clear is not given a level.
+			// This is what a sprite with no map of its own reads, and it has to reach the levels
+			// too, since a chain whose tail was never written holds whatever the driver left
+			// there rather than a coarser image.
 			encoder.clearColorTexture(texture, map.missing());
 
 			for (Sprite sprite : found) {

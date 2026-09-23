@@ -1,10 +1,12 @@
 # The migration roadmap
 
 This page is the condensed English form of the plan this work is tracked against. The plan itself
-is a long Chinese document, kept verbatim beside the repository's other architecture memory at
+is a long Chinese document, kept beside the repository's other architecture memory at
 [`.context/architecture/roadmap.md`](../.context/architecture/roadmap.md); that file is the source
-of record and preserves its own typography, which the house text rule would refuse in `docs/`. This
-page is what the documentation set routes a reader to.
+of record and preserves its own typography, which the house text rule would refuse in `docs/`. It
+was imported while the project still had two graphics backends and has since been rewritten around
+the Metal-only product surface, so the plan below is stated once, for Metal, rather than as a
+choice between paths. This page is what the documentation set routes a reader to.
 
 Where the plan sketches a mechanism and the implementation arrived at a different one, this page
 says so instead of repeating the sketch. Those places are collected under
@@ -59,11 +61,17 @@ a vertex stride that no longer matches.
 - Minecraft's public graphics types are preferred across the seam. Only what that API cannot express
   becomes a backend extension.
 - Extensions are small capability interfaces that describe a GPU effect, not a large `RenderBackend`
-  facade, and never Vulkan vocabulary. `MipmapCommands.generateMipmaps(GpuTexture)` is the intended
-  shape; pipeline stage bits, access masks and image layouts are not.
+  facade, and never Metal-native vocabulary. `MipmapCommands.generateMipmaps(GpuTexture)` is the
+  intended shape; an encoder object, a texture usage flag or an argument-buffer index is not.
 - Metallum does not learn shader-pack policy. It implements textures, views, attachments, clears,
   sampling, blits and rendering; it does not schedule pack targets, and it does not know a
   `colortex` name.
+- **The support surface is one backend, and the abstraction is not there to keep several alive.**
+  Metallum on Apple Metal is the only provider Vitrail has; there is no second implementation to
+  keep behaviour-compatible with, and no regression baseline belonging to one. Backend-neutrality
+  is a way of keeping Metal-native detail on the Metal side of the seam and pack semantics on
+  Vitrail's side. When Metallum is absent, its API does not match, or its device cannot be created,
+  Vitrail fails early and says so; it does not continue on another graphics API.
 
 ## The compilation path
 
@@ -84,11 +92,11 @@ in the backend for the long term.
 
 ## Synchronization and encoder lifetime
 
-Vulkan barriers are not translated one by one into Metal barriers. What is abstracted is the
-dependency, not the barrier API: this pass wrote a texture, the next pass reads it, and Metal
-expresses that with encoder lifetime, command-buffer ordering and `MTLFence`. Encoder state is meant
-to be unambiguous at every moment, so a render encoder is never left open while a blit encoder
-begins, every command is begun, encoded and ended, and an exception path closes its encoder too.
+Barriers are not the seam. What is abstracted is the dependency, not a barrier API: this pass wrote
+a texture, the next pass reads it, and Metallum expresses that with encoder lifetime, command-buffer
+ordering and `MTLFence`. Encoder state is meant to be unambiguous at every moment, so a render
+encoder is never left open while a blit encoder begins, every command is begun, encoded and ended,
+and an exception path closes its encoder too.
 
 ## Render targets
 
@@ -175,7 +183,7 @@ other.
 
 ```text
 0   architecture freeze
-1   Vitrail backend neutralization, Vulkan behaviour unchanged
+1   Vitrail backend neutralization, behaviour unchanged
 2   Metallum MRT foundation
 3   Vitrail to Metallum bridge
 4   first fullscreen pack pass
@@ -196,16 +204,19 @@ other.
 
 PHASE 0 fixes the boundary before more features land and stops new high-level pack semantics entering
 Metallum. PHASE 1 is not "start writing Metal Vitrail": it extracts the backend extension out of the
-existing Vulkan implementation and requires Vulkan behaviour to be unchanged before any Metal
-backend begins. PHASE 2 is the hard dependency for everything after it. PHASE 17 is where a pack's
+engine's own draw path and requires the pack-visible result to be unchanged while it does, because
+the point of the exercise is to isolate Metal-native detail rather than to keep more than one
+implementation alive. There is no second provider behind that seam and no behaviour baseline
+belonging to one, so "unchanged" is a statement about what a pack observes, not about a backend kept
+on life support. PHASE 2 is the hard dependency for everything after it. PHASE 17 is where a pack's
 compatibility is finally decided, under the five statuses `Supported`, `Partially Supported`,
 `Fallback`, `Unsupported` and `Broken`; "compatible" on its own is not an answer. See
 [PHASE 17 compatibility](phase17-compatibility.md) for the evidence rules.
 
 **Two numbering systems are in use and they are not the same one.** This page numbers the *migration*,
 PHASE 0 to PHASE 17 above. The performance work that follows it - attachment lifetime, bindings,
-compilation, dead resources, Metal 4, MetalFX and the removal of the Vulkan path - is numbered `P0` to
-`P7` in [Performance, Metal 4 and MetalFX](performance.md), which carries each phase's Apple
+compilation, dead resources, Metal 4 and MetalFX - is numbered `P0` to `P7` in
+[Performance, Metal 4 and MetalFX](performance.md), which carries each phase's Apple
 documentation, its measurements and its exit criterion, and which is where a phase's status is
 recorded. A bare "P1" is ambiguous between the two: PHASE 1 here is backend neutralization, and
 performance P1 is attachment lifetime, whose measured verdict is that removing a sixth of a frame's
@@ -229,10 +240,12 @@ These are the places where reading the plan as a specification would send a read
 Each is a deliberate arrival at the same goal by another route, not an omission.
 
 - **The bridge is not a third module.** The plan sketches `vitrail-metallum` as a separate module
-  depending on both Vitrail and Metallum, so that Vitrail never depends on Metallum. What exists
-  instead is an optional seam: `common/src/main/java/dev/vitrail/compat/metallum/` and
-  `mixin/metallum/` reach Metallum through optional `@Pseudo` Mixin targets and reflective lookups,
-  and Metallum is never on Vitrail's common compile classpath. The goal holds; the consequence to
+  depending on both Vitrail and Metallum, so that Vitrail never depends on Metallum's classes. What
+  exists instead is a reflective seam: `common/src/main/java/dev/vitrail/compat/metallum/` and
+  `mixin/metallum/` reach Metallum through `@Pseudo` Mixin targets and reflective lookups, and
+  Metallum is never on Vitrail's common compile classpath. Metallum itself is a required runtime
+  dependency, declared in the loader metadata, so the soft part is the compile boundary and not the
+  integration. The goal holds; the consequence to
   know is that a signature mismatch surfaces as a runtime capability failure rather than a compile
   error, which is why `MetallumApi` carries an API version and why a failed lookup is cached as a
   negative result rather than retried per frame.
@@ -240,7 +253,7 @@ Each is a deliberate arrival at the same goal by another route, not an omission.
   under the name the plan gives. The rest of the seam is `ComputeDeviceBackend`, `ComputeCommands`,
   `StorageBufferBackend`, `StorageImageBackend`, `StorageImageCommands`,
   `ShaderWritableTextureBackend` and `StalePipelines`, alongside `GpuFormats`, `PackPass`,
-  `PackChain`, `ColorTargets` and `TargetSurface`. The principle (small interfaces, no Vulkan
+  `PackChain`, `ColorTargets` and `TargetSurface`. The principle (small interfaces, no Metal-native
   vocabulary) is what to hold onto.
 - **Nothing needed migrating out of Metallum.** The plan's migration table assumes a backend that
   already carries a pack runtime. This Metallum never did: there is no `LegacyTerrainTranslator`, no

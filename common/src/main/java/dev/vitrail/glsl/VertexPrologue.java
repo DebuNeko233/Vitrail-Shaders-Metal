@@ -24,7 +24,7 @@ import java.util.TreeSet;
  * complains. The list of names is not in here and must not be: it is the format the pass binds,
  * and a head declaring one fewer than that moves the location of every element after it,
  * {@code IntermediaryShaderModule.rebind:151-163} counting only what the stage declared where
- * {@code VulkanRenderPipeline:109-117} counts the whole format.
+ * {@code RenderPipeline:109-117} counts the whole format.
  * <p>
  * Sodium's chunk mesh keeps a table of its own all the same, in {@link SodiumVertex}, and that is
  * not an oversight: its elements are twenty packed bytes of its own invention, {@code uvec2} and

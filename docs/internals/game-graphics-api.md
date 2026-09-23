@@ -95,30 +95,32 @@ frame where a mistake announces itself.
 The game's own post-processing pass is the model worth following for the shape of a pass: save the
 projection state, open a pass on the output target, set the pipeline, bind the default uniforms, set
 the uniform blocks, bind each input texture by name, draw a full-screen triangle, restore. Notably,
-it declares no barrier and no layout transition, which is the subject of the next section.
+it asks for no fence and waits on nothing, which is the subject of the next section.
 
 ## Synchronisation: nothing to write, and a price to know
 
-Every GPU texture in the game lives in the general Vulkan layout for its whole life. The only
-transition that ever happens to one is from undefined at construction, and the layout passed when a
-texture is used as a colour attachment is the same as the one passed when it is sampled. There is no
-per-texture layout tracking anywhere, so there is nothing that can drift out of step from one frame
-to the next.
+Metal has no image layouts at all. A texture is a colour attachment in one pass and a sampled input
+in the next without being recreated, and nothing in the API records a state for it in between. There
+is therefore no per-texture layout tracking anywhere, and nothing that could drift out of step from
+one frame to the next.
 
-On top of that, closing a render pass ends it with a **full memory barrier**: all commands to
-all commands, memory read and memory write. The other operations that touch textures (clearing,
-copying, uploading) end the same way. That is still what the game does for its own passes.
+On top of that, closing an encoder is where the backend records its ordering point: the encoder being
+ended updates the frame's **fence**, and the next encoder waits on it before it begins. The other
+operations that touch textures (clearing, copying, uploading) end the same way. That is still what
+the game does for its own passes.
 
-Passes this engine labels (`Vitrail ...`) close with a narrower barrier instead, naming what the
-rest of the frame samples of the pass **and** what it writes over it. Both halves are needed and only
-the first is obvious: two Vulkan passes writing one image are ordered by nothing, where the bound
-framebuffer of OpenGL orders them for free, and the emptying of a target now rides the load-op of
-a pass rather than being a clear of its own, which makes it one of those writes. Consecutive
-geometry that writes the same colour and depth images stays in one pass, which is what Iris does by
-leaving `defaultFB` bound (`IrisRenderingPipeline.bindDefault`). A later composite, a copy, or a
-different framebuffer ends that hold first. Mip chains are filled with `vkCmdBlitImage` on the
-frame's command buffer, the Vulkan form of `glGenerateMipmap`, with transfer barriers between the
-levels rather than the full barrier a pass per level would have ended on. A pass per level is
+Passes this engine labels (`Vitrail ...`) end on that same fence, and what makes them worth a section
+is the dependency it has to carry rather than the call that records it: what the rest of the frame
+samples of the pass, **and** what the pass writes over. Both halves are needed and only the first is
+obvious: two passes that both write one image are ordered by nothing the API gives for free, where the
+bound framebuffer of OpenGL orders them, and the emptying of a target now rides the load-op of a pass
+rather than being a clear of its own, which makes it one of those writes.
+Consecutive geometry that writes the same colour and depth images stays in one pass, which is what
+Iris does by leaving `defaultFB` bound (`IrisRenderingPipeline.bindDefault`). A later composite, a
+copy, or a different framebuffer ends that hold first. Mip chains are filled by the backend's native
+blit mipmap command on the frame's command buffer, the Metal form of `glGenerateMipmap`; a depth
+chain that command cannot reduce goes through the backend's generic D32 progressive-nearest path.
+Either way the chain is filled without a pass per level, and a pass per level is
 not an option in any case: the game sizes a pass off the level's extent shifted without
 flooring, and refuses one on a level whose shorter side reaches nought, which the tail of every
 chain running to one texel on its longer side has.
@@ -126,27 +128,27 @@ chain running to one texel on its longer side has.
 **Both of those trades are on one switch**, because a narrow dependency that a driver honours by
 accident looks exactly like a correct one until somebody else's machine draws it. A file
 `vitrail/full-pass-barrier` in the instance, or `-Dvitrail.fullPassBarrier=true`, puts the game's own
-wait back at the close of our passes and between the blits of a mip chain. It is slower and it
+wait back at the close of our passes and between the levels of a mip chain. It is slower and it
 cannot be the cause of anything, which is the whole point: an image that comes right with it has
 named the synchronisation rather than the pass that shows it.
 
 The practical consequence is that reading in pass N+1 what pass N wrote still requires no
-synchronisation code of our own: close, open, bind. But the barrier exists only if the pass is
-genuinely closed, closing being what records it: `vkCmdEndRenderingKHR` and then the barrier, on the
-command buffer the frame submits once at its end. A pass left open by an early return or an
-exception path skips its barrier and stays open besides, so passes belong in try-with-resources
+synchronisation code of our own: close, open, bind. But the fence exists only if the pass is
+genuinely closed, closing being what records it: the render encoder ends and the fence is updated,
+on the command buffer the frame submits once at its end. A pass left open by an early return or an
+exception path skips its fence and stays open besides, so passes belong in try-with-resources
 without exception.
 
 **A transfer is refused inside a pass only by the encoder that opened that pass.**
 `GpuDevice.createCommandEncoder()` hands out a new `CommandEncoder` on every call over the one
-Vulkan encoder, and each instance checks only its own open pass, so a buffer or texture write asked
-for through any other instance is recorded straight into whatever pass is recording, which Vulkan
-forbids. A pass this engine keeps open across geometry is therefore ended before such a write
-whenever nothing is drawing into it, and a file `vitrail/transfer-in-pass` in the instance names
-every transfer that still lands inside a pass.
+backend, and each instance checks only its own open pass, so a buffer or texture write asked
+for through any other instance is recorded straight into whatever pass is recording, which a Metal
+render encoder will not accept. A pass this engine keeps open across geometry is therefore ended
+before such a write whenever nothing is drawing into it, and a file `vitrail/transfer-in-pass` in
+the instance names every transfer that still lands inside a pass.
 
 The price still scales with the number of GPU stops rather than with what they read: each closed
-pass, each standalone clear, each copy. Folding a clear into a load-op, blitting a mip chain, and
+pass, each standalone clear, each copy. Folding a clear into a load-op, filling a mip chain, and
 holding matching geometry in one pass are how this engine spends fewer of those stops. Note that
 this is a structural statement, not a measured one: comparing two frames rendered from different
 viewpoints measures nothing, so any figure has to come from the same position, orientation and
@@ -167,8 +169,8 @@ So the practical rule is that clears are decided when a pass opens; a clear need
 one is really a pass boundary in disguise.
 
 **Nothing detects a leaked GPU resource.** Forgetting to destroy a render target's buffers produces
-no message of any kind. The only witness available is the Vulkan validation layer, which has to be
-turned on deliberately.
+no message of any kind. The only witness available is Metal API validation, or the Metal debugger,
+and either has to be turned on deliberately.
 
 **Render targets themselves are not closed off**, which is the counterweight to all of the above:
 the game's texture-backed target type is public and instantiable, so owning targets needs no mixin,
@@ -180,8 +182,8 @@ one pass and a sampled input in the next without being recreated.
 This is the question every port of an OpenGL-era renderer asks, and for X and Y the answer is that
 there is nothing to flip. Depth is the other story, and it is at the foot of this section.
 
-The Vulkan viewport the game sets is **not** inverted: it starts at zero and has a positive height.
-The flip happens once, at the very last moment, in the blit to the swapchain, where the destination
+The viewport the game sets is **not** inverted: it starts at zero and has a positive height.
+The flip happens once, at the very last moment, in the blit to the drawable, where the destination
 Y range is reversed while the source is not. Everything upstream of that blit (the main target and
 any target a mod owns) keeps the OpenGL orientation, origin at the bottom left.
 
@@ -214,11 +216,11 @@ Over-declaring is therefore free and under-declaring fails at compile time, whic
 direction is a generous layout. That is what makes it practical to serve a large uniform surface
 without declaring it pipeline by pipeline.
 
-**MoltenVK is the exception that makes over-declaring cost something.** Metal accepts sampler
-indices 0 through 15 only, and MoltenVK counts a descriptor's Metal index off its place among the
-descriptors of its kind in the set's layout. That layout is built from the modules themselves:
+**Metal is the exception that makes over-declaring cost something.** Metal accepts sampler
+indices 0 through 15 only, and Metallum counts a resource's Metal index off its place among the
+resources of its kind in the layout. That layout is built from the modules themselves:
 `GlslCompiler.compile` walks each stage's reflected sampler list and the INDEX of an entry becomes
-the Vulkan binding the module is rebound onto, whatever number shaderc had assigned. So a program
+the binding the module is rebound onto, whatever number shaderc had assigned. So a program
 whose shared include declares forty-eight samplers used to hand a body that reads thirteen of them
 indices running past the sixteenth, and the pipeline was refused for wanting three slots fewer than
 the hardware has.
@@ -226,11 +228,12 @@ the hardware has.
 `render/SamplerReach` closes that: it drops from a module's reflected sampler list every sampled
 image the entry point does not reach, so the layout is dense and a program under sixteen fits. Over
 a program's two stages TOGETHER, since one layout serves both. A program whose stages read more than
-sixteen between them is past Metal's cap for a pushed set, the same one Iris documented for macOS,
-and that is where `render/WideSamplerSets` steps in: on MoltenVK, when the device binds sets through
-tier 2 argument buffers, it creates that one layout without the push flag, which MoltenVK answers
-with a Metal argument buffer, and each draw allocates and binds the set instead of pushing it. The translator still writes sampled names first in the header,
-which no longer decides the cap and is described where it lives.
+sixteen between them is past Metal's cap for a set whose resources are handed over one at a time,
+the same cap Iris documented for macOS, and that is where Metal's **argument buffers** step in: the
+table of Apple's second argument-buffer tier, which every Apple Silicon Mac has, carries the whole
+set at once, so a stage reads far more than sixteen textures out of it and each draw binds that
+table instead of the resources one by one. The translator still writes sampled names first in the
+header, which no longer decides the cap and is described where it lives.
 
 The asymmetry does not extend to the draw. A sampler that is declared and used, but not bound when
 the draw happens, throws, so the layout can be generous while the binding cannot be sloppy.
@@ -259,50 +262,54 @@ and a storage image it declared would be bound to nothing. That is still true of
 is why nothing of a pack's compute goes through it: the pipeline is built against the backend below,
 and the walk is widened around the facade at three points. The reflected entry list gains the
 storage images and blocks it never enumerates, the layout emits a storage type for those names
-instead of a combined sampler or a uniform buffer, and the descriptor written at bind time carries
-the VMA handle and the three-dimensional view. `IRIS_FEATURE_CUSTOM_IMAGES` is posed on that road
-being open, one of the capability defines the engine poses; `EngineDefines` names the others and
-says which condition each one waits on.
+instead of a combined sampler or a uniform buffer, and the binding written at bind time resolves to
+the backend-owned storage image behind its three-dimensional view. `IRIS_FEATURE_CUSTOM_IMAGES` is
+posed on that road being open, one of the capability defines the engine poses; `EngineDefines` names
+the others and says which condition each one waits on.
 
-The Vulkan backend behind that facade already has the rest. The device object hands out the
-`VkDevice`, the VMA allocator, and a graphics queue created with both the graphics and compute
-bits. It also creates a dedicated compute queue when the hardware has a spare family, and it
-enables `VK_KHR_push_descriptor` as a required extension. The GLSL compiler it embeds is shaderc,
+The Metal backend behind that facade already has the rest. Metallum owns Metal device creation and
+the command queues, compiles a translated SPIR-V module into an `MTLComputePipelineState` through
+SPIRV-Cross, binds the facade resources by reflected name, and dispatches exact workgroup counts
+with `dispatchThreadgroups:threadsPerThreadgroup:`. The compiler the game embeds is shaderc,
 which has a compute kind the game never passes only because the Java enumeration has no constant
-for it. None of that needs a mixin: those methods are public.
+for it. The seam is a narrow capability interface rather than a widening of the device class:
+`ComputeDeviceBackend` owns the native compute pipeline's lifetime, and `ComputeCommands` carries
+one resolved dispatch.
 
-What does need going around is texture creation. The usage-bit mapping never sets the Vulkan
-storage bit, so a storage image of the pack's own has to be allocated through VMA rather than
-through `createTexture`. That is an extension of how the device is used, not of the device class.
-A colour target a compute writes as `colorimgN` is a different case: it has to stay the texture
-the passes attach and sample, so the bit is added to what that mapping returns, by a mixin on it,
-for the one creation that asks for it and only in a format the device makes a storage image of,
-asked of the device.
+What does need going around is texture creation. Minecraft 26.2's public usage bits carry no
+storage-write bit, so a storage image of the pack's own is allocated through a backend-owned writable
+texture rather than through `createTexture`. That is an extension of how the device is used, not of
+the device class. A colour target a compute writes as `colorimgN` is a different case: it has to stay
+the texture the passes attach and sample, so the missing allocation fact is added to what that
+mapping returns for the one creation that asks for it and only in a format the device makes a storage
+image of, asked of the device: `TargetSurface` asks the backend for the same ordinary target texture,
+and Metallum's `MetalTextureBridge` answers with `MetalGpuTexture(..., shaderWrite=true)`, adding
+`MTLTextureUsageShaderWrite`.
 
-None of this is inference. A compute shader built with that shaderc, dispatched against a storage
-image allocated through VMA, writes texels the same frame reads back unchanged: the road is open,
+None of this is inference. A compute shader built with that shaderc, dispatched against a
+backend-owned storage image, writes texels the same frame reads back unchanged: the road is open,
 and nothing of it was ever in the backend's way. The stage that walks it is `PackCompute`, which
 compiles a pack's `shadowcomp` and dispatches it at the head of the frame, compiles the computes
 hanging off a full screen pass and dispatches them right before that pass, and dispatches a
 compute whose program the place draws no pass for at that program's own moment, its family saying
 whether that falls before the world's translucents or after them and its name where it lands among
-the passes drawn there. Every one of them runs between two barriers of its own, since the game's
-render pass boundary orders graphics against graphics only.
-Which programs it serves, including the pack's own switch deciding whether it serves any at all,
-and why the shadow moment rather than beside the shadow map that feeds it, is answered where the
-pack's chain is.
+the passes drawn there. Every one of them runs between two fences of its own, since an encoder
+boundary orders graphics against graphics only. Which programs it serves, including the pack's own
+switch deciding whether it serves any at all, and why the shadow moment rather than beside the
+shadow map that feeds it, is answered where the pack's chain is.
 
-**On MoltenVK, a compute's shared variables can be moved into a storage buffer.** SPIRV-Cross
+**On Metal, a compute's shared variables can be moved into a storage buffer.** SPIRV-Cross
 declares a GLSL `shared` variable as `threadgroup` memory of the Metal kernel, and Metal refuses a
 kernel holding more than 32768 bytes of it as the pipeline is built: Photon's
-`shared vec3 shared_memory[256][9]`, sixteen bytes a `float3`, is refused as 36864. Vulkan reports
-no such limit, so the figure is Metal's own message. `PackCompute` preprocesses a stage that says
-`shared`, `glsl/SharedMemory` sizes its live declarations the way SPIRV-Cross lays them out, and past
+`shared vec3 shared_memory[256][9]`, sixteen bytes a `float3`, is refused as 36864, and that figure
+is Metal's own message. `PackCompute` preprocesses a stage that says `shared`,
+`glsl/SharedMemory` sizes its live declarations the way SPIRV-Cross lays them out, and past
 the limit the stage is compiled with them declared in one `std430` block instead, which the pass
-allocates through VMA and binds for its dispatch. The body is left as it was. Two conditions make
-that the same memory. The pack's own count has to be one work group on every axis, since a shared
-variable is one copy per group and a buffer one copy for the whole dispatch; any other stage keeps
-its threadgroup memory and the log says Metal will refuse it. And the barriers have to name the
+allocates through the backend's storage-buffer capability and binds for its dispatch. The body is
+left as it was. Two conditions make that the same memory. The pack's own count has to be one work
+group on every axis, since a shared variable is one copy per group and a buffer one copy for the
+whole dispatch; any other stage keeps its threadgroup memory and the log says Metal will refuse it.
+And the barriers have to name the
 buffer: SPIRV-Cross writes `barrier()` as `threadgroup_barrier(mem_flags::mem_threadgroup)`, which
 orders writes to threadgroup memory only, so the moved text puts `memoryBarrierBuffer()` in front of
 each one, `mem_device` below MSL 3.2 and a fence over device memory from 3.2, and declares the block

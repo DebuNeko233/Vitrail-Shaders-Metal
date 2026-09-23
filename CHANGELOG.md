@@ -370,13 +370,14 @@ what the next one holds.
   after the packs named in plain letters. The codes are left out of the sort now, as Iris does, and
   two names that differ only in case keep Iris's order too.
 
-- **On OpenGL, Vitrail offers to switch to Vulkan.** Vitrail draws nothing on OpenGL, yet its pack
+- **Off the engine's own backend, Vitrail offers to switch to it.** Vitrail draws nothing there, yet its pack
   screen and its settings page still opened there, so a pack picked or a setting moved changed
   nothing you could see. Its page in the video settings and NeoForge's Config button now open a
-  screen saying Vitrail cannot run on OpenGL, with a button that sets the game to Vulkan and closes
-  it, and one that goes back. Its settings page is no longer listed there, its keys and its lines on
-  the F3 screen do nothing and show nothing, and the game's own Graphics API setting is where it
-  always was. Beside Iris it is the same offer, the way Iris's own page offers OpenGL on Vulkan.
+  screen saying Vitrail cannot run on this graphics API, with a button that switches the game to the
+  backend and closes it, and one that goes back. Its settings page is no longer listed there, its keys
+  and its lines on the F3 screen do nothing and show nothing, and the game's own Graphics API setting
+  is where it always was. Beside Iris it is the same offer, the way Iris's own page offers OpenGL where
+  it cannot draw.
 
 ### Fixed
 
@@ -388,9 +389,9 @@ what the next one holds.
   where it draws the world itself and Iris does not, and where Iris draws it no longer puts a red
   line in the chat saying the picture is missing, nor answers Iris's reload key, which is also its
   own, with a red line of its own. After a startup that ended badly, the backend is kept as it was
-  set rather than put back to Vulkan while Iris is installed, since Iris has already chosen its side
+  set rather than put back to the engine's own while Iris is installed, since Iris has already chosen its side
   for that backend. Where Iris draws, Vitrail's key for the pack screen leaves the press to Iris's
-  own, which sits on the same I, so the I opens Iris's screen alone. On Vulkan, where
+  own, which sits on the same I, so the I opens Iris's screen alone. On the engine's own backend, where
   Vitrail draws, that I opens Vitrail's screen and not Iris's offer to switch to OpenGL over it.
 
 - **Reverie draws on a Mac.** Two of its passes read more textures at once than the sixteen a Mac
@@ -426,7 +427,7 @@ what the next one holds.
 
 - **Water no longer goes missing on a Mac.** The engine keeps one drawing pass open across the
   world's geometry when it can, and the hand wrote its own data to the graphics card inside that
-  pass right after the water had been drawn in it, which Vulkan does not allow; on a Mac that write
+  pass right after the water had been drawn in it, which the backend does not allow; on a Mac that write
   cost the water already drawn. The pass is now closed before any such write, unless something is
   still drawing into it.
 
@@ -707,7 +708,7 @@ what the next one holds.
   programs compiled against a function that was not there.
 
 - **A pack that writes a constant through a macro is no longer refused whole for it.** A
-  `const` whose initialiser the Vulkan compiler would not take loses the keyword at load, and
+  `const` whose initialiser the compiler would not take loses the keyword at load, and
   whether it would was judged on the names written on the line: a macro's name passed whatever
   it stood for, so a macro over a value this engine had already had to demote left a constant
   the compiler then refused, and one pass refusing takes the whole pack down. The macro is now
@@ -1070,7 +1071,7 @@ what the next one holds.
   every time because the disk key hashed the load number the debug name carries. That number
   is out of the key. Computes are compiled by this engine, not by the game's shader compiler;
   what is kept is the compiled module and its bind table, the same files graphics shaders
-  already write under `vitrail/modules`. Vulkan pipelines are built each load as before.
+  already write under `vitrail/modules`. Native pipelines are built each load as before.
 - **F3 names the pack the way Iris does.** The profile line is the scanned name or Custom, with
   how many options sit outside it, and the shadow line is Sodium's `C: a/b D: d` without this
   engine's own cull dialect.
@@ -1278,9 +1279,9 @@ what the next one holds.
 
 - **A crash during startup no longer takes the graphics backend with it.** The game resets the
   preferred graphics API and the fullscreen mode after any startup that did not finish, whatever
-  crashed, and nothing of this mod draws off Vulkan, so one crash used to cost a restart to set
-  it back by hand. A selector under Video Settings picks what to come back to, Vulkan unless
-  told otherwise.
+  crashed, and nothing of this mod draws off its own backend, so one crash used to cost a restart to set
+  it back by hand. A selector under Video Settings picks what to come back to, the engine's own backend
+  unless told otherwise.
 
 - **A switch that puts the game's own wait back after every render pass.** A pack's passes end on
   a wait naming what the next one reads and writes, rather than on the game's wait for the whole
@@ -1305,8 +1306,8 @@ what the next one holds.
 
 - **Chloride is no longer required, on either loader.** One thing was behind that requirement:
   NeoForge opens a loading window before the game exists, that window carries an OpenGL context,
-  and the game takes it over instead of making one, so the Vulkan surface was asked for on a
-  window built for OpenGL. Vitrail now refuses that window itself when the backend is Vulkan,
+  and the game takes it over instead of making one, so the backend's surface was asked for on a
+  window built for OpenGL. Vitrail now refuses that window itself when the backend is its own,
   takes it off FML's hands at the end of mod loading, and closes it once the game has drawn its
   first frame. Fabric opens no such window and never needed the help. Chloride remains worth
   installing, its settings are still read and reported, and running it alongside changes nothing.
@@ -1394,7 +1395,7 @@ what the next one holds.
 
 - **A pack's storage images keep the words it wrote around them.** Translation rebuilt those
   declarations from the type onwards and dropped `writeonly`, `readonly`, `restrict` and
-  `coherent` on the way, whichever side of `uniform` the pack put them. On Vulkan the first of
+  `coherent` on the way, whichever side of `uniform` the pack put them. There the first of
   those is what makes an image with no declared format legal at all, and it is the one the packs
   that ship a voxel volume write.
 
@@ -1448,7 +1449,7 @@ what the next one holds.
   declared first. A program that samples more than sixteen textures still cannot run there.
 
 - **A pack that marks a computed matrix as `const` loads instead of falling back to vanilla.**
-  Vulkan will not take `transpose` of a literal, or a uniform, as a constant initialiser, and one
+  The compiler will not take `transpose` of a literal, or a uniform, as a constant initialiser, and one
   such pass used to fail the compile and take the whole pack with it. The keyword comes off and
   the value stays. Seen on Lux v1.2, a BSL derivative.
 
@@ -1460,11 +1461,11 @@ what the next one holds.
 
 ### Changed
 
-- **On a backend other than Vulkan, nothing of the pack is drawn any more.** The pack is still
+- **On a backend other than the engine's own, nothing of the pack is drawn any more.** The pack is still
   read and still shown in its settings screen, so it can be picked and configured ahead of the
   restart, but the game keeps its own image: the passes used to run there and draw a picture that
   was credible and wrong. A chat line the first time a world is shown says so and names the setting
-  to change, Graphics API to "Prefer Vulkan (Experimental)" under Video Settings, beside the error
+  to change, the Graphics API entry under Video Settings, beside the error
   the log already carried.
 
 ### Fixed
@@ -1656,7 +1657,7 @@ what the next one holds.
 
 - **The line printed when the game came up on OpenGL no longer says the pack draws nothing.** The
   passes do run on that backend, and what they draw is a picture both credible and wrong: the
-  programs are translated against Vulkan's depth and clip conventions, so a sky cut in two or a
+  programs are translated against the engine's own depth and clip conventions, so a sky cut in two or a
   misdrawn hand there is the backend and not the pack. The line owns that now, which is the point
   of it, a report filed against the pack being the one thing it exists to prevent.
 
@@ -1929,4 +1930,4 @@ what the next one holds.
 
 ## 0.1.0-alpha.1
 
-First release. OptiFine-format shader packs on Minecraft's native Vulkan renderer, NeoForge only.
+First release. OptiFine-format shader packs on the game's own renderer, NeoForge only.

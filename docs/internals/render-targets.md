@@ -8,7 +8,7 @@ written for someone changing this code, not for someone using a pack.
 
 ## The format table is a set of decisions, not a set of renames
 
-A pack writes an OpenGL internal format name. The game's `GpuFormat` carries Vulkan names. Mapping
+A pack writes an OpenGL internal format name. The game's `GpuFormat` carries its own names. Mapping
 one onto the other looks like a lookup table and is not, because several properties of the target
 enum force choices the pack never made.
 
@@ -211,14 +211,16 @@ the clear and copy paths require, and throws outside a range bounded by the devi
 texture size. Resizing destroys and recreates the buffers, so any texture view held across a resize
 is dead and nothing says so.
 
-**Synchronisation is free and it is not cheap.** The Vulkan command encoder places a global memory
-barrier after every render pass the game itself closes, and again after every clear and every copy.
-Passes this engine labels close with a narrower one instead, which names both what the rest of the
-frame samples of the pass and what it writes over it: the second half is the one an OpenGL engine
-never has to say, since the bound framebuffer orders two draws into it and two Vulkan passes into
-one image are ordered by nothing. Writing a target in one pass and reading it in the next therefore
-requires nothing at all from this engine, and images stay in one layout end to end with no
-transitions to manage. The other side of that coin is that each
+**Synchronisation is free and it is not cheap.** Ending a render encoder is what orders the work
+inside it against what follows: the encoder updates the frame's fence as it ends and the next one
+waits on it, and the game ends its own after every pass it closes, and again around every clear and
+every copy. What a pass this engine labels has to get right is the dependency that fence carries,
+which names both what the rest of the frame samples of the pass and what it writes over it: the
+second half is the one an OpenGL engine never has to say, since the bound framebuffer orders two
+draws into it and two passes that both write one image are ordered by nothing the API gives for free.
+Writing a target in one pass and reading it in the next therefore requires nothing at all from this
+engine, and a texture carries no layout state at all, so there is nothing to manage between the two.
+The other side of that coin is that each
 closed pass, each standalone clear and each copy is still a GPU stop; that is the real cost model
 for anything that adds one, and the reason matching geometry is kept in one pass.
 
@@ -256,10 +258,11 @@ used before it was redeclared.
 
 **A fragment output declared under a 16 bit type is declared under the 32 bit one.** The
 reference leaves such a declaration alone, OpenGL taking it on any card that takes the
-extension. On Vulkan a 16 bit variable in the input or output storage class asks the module for
-a capability GeForce does not expose, so the module is invalid on that card. The value written is
-the same either way, the attachment holding whatever format the
-pack gave it, and the pack's own assignments still fit, a half converting to a float on its own.
+extension. In the emitted dialect a narrow variable in the input or output storage class asks the
+module for a capability it cannot be relied on to carry, so the fragment output is declared under
+its 32 bit form instead. The value written is the same either way, the attachment holding whatever
+format the pack gave it, and the pack's own assignments still fit, a half converting to a float on
+its own.
 
 ## Identity, caching and reload
 

@@ -14,7 +14,7 @@ import java.util.Map;
  * declared without an initialiser undefined until it is written, so a pack that reads one first
  * has a defect, and one that shows nowhere on the platform it was written on: measured against
  * Iris at the same spot, on the same machine, the pack reads zero there. Compiled through shaderc
- * the {@code OpVariable} stays bare, and what the Vulkan driver hands back changed with the face
+ * the {@code OpVariable} stays bare, and what the backend hands back changed with the face
  * being drawn and with every edit to the shader's text, which is what a register left over from
  * the previous work looks like. Complementary Unbound's {@code GetComplexLightVolume} accumulates
  * into a {@code vec4} it never zeroes when its corner leak fix is on, and that was a hand black on

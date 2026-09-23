@@ -199,8 +199,9 @@ final class DistantProgram extends FamilyProgram {
 
 	@Override
 	public boolean warmable() {
-		// Without DH standing, nothing ever draws these. Keep that decision above the backend split:
-		// Vulkan's detached build and a backend-safe public precompile must skip the same family.
+		// Without DH standing, nothing ever draws these. The decision belongs to the program rather
+		// than to the warm-up, so whatever road compiles a family ahead of its first draw skips the
+		// same one.
 		// A later real draw does not consult this method and can still compile after DH becomes usable.
 		return DhLods.usable();
 	}

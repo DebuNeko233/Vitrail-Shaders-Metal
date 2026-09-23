@@ -1,5 +1,6 @@
 package dev.vitrail;
 
+import dev.vitrail.render.BufferBlending;
 import dev.vitrail.render.MetallumStatus;
 
 import com.mojang.blaze3d.systems.GpuDevice;
@@ -13,45 +14,45 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
- * The two parts of an install that nothing here can set and that both change what is drawn: which
- * graphics backend the game came up on, and which of Chloride's own settings are on.
+ * Why this install can or cannot draw a shader pack, said once at startup, plus the one part of that
+ * nothing here can set and that changes what is drawn: which of Chloride's own settings are on.
  * <p>
- * They are said at startup because neither announces itself in the picture. A game running OpenGL
- * loads this mod and is then drawn by the game alone, the pack read and inert; a mob Chloride culled
- * is simply not there. Both look like this engine failing, and a report about either would be filed
- * against it and read against its code. Said at the moment the log is still short enough to read,
- * and only where there is something to say.
+ * Metal is the only backend this engine draws on, and reaching it takes a short list of facts that
+ * are all decided before this mod runs: the platform has to be macOS on Apple Silicon, Metallum has
+ * to be installed, its public API has to answer the version this build understands, its owner has to
+ * have selected Prefer Metal, and the game has to have brought a Metal device up through it. When one
+ * of them is missing the session does not fall back to another backend - there is none to fall back
+ * to - so the useful thing to say is which one is missing, and {@link #diagnosis()} answers that in a
+ * clause that goes into the log and, once a world is on the screen, into chat.
  * <p>
- * The backend is the one of the two said a second time, in chat, the first time a world is shown:
- * the log is read by whoever goes looking, and a player whose pack does nothing at all is not yet
- * looking. Once a session and not once a world, since the answer cannot change between them.
+ * The chat line exists because the log is read by whoever goes looking, and a player whose pack does
+ * nothing at all is not yet looking. Once a session and not once a world, since the answer cannot
+ * change between them.
  * <p>
- * Nothing here is fixed on the player's behalf, and that is the whole shape of it: the backend is
- * the game's to choose and is chosen before this runs, and Chloride's file belongs to Chloride.
- * What this can do is name the setting, spell it the way the file spells it, and say what it costs.
+ * Chloride is the second thing said, and it is a different kind of statement: a mod that culls what
+ * this engine would have drawn, where a family missing from the picture is worth looking for there
+ * before it is looked for in the pack. Nothing here is fixed on the player's behalf. What this can do
+ * is name the setting, spell it the way the file spells it, and say what it costs.
  * <p>
- * <strong>It is a reading of one moment and does not follow either of them afterwards.</strong>
- * Chloride offers its settings in the Sodium screen and can rebuild the device without a restart,
- * so a session that changes one of them mid-way has a report that no longer describes it. What that
- * costs is a line that is missing rather than a line that is wrong, which is the direction to be
- * wrong in.
+ * <strong>It is a reading of one moment and does not follow any of it afterwards.</strong> Chloride
+ * offers its settings in the Sodium screen and can rebuild the device without a restart, so a session
+ * that changes one of them mid-way has a report that no longer describes it. What that costs is a
+ * line that is missing rather than a line that is wrong, which is the direction to be wrong in.
  */
 public final class HostReport {
 
-	/** The backend name reported by Minecraft's Vulkan device. */
-	private static final String VULKAN = "Vulkan";
-
-	/** The backend name reported by Metallum's Metal device. */
+	/** The backend name reported by Metallum's Metal device, and the only one this engine draws on. */
 	private static final String METAL = "Metal";
 
 	/**
 	 * Answered where the device is not up yet, which at client setup cannot happen: the game builds
 	 * it in the {@code Minecraft} constructor and dispatches mod events long afterwards. It is here
-	 * so that a caller earlier than that gets a word rather than a crash, and it is a word the error
-	 * below stays silent on: a backend nobody can name is not one to send somebody into the video
-	 * settings over.
+	 * so that a caller earlier than that gets a word rather than a crash, and it is a word the
+	 * diagnosis below stays silent on: a backend nobody can name is not one to send somebody into
+	 * the video settings over.
 	 */
 	private static final String UNKNOWN = "unknown";
 
@@ -116,8 +117,8 @@ public final class HostReport {
 
 	/**
 	 * The backend the game really came up on, which is not the same question as the one
-	 * {@code options.txt} answers: asked for Vulkan, the game tries it and falls back to OpenGL in
-	 * the same run when it cannot be brought up, leaving the file saying one thing and the session
+	 * {@code options.txt} answers: asked for one, the game tries it and falls back to another in the
+	 * same run when it cannot be brought up, leaving the file saying one thing and the session
 	 * running on the other. Only the device knows.
 	 *
 	 * @return the backend name, or {@link #UNKNOWN} before the device exists
@@ -128,6 +129,18 @@ public final class HostReport {
 	}
 
 	/**
+	 * The backend name Metallum's Metal device reports, which is the only one this engine draws on.
+	 * <p>
+	 * Exposed because more than one place has to ask the same question of a backend that is not up
+	 * yet: the allocation helper asks it of a device's own report, and NeoForge's early-window guard
+	 * asks it of the {@code GpuBackend} the game is about to build a window for, before there is any
+	 * device to ask. One spelling, so the two cannot come to disagree about what Metal is called.
+	 */
+	public static String metalBackendName() {
+		return METAL;
+	}
+
+	/**
 	 * Whether this session is on Metal with everything the path needs: the backend is actually Metal,
 	 * Metallum's versioned API matches and reports Prefer Metal, and Vitrail's Metal capability
 	 * provider has already published after device creation. True here means Vitrail draws.
@@ -135,22 +148,24 @@ public final class HostReport {
 	public static boolean metalCandidate() {
 		return METAL.equals(backend())
 				&& MetallumStatus.compatibleAndPreferred()
-				&& dev.vitrail.render.BufferBlending.served();
+				&& BufferBlending.served();
 	}
 
 	/**
-	 * Whether the game is known to have come up on a backend this mod will not draw a pack on.
+	 * Whether the device is up and is not one this engine will draw a pack on.
 	 * <p>
-	 * Metal is the maintained path, and it is accepted once its own three answers hold: a compatible
-	 * Metallum, that build's Prefer Metal, and a device that came up. Nothing here asks about a
-	 * developer switch any more. Unknown is not refused because the device may simply not exist yet,
-	 * and Vulkan is not refused because that path is still in the tree even though it is no longer
-	 * one that has to keep working ({@code AGENTS.md} says so, and {@code docs/performance.md}
-	 * schedules its removal).
+	 * Metal is the only backend this engine draws on, so there is exactly one way to be a candidate
+	 * and every other named backend is refused. Unknown is not refused, because the device may simply
+	 * not exist yet and a question asked before then must not read as a verdict.
+	 * <p>
+	 * The refusal is a fact about a session that is already running rather than a switch: nothing here
+	 * offers another backend, because Vitrail has none. What a refused session gets is the clause in
+	 * {@link #diagnosis()} naming the one fact that is missing, which is the whole of what can be done
+	 * about it at this point.
 	 */
 	public static boolean otherBackend() {
 		String backend = backend();
-		if (UNKNOWN.equals(backend) || VULKAN.equals(backend)) {
+		if (UNKNOWN.equals(backend)) {
 			return false;
 		}
 
@@ -158,21 +173,72 @@ public final class HostReport {
 	}
 
 	/**
-	 * Says in chat, once a session, that nothing of the pack is drawn on this backend and which
-	 * setting draws it. Asked every tick and answering nothing until a world is on the screen with
-	 * no screen over it: said from the login packet, the line would land behind the loading
-	 * terrain screen and be fading by the time the world appears.
+	 * The one fact standing between this session and a drawn pack, as a clause that reads after a
+	 * colon, or empty where nothing is: the platform, then Metallum, then its version, then its
+	 * preference, then the device.
+	 * <p>
+	 * Asked in that order deliberately, because each answer only means anything given the one before
+	 * it: a preference cannot be blamed before the mod that holds it is known to be installed, and a
+	 * device cannot be blamed before the owner has been shown to want one. Read as a diagnosis, the
+	 * first clause that is not empty is the thing to fix.
+	 */
+	public static String diagnosis() {
+		if (!onAppleSilicon()) {
+			return "this engine draws through Metal, which is macOS on Apple Silicon, and this session "
+					+ "is " + System.getProperty("os.name", "an unknown system") + " on "
+					+ System.getProperty("os.arch", "an unknown architecture");
+		}
+
+		MetallumStatus.Status status = MetallumStatus.status();
+		if (!status.present()) {
+			return "Metallum is not installed; it is the backend this engine draws through, and it is "
+					+ "required rather than optional";
+		}
+
+		if (!status.compatible()) {
+			return "Metallum answers API v" + status.apiVersion() + " and this build of "
+					+ Vitrail.MOD_NAME + " understands v" + MetallumStatus.SUPPORTED_API_VERSION
+					+ ", so the two cannot talk to each other";
+		}
+
+		if (!status.metalPreferred()) {
+			return "Metallum is installed but its own graphics API preference is not Prefer Metal, so "
+					+ "it never offers a Metal device to the game";
+		}
+
+		if (!BufferBlending.served()) {
+			return "Metallum reports Prefer Metal and no Metal device came up through it, so there is "
+					+ "nothing for the engine to draw with";
+		}
+
+		return "";
+	}
+
+	/** Whether this is the one platform the Metal path exists on. */
+	private static boolean onAppleSilicon() {
+		String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+		String arch = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
+
+		return os.contains("mac") && (arch.equals("aarch64") || arch.equals("arm64"));
+	}
+
+	/**
+	 * Says in chat, once a session, that nothing of the pack is drawn and that the log names why.
+	 * Asked every tick and answering nothing until a world is on the screen with no screen over it:
+	 * said from the login packet, the line would land behind the loading terrain screen and be fading
+	 * by the time the world appears.
 	 * <p>
 	 * Added to the chat as a message of the client's own rather than sent to the player the way the
-	 * reload key's line is: {@code LocalPlayer.sendSystemMessage} hands it to the chat listener as
-	 * a server message, and a chat set to hidden drops those, {@code ChatListener.handleSystemMessage}
+	 * reload key's line is: {@code LocalPlayer.sendSystemMessage} hands it to the chat listener as a
+	 * server message, and a chat set to hidden drops those, {@code ChatListener.handleSystemMessage}
 	 * checking {@code canReceiveSystemMessages} first. The client's own source is the one
 	 * {@code ChatAbilities.selectVisibleMessages} always lets through, and a line about the whole
 	 * picture being missing is not one to leave to a chat setting.
 	 * <p>
-	 * The setting and its entry are named by the game's own labels rather than by a translation of
-	 * ours, so that the words match the screen the player is sent to whatever language the game is
-	 * in.
+	 * The line names no setting to change, and that is the difference from the shape this had when
+	 * there were two backends: there is no other backend to send a player to, so what the line can do
+	 * is say that the picture is missing and that the reason is in the log, which carries the exact
+	 * clause.
 	 */
 	public static void sayInWorld() {
 		if (saidInWorld) {
@@ -190,32 +256,21 @@ public final class HostReport {
 		}
 
 		// Iris drawing this session means a player who picked it, and a red line saying the picture
-		// is missing would be false for them. Asked of what Iris chose at startup rather than of
-		// Iris being there: after a Vulkan boot that fell back, Iris draws nothing and the line is
-		// owed.
+		// is missing would be false for them. Asked of what Iris chose at startup rather than of Iris
+		// being there.
 		if (IrisBeside.draws()) {
 			return;
 		}
 
-		// A session already on Metal is never told to replace its graphics preference with Vulkan,
-		// whether or not the path came up: the answer there is a compatible Metallum, which the
-		// startup log and the pack screen both name, and telling a player to change the Graphics API
-		// would send them away from the only maintained path to one that is scheduled for removal.
-		// The red switch guidance stays for genuinely unsupported and fallback backends only.
-		if (METAL.equals(backend())) {
-			return;
-		}
-
 		minecraft.gui.hud.getChat().addClientSystemMessage(Component.translatable(
-				ScreenText.OTHER_BACKEND, backend(), Component.translatable(ScreenText.GRAPHICS_API),
-				Component.translatable(ScreenText.GRAPHICS_API_VULKAN))
-				.withStyle(ChatFormatting.RED));
+				ScreenText.OTHER_BACKEND, backend()).withStyle(ChatFormatting.RED));
 	}
 
 	/**
-	 * Says what an install decides for this mod, once, and only where it decides something. A backend
-	 * that is Vulkan and a Chloride with nothing on cost no line at all: the log is read by whoever is
-	 * chasing something else, and a line saying that all is well is one more to step over.
+	 * Says what an install decides for this mod, once, and only where it decides something. A session
+	 * that reached the Metal path and on which Chloride has nothing on costs no line at all: the log
+	 * is read by whoever is chasing something else, and a line saying that all is well is one more to
+	 * step over.
 	 */
 	public static void say(Path gameDirectory) {
 		sayBackend();
@@ -229,16 +284,17 @@ public final class HostReport {
 	}
 
 	/**
+	 * The whole of what is wrong with this session, in one line, or nothing at all.
+	 * <p>
 	 * Said as an error rather than a warning because the pack a player asks for is not drawn at all,
 	 * and that is the engine's doing: {@code PackChoice.load} finds whichever one is named and stops
-	 * before reading it. It stops because of what the passes drew when they were let run on the
-	 * other backend, the symptom this repository has seen there: a picture both credible and wrong,
-	 * the programs having been translated against Vulkan's depth and clip conventions. Credible and
-	 * wrong reads as a pack fault, which is worse than a picture the game draws alone, so nothing is
-	 * drawn and the line says why.
+	 * before reading it. It stops because the programs are translated against Metal's depth and clip
+	 * conventions, so a pass let run on another backend draws a picture both credible and wrong.
+	 * Credible and wrong reads as a pack fault, which is worse than a picture the game draws alone,
+	 * so nothing is drawn and the line says why.
 	 * <p>
-	 * Where Iris draws this session the same backend is information rather than an error: the
-	 * picture is not missing, it is the other engine's.
+	 * Where Iris draws this session the same state is information rather than an error: the picture is
+	 * not missing, it is the other engine's.
 	 */
 	private static void sayBackend() {
 		if (!otherBackend()) {
@@ -247,37 +303,16 @@ public final class HostReport {
 
 		if (IrisBeside.draws()) {
 			Vitrail.logger().info("This game is running the {} backend with Iris installed, so Iris "
-					+ "draws the packs and {} stands aside. Set Graphics API to \"Prefer Vulkan "
-					+ "(Experimental)\" under Options, Video Settings, and restart to draw them with {} "
-					+ "instead", backend(), Vitrail.MOD_NAME, Vitrail.MOD_NAME);
+					+ "draws the packs and {} stands aside. {} draws on Metal alone: {}",
+					backend(), Vitrail.MOD_NAME, Vitrail.MOD_NAME, diagnosis());
 
 			return;
 		}
 
-		if (METAL.equals(backend())) {
-			// Metal is the maintained path, so a session on it that Vitrail will not draw on is a
-			// missing or unusable backend rather than a switch somebody forgot to pass. Said once,
-			// naming the contract this build understands, because an absent mod, one that implements
-			// a different API version, one nobody has told to prefer Metal, and one whose device
-			// never came up all look the same from the other side of a reflective probe.
-			Vitrail.logger().warn("This game is running the Metal backend, but {} will not draw a pack "
-					+ "on it: no Metallum answered the probe, or the one that did does not implement "
-					+ "API v{}, or Metal is not selected as its preference, or its device never came "
-					+ "up. Install or update Metallum and check its own settings; until then nothing of "
-					+ "a pack is read or drawn",
-					Vitrail.MOD_NAME, MetallumStatus.SUPPORTED_API_VERSION);
-
-			return;
-		}
-
-		Vitrail.logger().error("This game is running the {} backend and {}'s programs are translated "
-				+ "for {} alone. The mod loads, and a pack it is asked for is neither read nor drawn: "
-				+ "the game keeps its own image. Set "
-				+ "Graphics API to \"Prefer Vulkan (Experimental)\" under Options, Video Settings, "
-				+ "and restart. If it was already set there, either a launch argument forced this "
-				+ "backend, which the game says higher up, or the Vulkan boot failed and the game "
-				+ "fell back: the reason is in the lines the game logged before this one",
-				backend(), Vitrail.MOD_NAME, VULKAN);
+		Vitrail.logger().error("This game is running the {} backend, and {}'s programs are translated "
+				+ "for Metal alone. A pack it is asked for is neither read nor drawn: the game keeps "
+				+ "its own image. {}",
+				backend(), Vitrail.MOD_NAME, diagnosis());
 	}
 
 	/**

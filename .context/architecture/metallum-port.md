@@ -9,7 +9,7 @@ Shader pack
   -> Vitrail: what the pack means
   -> Minecraft graphics API + narrow backend capabilities
   -> backend: how the GPU operation is executed
-  -> Metal/Vulkan
+  -> Metal
 ```
 
 Vitrail owns shader-pack semantics and scheduling. Metallum owns native Metal execution. The bridge exists only where Minecraft's public graphics API cannot express a required operation.
@@ -33,11 +33,11 @@ Vitrail owns shader-pack semantics and scheduling. Metallum owns native Metal ex
 
 - Prefer Minecraft `GpuDevice`, `CommandEncoder`, `RenderPass`, `RenderPipeline`, `GpuTexture`, `GpuTextureView`, `GpuBuffer`, and `GpuSampler` across the seam.
 - A missing public operation should normally become one narrow semantic capability, not a general-purpose backend facade.
-- Backend-neutral interfaces describe the needed GPU effect, not Vulkan/Metal vocabulary. Native handles, descriptor indices, image layouts, access masks, and encoder objects stay backend-side.
-- Optional Metallum integration should remain a soft dependency where practical: today that is two optional Mixin targets (`metallum.MetalBackendMixin`, `metallum.MetalDeviceMixin`) plus the capability resolvers, and Metallum is still not on Vitrail's common compile classpath. The encoder Mixin was deleted once the adapter answered the same question, which is the direction this invariant points.
+- Backend-neutral interfaces describe the needed GPU effect, not a specific graphics API's vocabulary. Native handles, descriptor indices, resource usage flags, and encoder objects stay backend-side.
+- Metallum is a required runtime dependency and the only provider, so the loader enforces it; the code seam stays a soft *compile* boundary: two optional Mixin targets (`metallum.MetalBackendMixin`, `metallum.MetalDeviceMixin`) plus the capability resolvers, with Metallum still not on Vitrail's common compile classpath. That is what keeps an API mismatch a catchable runtime capability failure rather than a compile error, and it is the direction this invariant points. A missing Metallum, an incompatible API version, or a Metal device that does not come up draws nothing of a pack and says so; there is no fallback to another graphics API.
 - Indexed nullable MRT slots are semantic. Never compact an attachment array: an unused middle slot must keep later fragment outputs at their original indices.
-- Do not translate Vulkan barriers literally into Metal. Preserve the dependency using Metal encoder lifetime/ordering/fences.
-- **Vulkan is not a preservation target.** Metal is the maintained path and the Vulkan path's removal is scheduled work (`docs/performance.md`, phase P7), so a Vulkan-only behaviour is not kept merely because it exists. What does survive is the semantic model Vitrail owns: a Metal implementation may not give a pack a different meaning, and an unsupported or unvalidated behaviour stays explicit rather than being advertised as complete because the screen contains a plausible image.
+- Do not move a barrier API across the seam literally. Preserve the dependency using Metal encoder lifetime/ordering/fences.
+- **The deleted graphics API is not a preservation target, and nothing replaces it as one.** Metal is the only path, so a behaviour that existed only for the removed API is not kept merely because it exists. What does survive is the semantic model Vitrail owns: a Metal implementation may not give a pack a different meaning, and an unsupported or unvalidated behaviour stays explicit rather than being advertised as complete because the screen contains a plausible image.
 
 ## Reference vertex-ABI discipline
 

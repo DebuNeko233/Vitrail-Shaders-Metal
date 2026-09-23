@@ -90,7 +90,7 @@ public final class DhLods {
 	private static boolean resolved;
 
 	/**
-	 * Volatile for the one reader off the render thread, {@code DistantProgram.warmAhead}: it
+	 * Volatile for the one reader off the render thread, {@code DistantProgram.warmable()}: it
 	 * asks whether the far terrain family's pipelines are worth compiling ahead, and a stale
 	 * answer there costs a skipped or a wasted warm-up, never an image.
 	 */

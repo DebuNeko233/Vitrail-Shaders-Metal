@@ -7,11 +7,11 @@ import java.util.BitSet;
  * output, because on Apple hardware those names reach a C++ compiler that has its own meaning for
  * some of them.
  * <p>
- * <strong>What it costs a pack to keep them.</strong> MoltenVK does not hand SPIR-V to Metal: it
- * runs its own SPIRV-Cross and renders MSL, which is C++, and it takes the identifiers of that MSL
- * from the module's {@code OpName} strings. A pack's own names then land in Metal's namespace, and
- * Apple's compiler refuses the pipeline outright where one of them collides. Measured on an M4,
- * macOS Tahoe 26.6.1, MoltenVK 1.4.2, over the nine packs swept there: Photon dies on
+ * <strong>What it costs a pack to keep them.</strong> The road to Metal does not run through Metal
+ * itself: SPIRV-Cross renders MSL, which is C++, and it takes the identifiers of that MSL from the
+ * module's {@code OpName} strings. A pack's own names then land in Metal's namespace, and Apple's
+ * compiler refuses the pipeline outright where one of them collides. Measured on an M4, macOS
+ * Tahoe 26.6.1, through Metallum's SPIRV-Cross, over the nine packs swept there: Photon dies on
  * {@code call to 'length_squared' is ambiguous}, its own helper against the one in Metal's standard
  * library, and again on {@code invalid parameter name: 'new' is a keyword}; Bliss dies on
  * {@code reference to 'bias' is ambiguous}, {@code metal::bias} being a type over there; BSL dies

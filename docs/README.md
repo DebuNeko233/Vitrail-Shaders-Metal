@@ -1,6 +1,6 @@
 # Vitrail, explained
 
-Vitrail loads OptiFine-format shader packs on Minecraft's native Vulkan and Metal renderers. This
+Vitrail loads OptiFine-format shader packs on Apple Metal, through the Metallum backend. This
 directory is the long-form documentation: what a pack actually is, what the engine does with
 it, why some things work and others do not, and how to develop against it.
 
@@ -14,7 +14,7 @@ The short version lives in the [README](../README.md) and the install steps in
 | Know why the format is OptiFine's, and how this sits next to other engines | [Why this exists](why.md) |
 | Work out why your pack looks wrong, starting from what you see | [Pack compatibility](compatibility.md) |
 | Understand what a shader pack is made of | [The pack format](pack-format.md) |
-| Understand how legacy GLSL reaches a Vulkan GPU | [Translation](translation.md) |
+| Understand how legacy GLSL reaches a Metal GPU | [Translation](translation.md) |
 | Understand when each program runs during a frame | [The frame](frame.md) |
 | Understand the sky and the shadow map | [Sky and shadows](sky-and-shadows.md) |
 | Work out what to turn down when a pack runs slowly, and what turning it down misses | [The render scale](render-scale.md) |
@@ -46,12 +46,12 @@ the traps that were paid for once already.
 ## The one idea the whole project rests on
 
 Shader packs are written in OpenGL-era GLSL, against an OpenGL-era pipeline. The game
-renders through Vulkan. Those two facts are not compatible, and every design decision here
+renders through Metal. Those two facts are not compatible, and every design decision here
 follows from how that gap is closed.
 
 Vitrail closes it **before a program draws, never while it is drawing**. Every GLSL unit a pack ships
-is rewritten into Vulkan GLSL, then handed to the compiler the game already embeds, which turns it
-into SPIR-V. No frame is ever spent translating something that is already on screen, and by the time
+is rewritten into modern GLSL and compiled to SPIR-V, which crosses to Metallum and becomes a Metal
+shader there. No frame is ever spent translating something that is already on screen, and by the time
 a program has drawn once there is no legacy GLSL behind it.
 
 Where the pauses come from is worth knowing, because "once" is not the same as "at selection". The

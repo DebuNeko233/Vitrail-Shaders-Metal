@@ -227,10 +227,11 @@ public final class EngineDefines {
 		defines.put("IRIS_FEATURE_HIGHER_SHADOWCOLOR", "");
 
 		// Storage blocks are served: a bufferObject directive is read and its buffer allocated
-		// (render/storage/StorageBuffers), and a block a program declares is bound as a storage descriptor
-		// rather than a uniform one (mixin/VulkanBindGroupLayoutMixin). Iris holds the flag usable
+		// (render/storage/StorageBuffers), and a block a program declares is bound as a storage
+		// resource rather than a uniform one, the backend reading that from the compiled shader
+		// resource it binds. Iris holds the flag usable
 		// only where the driver has them (features/FeatureFlags.java:22,
-		// IrisRenderSystem.supportsSSBO). Vulkan has them everywhere, so the condition has nothing
+		// IrisRenderSystem.supportsSSBO). Metal has them everywhere, so the condition has nothing
 		// left to test.
 		defines.put("IRIS_FEATURE_SSBO", "");
 
@@ -239,19 +240,20 @@ public final class EngineDefines {
 		// the colour targets on the halves the pass reads (render/PackCompute). Complementary's
 		// floodfill and Photon's sky lighting are both that road and both run. Iris holds the flag
 		// usable where the driver has compute (features/FeatureFlags.java:14,
-		// IrisRenderSystem.supportsCompute); Vulkan has it everywhere, so the condition has nothing
+		// IrisRenderSystem.supportsCompute); Metal has it everywhere, so the condition has nothing
 		// left to test, as with the storage blocks above.
 		defines.put("IRIS_FEATURE_COMPUTE_SHADERS", "");
 
 		// Per buffer blending is served where the DEVICE serves it, which is the one symbol here
 		// that is not posed for every machine: a blend.<program>.<buffer> directive is built into
 		// the attachment whose rank its target holds (render/GeometryProgram.state), and two
-		// attachments of one Vulkan pipeline carry two blend states only under independentBlend.
-		// Iris withholds its own flag where ITS api cannot part them either, the driver having to
+		// attachments of one pipeline carry two blend states only where the backend configures a
+		// blend state per attachment. Iris withholds its own flag where ITS api cannot part them
+		// either, the driver having to
 		// carry ARB_draw_buffers_blend or OpenGL 4.0 (features/FeatureFlags.java:15,
-		// IrisRenderSystem.supportsBufferBlending). Same rule over a different question: a Vulkan
-		// device feature and a GL extension are asked of two APIs, so the machines the two engines
-		// withhold the symbol from are not the same set.
+		// IrisRenderSystem.supportsBufferBlending). Same rule over a different question: the
+		// capability this engine publishes and a GL extension are asked of two APIs, so the
+		// machines the two engines withhold the symbol from are not the same set.
 		if (environment.bufferBlending()) {
 			defines.put("IRIS_FEATURE_PER_BUFFER_BLENDING", "");
 		}

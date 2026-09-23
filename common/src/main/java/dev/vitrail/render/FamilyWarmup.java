@@ -2,7 +2,6 @@ package dev.vitrail.render;
 
 import dev.vitrail.glsl.LoadClock;
 import dev.vitrail.glsl.TranslationCache;
-import dev.vitrail.mixin.access.GpuDeviceAccessor;
 import dev.vitrail.pack.option.OptionValue;
 import dev.vitrail.pack.source.OpenedPack;
 import dev.vitrail.render.timing.PassTimings;
@@ -10,8 +9,6 @@ import dev.vitrail.Vitrail;
 
 import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vulkan.glsl.GlslCompiler;
-import com.mojang.blaze3d.vulkan.VulkanDevice;
 import net.minecraft.util.Util;
 
 import java.nio.file.Path;
@@ -123,14 +120,6 @@ final class FamilyWarmup {
 	private final AtomicInteger warmServed = new AtomicInteger();
 	private final AtomicInteger warmTotal = new AtomicInteger();
 
-	/**
-	 * The device contract one warm-up run selected. Vulkan keeps its existing detached-build path;
-	 * a backend whose public API explicitly guarantees background precompile uses the front device
-	 * directly, so no implementation class enters Vitrail's compile path.
-	 */
-	private record CompileDevice(GpuDevice front, VulkanDevice vulkan) {
-	}
-
 	FamilyWarmup(List<FamilyDraw> families, Path packPath, Map<String, OptionValue> chosen,
 			String profile, Object familyMaps) {
 		this.families = families;
@@ -168,15 +157,16 @@ final class FamilyWarmup {
 	 * its own the moment that family's translation lands, so the entities compile while the
 	 * clouds are still being read. Complementary Unbound's leftovers still cost their minute of
 	 * work on a cold driver cache, spread across the pool's workers instead of queued on one;
-	 * what they never cost again is the render thread, which only adopts what the workers
-	 * finish, and the failed shape that DID cost it is engraved above {@code PackChain.compileNext}.
+	 * what they never cost again is the render thread, which finds the work already paid for, and
+	 * the failed shape that DID cost it is engraved above {@code PackChain.compileNext}.
 	 * <p>
 	 * The translations stay SEQUENTIAL on the one worker, deliberately: two readers on one zip
 	 * race, which is the reason the terrain's own read finishes before this starts. Only the
 	 * compiles fan out, one task per family, on {@link #COMPILE_POOL} rather than on the game's
-	 * shared pool. Vulkan gives each task its own compiler; a backend advertising safe public
-	 * background precompile owns its compiler and cache serialization itself. The sky's and the
-	 * entities' tasks are spawned first: those two are on screen the moment the world is.
+	 * shared pool. The backend owns the compiler and the cache serialization behind
+	 * {@link GpuDevice#precompilePipeline}, which is the whole of why a task of this pool may call
+	 * it. The sky's and the entities' tasks are spawned first: those two are on screen the moment
+	 * the world is.
 	 */
 	void start() {
 		synchronized (this) {
@@ -197,7 +187,7 @@ final class FamilyWarmup {
 			whole = CompletableFuture.supplyAsync(() -> {
 				start.set(System.nanoTime());
 				Vitrail.logger().info("The pack-load worker starts on the six families");
-				CompileDevice device = compileDevice(keepOld);
+				GpuDevice device = compileDevice(keepOld);
 				fanned.set(device != null);
 
 				List<CompletableFuture<Void>> compiles = new ArrayList<>(this.families.size());
@@ -245,9 +235,13 @@ final class FamilyWarmup {
 			this.warmedAt = Util.getMillis();
 			this.familiesWarmed = true;
 			if (fanned.get()) {
+				// The refusals are named one by one by the compile that made them, and this counts
+				// them beside that: a reader of the aggregate alone should not have to subtract two
+				// numbers to learn that a pack defect was met at all.
 				Vitrail.logger().info("{} of {} leftover pipelines compiled ahead of their "
-						+ "first draw, {} ms of background work, translations included",
-						this.warmServed.get(), this.warmWalked.get(),
+						+ "first draw, {} refused and named above, {} ms of background work, "
+						+ "translations included", this.warmServed.get(), this.warmWalked.get(),
+						this.warmWalked.get() - this.warmServed.get(),
 						(System.nanoTime() - start.get()) / 1_000_000L);
 				// Beside the total it explains. The spans are summed per program across workers,
 				// so together they can pass the wall clock of the load; they compare with each
@@ -289,23 +283,20 @@ final class FamilyWarmup {
 	}
 
 	/**
-	 * The backend contract the compile tasks may use, or null with the reason logged: no task is
-	 * spawned then, and every family keeps its first-draw path. Vulkan keeps the existing detached
-	 * pipeline build because its public device cache is render-thread-owned. Metallum may instead
-	 * use the ordinary {@link GpuDevice#precompilePipeline} path after its optional API explicitly
-	 * guarantees that path is safe on a background worker. Resolved on the worker rather than at
-	 * the call, because the load's own road can run before rendering is up.
+	 * The device the compile tasks may use, or null with the reason logged: no task is spawned
+	 * then, and every family keeps its first-draw path. The tasks compile through
+	 * {@link DumpedProgram#compile(GpuDevice)}, whose road is {@link GpuDevice#precompilePipeline},
+	 * and they are spawned only once the backend's optional API explicitly guarantees that road is
+	 * safe on a background worker: the compiler and the caches behind it are the backend's, and it
+	 * is the backend that serialises them, which is what keeps every implementation class out of
+	 * Vitrail's compile path. Resolved on the worker rather than at the call, because the load's
+	 * own road can run before rendering is up.
 	 */
-	private static CompileDevice compileDevice(boolean keepOld) {
+	private static GpuDevice compileDevice(boolean keepOld) {
 		GpuDevice front = RenderSystem.tryGetDevice();
-		if (front != null && !keepOld) {
-			Object backend = ((GpuDeviceAccessor) front).vitrail$backend();
-			if (backend instanceof VulkanDevice device) {
-				return new CompileDevice(front, device);
-			}
-			if (BufferBlending.served() && MetallumStatus.backgroundPipelinePrecompile()) {
-				return new CompileDevice(front, null);
-			}
+		if (front != null && !keepOld && BufferBlending.served()
+				&& MetallumStatus.backgroundPipelinePrecompile()) {
+			return front;
 		}
 
 		Vitrail.logger().info("The workers leave the leftover families to their first draw: {}",
@@ -325,7 +316,7 @@ final class FamilyWarmup {
 	 * translation stage.
 	 */
 	private void spawnFamilyCompiles(List<CompletableFuture<Void>> compiles, int family,
-			CompileDevice device) {
+			GpuDevice device) {
 		if (device == null) {
 			return;
 		}
@@ -348,37 +339,15 @@ final class FamilyWarmup {
 	}
 
 	/**
-	 * Compiles every program one family read. Vulkan keeps the detached pipeline build it has used
-	 * from the start: one compiler per task, followed by render-thread cache adoption. A backend
-	 * advertising the optional background-precompile contract instead owns that synchronization and
-	 * is called through {@link DumpedProgram#compile(GpuDevice)}, the exact public road first draw
-	 * would have taken. {@code vitrail/keep-first-draw-compiles} beside the pack keeps the old path
-	 * for a measurement, the way {@code keep-redone-work} does.
+	 * Compiles every program one family read, through {@link DumpedProgram#compile(GpuDevice)}: the
+	 * exact public road a first draw takes, whose compiler and caches the backend owns and
+	 * serialises, and the only road this warm-up has. A pack defect met here is named by the
+	 * compile that meets it, and the aggregate line counts it as refused beside the served total
+	 * rather than leaving a reader to subtract. {@code vitrail/keep-first-draw-compiles} beside
+	 * the pack leaves every family to its first draw for a measurement, the way
+	 * {@code keep-redone-work} does.
 	 */
-	private void warmFamily(List<DumpedProgram> programs, CompileDevice device) {
-		if (device.vulkan() != null) {
-			try (GlslCompiler compiler = new GlslCompiler()) {
-				for (DumpedProgram program : programs) {
-					if (this.released || PackChain.stopped()) {
-						return;
-					}
-					if (!program.warmable()) {
-						// The family map may contain an optional program that cannot be drawn in this
-						// session. It was counted when the map was copied, so take it back out of the
-						// progress total rather than reporting an intentional skip as a failed compile.
-						this.warmTotal.decrementAndGet();
-						continue;
-					}
-
-					this.warmWalked.incrementAndGet();
-					if (program.warmAhead(device.vulkan(), compiler)) {
-						this.warmServed.incrementAndGet();
-					}
-				}
-			}
-			return;
-		}
-
+	private void warmFamily(List<DumpedProgram> programs, GpuDevice device) {
 		for (DumpedProgram program : programs) {
 			if (this.released || PackChain.stopped()) {
 				return;
@@ -392,7 +361,7 @@ final class FamilyWarmup {
 			}
 
 			this.warmWalked.incrementAndGet();
-			if (program.compile(device.front())) {
+			if (program.compile(device)) {
 				this.warmServed.incrementAndGet();
 			}
 		}

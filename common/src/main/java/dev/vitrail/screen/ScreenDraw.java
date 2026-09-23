@@ -21,7 +21,7 @@ import net.minecraft.sounds.SoundEvents;
  * coordinates its own file uses, so a pack author who knows that screen recognises this one. The
  * atlas itself is Iris's {@code widgets.png}, carried over under its licence and named in NOTICE.
  * <p>
- * <b>One line of Iris's is deliberately absent, and it is a Vulkan matter.</b> Iris enables blending
+ * <b>One line of Iris's is deliberately absent, and it is a Metal matter.</b> Iris enables blending
  * by hand before each blit, {@code GuiUtil.java:69} and {@code GuiUtil.java:197}, through
  * {@code com.mojang.blaze3d.opengl.GlStateManager}. That class is the OpenGL backend's own state
  * machine and there is no context for it to talk to here, so the call is not merely useless but

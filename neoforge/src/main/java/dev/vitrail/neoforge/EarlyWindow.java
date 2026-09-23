@@ -1,32 +1,32 @@
 package dev.vitrail.neoforge;
 
+import dev.vitrail.HostReport;
 import dev.vitrail.Vitrail;
 
 import com.mojang.blaze3d.systems.GpuBackend;
-import com.mojang.blaze3d.vulkan.VulkanBackend;
 import net.neoforged.fml.loading.EarlyLoadingScreenController;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.opengl.GL;
 
 /**
- * Keeps the game from adopting NeoForge's early loading window when it is about to draw with Vulkan.
+ * Keeps the game from adopting NeoForge's early loading window when it is about to draw with Metal.
  * <p>
  * FML opens a window of its own before Minecraft exists, to draw the mod loading bar, and that
  * window carries an OpenGL context. {@code Window.createGlfwWindow} then asks
  * {@link EarlyLoadingScreenController#current()} and, when there is one, takes over its handle
  * instead of calling {@code glfwCreateWindow}. The hints the backend set one line earlier are then
- * hints on a window nobody creates: the Vulkan surface wants a window whose client API is
+ * hints on a window nobody creates: Metallum's Metal surface wants a window whose client API is
  * {@code GLFW_NO_API}, it is handed one made for OpenGL, and the boot falls back. The shape this is
- * recognised by is a log that says "Using graphics backend OpenGL" although {@code options.txt} asks
- * for Vulkan.
+ * recognised by is a log that says "Using graphics backend OpenGL" although Metallum is set to
+ * {@code Prefer Metal}.
  * <p>
- * The answer is to hand the game nothing under Vulkan, so it creates its own window with its own
+ * The answer is to hand the game nothing under Metal, so it creates its own window with its own
  * hints, and to dispose of the one FML is left holding once FML has stopped drawing into it. Nothing
  * here touches {@code GLFW_CLIENT_API}: the backend already sets what it needs, it was simply never
  * reached.
  * <p>
  * <strong>NeoForge only, and that is not a limitation.</strong> Fabric has no early loading window,
- * so there is nothing to refuse there, and the Fabric bench boots on Vulkan with none of this.
+ * so there is nothing to refuse there, and the Fabric bench boots on Metal with none of this.
  */
 public final class EarlyWindow {
 
@@ -41,13 +41,22 @@ public final class EarlyWindow {
 
 	/**
 	 * What the game is told when it asks for the early loading screen, which is nothing at all when
-	 * the backend is Vulkan.
+	 * the backend is the one that will draw: Metal, and now only Metal.
 	 * <p>
 	 * <strong>Only a controller that was really there is claimed</strong>, and that is what makes
 	 * this safe beside another mod doing the same job. Two wrappers around one call nest, so only the
 	 * innermost reaches {@code current()}: it sees the controller and claims the window, and the
 	 * outer one is handed the null the inner one returned and claims nothing. Whichever way round the
 	 * two end up, exactly one of them ends up owning the orphan.
+	 *
+	 * <p>
+	 * <strong>Asked of the backend's own name and not of a type</strong>, for two reasons that hold
+	 * together. Metallum's backend is not on this module's compile classpath - it is a mod, not a
+	 * library - so there is no class to test against, and the name it reports is the same string the
+	 * rest of the engine knows Metal by ({@link HostReport#metalBackendName()}). And the class this
+	 * used to test against was the game's own GL-less backend, which is not the one that needs the
+	 * refusal: what broke the boot was FML's OpenGL window being adopted under the backend that asks
+	 * for a window with no client API, and on this product that backend is Metal.
 	 *
 	 * @param backend    the backend the window is being built for, taken from the call rather than
 	 *                   from any state of ours: this runs before there is a device to ask
@@ -58,7 +67,7 @@ public final class EarlyWindow {
 	 */
 	public static EarlyLoadingScreenController hand(GpuBackend backend,
 			EarlyLoadingScreenController controller, boolean claim) {
-		if (!(backend instanceof VulkanBackend)) {
+		if (!HostReport.metalBackendName().equals(backend.getName())) {
 			return controller;
 		}
 

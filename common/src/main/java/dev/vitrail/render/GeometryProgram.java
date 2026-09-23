@@ -3,7 +3,6 @@ package dev.vitrail.render;
 import dev.vitrail.glsl.LegacyGlsl;
 import dev.vitrail.glsl.PackProgram;
 import dev.vitrail.glsl.TranslatedUnit;
-import dev.vitrail.mixin.access.GpuDeviceAccessor;
 import dev.vitrail.pack.model.AlphaTest;
 import dev.vitrail.pack.model.BlendMode;
 import dev.vitrail.pack.model.ProgramStage;
@@ -27,8 +26,6 @@ import dev.vitrail.Vitrail;
 import com.mojang.blaze3d.GpuDeviceLossException;
 import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.PrimitiveTopology;
-import com.mojang.blaze3d.platform.CompareOp;
-import com.mojang.blaze3d.preprocessor.GlslPreprocessor;
 import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
@@ -50,11 +47,6 @@ import com.mojang.blaze3d.textures.GpuSampler;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormatElement;
-import com.mojang.blaze3d.vulkan.VulkanDevice;
-import com.mojang.blaze3d.vulkan.VulkanRenderPipeline;
-import com.mojang.blaze3d.vulkan.glsl.GlslCompiler;
-import com.mojang.blaze3d.vulkan.glsl.IntermediaryShaderModule;
-import com.mojang.blaze3d.vulkan.glsl.ShaderCompileException;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BindGroupLayouts;
 import net.minecraft.client.renderer.MappableRingBuffer;
@@ -374,8 +366,9 @@ final class GeometryProgram {
 	 * The rule is {@link DrawBuffers#shadowColours}, which is Iris's. What is decided here is the
 	 * length: no more attachments than the fragment stage declares outputs.
 	 * <p>
-	 * <strong>That cut is a DIVERGENCE, and it is here because Vulkan and GL do not agree on what an
-	 * attachment no fragment writes holds.</strong> Vulkan leaves it undefined for the whole draw;
+	 * <strong>That cut is a DIVERGENCE, and it is here because the backend and the GL these packs
+	 * were written against do not agree on what an attachment no fragment writes holds.</strong>
+	 * The backend leaves it undefined for the whole draw;
 	 * the GL these packs were written against leaves it standing, and what a pack reads out of an
 	 * untouched shadow buffer is the white a coloured shadow multiplies by. Four packs of the corpus
 	 * ship a shadow program with one output and no directive at all - BSL, Bliss, Body Camera and
@@ -488,21 +481,6 @@ final class GeometryProgram {
 	private boolean drew;
 	private boolean broken;
 	private boolean compiled;
-
-	/**
-	 * The pipeline the pack-load worker built for this program, waiting for a render-thread
-	 * {@link #compile} to hand it to the device's cache, which is the one step the worker may not
-	 * take itself. Written and cleared under this program's monitor, on whichever side gets there
-	 * first.
-	 */
-	private VulkanRenderPipeline ahead;
-
-	/**
-	 * Set by {@link #discardAhead()} when the chain released before anything drew this program:
-	 * from then on the worker destroys what it built instead of storing it, since no compile of a
-	 * released chain will ever come to adopt it.
-	 */
-	private boolean discarded;
 
 	/**
 	 * The attachments of this pass some sampler of the program also names, on the same half, each
@@ -808,7 +786,7 @@ final class GeometryProgram {
 				Slot one = this.slots.get(slot);
 				switch (one.bound()) {
 					// Held as a null state, which the backend turns into a colour write mask of
-					// nought while every neighbour carries WRITE_ALL (VulkanRenderPipeline:182-189).
+					// nought while every neighbour carries WRITE_ALL.
 					// So a pass that covers its outputs hands the device an attachment array whose
 					// elements already differ, blend functions or no blend functions, and has since
 					// long before any of them were read by rank.
@@ -911,14 +889,14 @@ final class GeometryProgram {
 	 * plan already folded them in.
 	 * <p>
 	 * <strong>Where the device cannot part its attachments the whole program answer stands on all
-	 * of them.</strong> Two attachments of one Vulkan pipeline may carry two blend states only
+	 * of them.</strong> Two attachments of one pipeline may carry two blend states only
 	 * under {@code independentBlend}, so {@link BufferBlending} is asked first and the plan's
 	 * rankless answer is what a device without it gets, which is the function this pass carried
 	 * before the ranks were read at all. That function is the whole of what the fallback keeps back.
 	 * It does not hand such a device an identical array, and it never did: an unused slot is held as
 	 * a null state and the backend gives that one a colour write mask of nought beside its
-	 * neighbours' {@code WRITE_ALL} ({@code VulkanRenderPipeline:182-189}), so a pass covering its
-	 * outputs was parting its attachments there already. What the device gets back is what it had.
+	 * neighbours' {@code WRITE_ALL}, so a pass covering its outputs was parting its attachments
+	 * there already. What the device gets back is what it had.
 	 * <p>
 	 * It is a fallback and never a refusal: the pipeline builder throws on two states that disagree,
 	 * so a pack whose directives part its targets would otherwise not be built at all, and a program
@@ -1048,6 +1026,11 @@ final class GeometryProgram {
 	 * {@link #prepare} still does the rest at the first real draw. {@code precompilePipeline} is a
 	 * computeIfAbsent: after a resource reload emptied the cache this compiles again, and while the
 	 * cache holds it this is a lookup.
+	 * <p>
+	 * This is also the one road the pack-load worker takes for a leftover family, so a background
+	 * compile and a first-draw one are one call and not two. Whether it may be made off the render
+	 * thread is the backend's answer and not this class's: the compiler and the caches behind it
+	 * are the backend's, and {@code FamilyWarmup} asks before it spawns a task.
 	 *
 	 * @return false when the program will never be drawn
 	 */
@@ -1064,19 +1047,6 @@ final class GeometryProgram {
 		// game's shader sources, which carry no line of this pack: an invalid pipeline, and the
 		// frame throws by name in the middle of the sky. The call below is a computeIfAbsent, so
 		// it costs a lookup for as long as the cache holds the key.
-
-		// What the worker finished is handed to the cache here, on the render thread, and the
-		// precompile below finds it as a lookup. A cache that already holds the key kept a copy
-		// somebody compiled meanwhile, so ours dies instead, never having been bound anywhere.
-		VulkanRenderPipeline ready = this.ahead;
-		if (ready != null) {
-			this.ahead = null;
-			boolean adopted = ((GpuDeviceAccessor) device).vitrail$backend()
-					instanceof StalePipelines cache && cache.vitrail$adopt(this.pipeline, ready);
-			if (!adopted) {
-				ready.destroy();
-			}
-		}
 
 		CompiledRenderPipeline compiled = device.precompilePipeline(this.pipeline, this.source);
 		if (!compiled.isValid()) {
@@ -1151,10 +1121,10 @@ final class GeometryProgram {
 			} catch (GpuDeviceLossException e) {
 				throw e;
 			} catch (RuntimeException e) {
-				// A stage the driver refuses throws out of precompilePipeline rather than coming back
-				// invalid, which is what MoltenVK does with one Metal will not build, and the caller
-				// is a pipeline being set on a pass, outside every catch of the frame. It is the same
-				// refusal, so it takes the same latch.
+				// A stage the driver refuses throws out of precompilePipeline rather than coming
+				// back invalid, which is what the driver does with one Metal will not build, and
+				// the caller is a pipeline being set on a pass, outside every catch of the frame.
+				// It is the same refusal, so it takes the same latch.
 				thrown = e;
 				valid = false;
 			}
@@ -1254,7 +1224,8 @@ final class GeometryProgram {
 		// answers no for every compared name of this program and the variant's depth-reference
 		// lookups run on an ordinary sampler, undefined and silent.
 		ShadowCompare.noteBeside(built, this.pipeline);
-		GeometryStage.noteBeside(built, this.pipeline);
+		// Nothing the same has to be done for a geometry stage: Metal admits none, so there is no
+		// filed text to copy onto the variant.
 
 		return built;
 	}
@@ -1269,102 +1240,6 @@ final class GeometryProgram {
 	 */
 	void forgetCompiled() {
 		this.compiled = false;
-	}
-
-	/**
-	 * Builds this program's compiled pipeline on the pack-load worker, through the same public
-	 * steps the device takes, so the first draw finds the half second of shaderc already paid.
-	 * <p>
-	 * <strong>Deliberately not {@code precompilePipeline}</strong>: the device keeps its results
-	 * in plain maps only the render thread may touch, and its compiler is one shared instance on
-	 * the same rule. Everything used here instead is safe off the thread. The worker's own
-	 * {@code GlslCompiler} carries shaderc, the SPIRV-Cross reflection opens a context per call,
-	 * and the three calls underneath ({@code vkCreateShaderModule}, the set layout, the pipelines)
-	 * create device-level objects Vulkan lets any thread create. What the worker may not do is
-	 * write the cache, and {@link #compile} does that half, adopting the object built here.
-	 * <p>
-	 * A compile the pack's GLSL refuses stores nothing and says so in one line, because a refusal
-	 * only this path reproduces would otherwise never be seen at all; the first draw then retries
-	 * on the device's own path, which latches {@link #broken} and prints the authoritative one.
-	 *
-	 * @param compiler the worker's own compiler, never the device's
-	 * @return true when a compiled pipeline now waits for {@link #compile} to adopt it
-	 */
-	boolean warmAhead(VulkanDevice device, GlslCompiler compiler) {
-		synchronized (this) {
-			if (this.compiled || this.broken || this.discarded || this.ahead != null) {
-				return false;
-			}
-		}
-
-		VulkanRenderPipeline built;
-		try {
-			IntermediaryShaderModule vertex =
-					intermediary(compiler, this.pipeline.getVertexShader(), ShaderType.VERTEX);
-			try {
-				IntermediaryShaderModule fragment =
-						intermediary(compiler, this.pipeline.getFragmentShader(), ShaderType.FRAGMENT);
-				try {
-					GlslCompiler.CompiledModules modules =
-							compiler.compile(device, this.pipeline, vertex, fragment);
-					built = VulkanRenderPipeline.compile(device, modules.layout(), this.pipeline,
-							modules.vertex(), modules.fragment());
-				} finally {
-					// vkCreateShaderModule consumes pCode at the call, by spec, so the buffers
-					// behind the intermediaries are done once compile returns. The device keeps
-					// its own in a cache instead, which is why its path has no close: here
-					// nothing keeps them.
-					fragment.close();
-				}
-			} finally {
-				vertex.close();
-			}
-		} catch (ShaderCompileException e) {
-			// The first draw retries on the device's own path, which latches broken and prints
-			// the pack's defect properly. Said here as well because a refusal the device path
-			// does NOT reproduce would otherwise never be seen at all.
-			Vitrail.logger().info("{} stays for its first draw: {}", this.path, e.getMessage());
-
-			return false;
-		}
-
-		synchronized (this) {
-			if (this.compiled || this.broken || this.discarded) {
-				built.destroy();
-
-				return false;
-			}
-
-			this.ahead = built;
-		}
-
-		return true;
-	}
-
-	/** One stage the way the device reads it: the pipeline's defines injected, then shaderc. */
-	private IntermediaryShaderModule intermediary(GlslCompiler compiler, Identifier id,
-			ShaderType type) throws ShaderCompileException {
-		String text = this.source.get(id, type);
-		if (text == null) {
-			throw new ShaderCompileException("no source for " + id);
-		}
-
-		return compiler.createIntermediary(id.toDebugFileName(),
-				GlslPreprocessor.injectDefines(text, this.pipeline.getShaderDefines()), type);
-	}
-
-	/**
-	 * The chain released before anything drew this program, so no {@link #compile} will ever come
-	 * for what the worker prepared. What already waits is destroyed on the spot, which is safe for
-	 * an object nothing ever bound; what the worker is still building is destroyed by the worker
-	 * itself when it finds this flag.
-	 */
-	synchronized void discardAhead() {
-		this.discarded = true;
-		if (this.ahead != null) {
-			this.ahead.destroy();
-			this.ahead = null;
-		}
 	}
 
 	/**
@@ -1559,8 +1434,8 @@ final class GeometryProgram {
 			//
 			// THIS ONLY GETS HALF OF IT, and the half it misses is an obstacle of the API rather
 			// than a preference. What comes back here is nearest inside a level and LINEAR between
-			// them: the backend sets the mip mode from the sampler's maximum lod alone,
-			// VulkanGpuSampler:47 taking LINEAR for anything above a quarter, and the cache offers
+			// them: the backend sets the mip mode from the sampler's maximum lod alone, taking
+			// LINEAR for anything above a quarter, and the cache offers
 			// no way to ask for the other one - a sampler built with no mipmaps caps the lod at that
 			// quarter and gives up the chain entirely, which is worse. Making one by hand does not
 			// help either, GpuDevice.createSampler reaching the same constructor.
@@ -1809,7 +1684,7 @@ final class GeometryProgram {
 	 */
 	private RenderPassDescriptor shadowDescriptor() {
 		// The one-level view and not the sampled one: a pack that asked for a chain gets a map of
-		// several levels, and Vulkan attaches exactly one.
+		// several levels, and the backend attaches exactly one.
 		GpuTextureView depth = this.shadow.depthAttachment();
 		if (depth == null) {
 			return null;
@@ -2127,7 +2002,7 @@ final class GeometryProgram {
 	 * channel is what a depth read takes.
 	 * <p>
 	 * A shadow pass reads the far plane whatever the map holds: the image it would read is an
-	 * attachment of the very pass it is drawn in, and sampling an attachment is a thing Vulkan
+	 * attachment of the very pass it is drawn in, and sampling an attachment is a thing the backend
 	 * gives no meaning to.
 	 */
 	private GpuTextureView shadowDepth(String sampler) {
@@ -2164,8 +2039,8 @@ final class GeometryProgram {
 	 * The translucent pass gets the opaque world's image for depthtex0 and depthtex1 alike. At that
 	 * point of the frame the two are one depth, the opaque world's, and that image is exactly it; the
 	 * live depth cannot be the answer for either of them, being an attachment of this very pass, and
-	 * sampling an attachment is a thing Vulkan gives no meaning to. This is what BSL's water fog and
-	 * refraction read.
+	 * sampling an attachment is a thing the backend gives no meaning to. This is what BSL's water
+	 * fog and refraction read.
 	 * <p>
 	 * The solid and cutout passes get the same image as depthtex1 and the constant as depthtex0.
 	 * They draw before the image of THIS frame is taken, so what the name holds at their moment is
@@ -2713,8 +2588,8 @@ final class GeometryProgram {
 		// Said because nothing on screen would. A pack declaring sampler2DShadow asks the hardware
 		// to compare and hand back a filtered fraction; blaze3d's GpuSampler carries no comparison
 		// at all, so the map's own names are bound under the comparison sampler this engine makes
-		// in Vulkan's terms, and anything else compared is made in the shader instead: four texels
-		// gathered, four steps, and the same bilinear blend the hardware would have applied.
+		// in the backend's terms, and anything else compared is made in the shader instead: four
+		// texels gathered, four steps, and the same bilinear blend the hardware would have applied.
 		//
 		// Asked of the notes and not of the samplers: on the arithmetic road the type has been
 		// rewritten to the ordinary one and there is nothing left to recognise.

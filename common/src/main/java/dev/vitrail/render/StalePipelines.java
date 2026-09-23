@@ -2,7 +2,6 @@ package dev.vitrail.render;
 
 import dev.vitrail.mixin.access.RenderPipelineAccessor;
 
-import com.mojang.blaze3d.pipeline.CompiledRenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
@@ -22,10 +21,11 @@ import java.util.function.Predicate;
  * to a safe destruction point; Vitrail owns only the predicate describing which pipeline keys are
  * stale.
  * <p>
- * Adoption is a separate optional optimization on the same cache boundary. Vitrail's existing
- * background family warm-up produces a Vulkan compiled pipeline; the default answer is therefore
- * false and only a backend that recognizes the offered {@link CompiledRenderPipeline} adopts it.
- * Correctness never depends on adoption because the caller falls back to normal first-draw compile.
+ * An earlier shape of this interface also carried an adoption step, for a pipeline a background
+ * worker had compiled outside the backend's cache and the render thread then handed in. That step
+ * existed only for the detached warm-up, which is gone: the warm-up now compiles through the
+ * backend's own public precompile road, so the cache owns the pipeline from the call and there is
+ * nothing to adopt.
  */
 public interface StalePipelines {
 
@@ -43,14 +43,6 @@ public interface StalePipelines {
 	 */
 	default List<RenderPipeline> vitrail$dropEntityPipelines() {
 		return vitrail$dropPipelines(StalePipelines::vitrail$declaresGameEntity);
-	}
-
-	/**
-	 * Offers a compiled pipeline prepared outside the backend cache. Backends that do not implement
-	 * this optimization leave the caller owning the object and return false.
-	 */
-	default boolean vitrail$adopt(RenderPipeline pipeline, CompiledRenderPipeline compiled) {
-		return false;
 	}
 
 	private static boolean vitrail$declaresGameEntity(RenderPipeline pipeline) {

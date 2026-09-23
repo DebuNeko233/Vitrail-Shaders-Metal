@@ -96,7 +96,7 @@ jobs:
           python3 tests/test_sodium_pass_routing.py
           python3 tests/test_terrain_alpha_contract.py
           python3 tests/test_terrain_smoke_fixture.py
-          python3 tests/test_vulkan_recording_contract.py
+          python3 tests/test_metal_only_surface.py
           # Named here rather than left to be run by hand: a contract that no workflow runs asserts
           # nothing, and `test_workflow_contract.py` fails when a script in tests/ drops out of every
           # workflow again.

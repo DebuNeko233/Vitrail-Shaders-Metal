@@ -55,7 +55,7 @@ rather than guess.
 
 | What you see | Go to |
 | --- | --- |
-| Nothing of the pack is drawn, the world looks vanilla | [The pack was refused](#the-pack-was-refused), or a game that came up on OpenGL, which [INSTALL](../INSTALL.md#switching-the-graphics-backend-to-vulkan) answers |
+| Nothing of the pack is drawn, the world looks vanilla | [The pack was refused](#the-pack-was-refused), or a session not on Metal, which [INSTALL](../INSTALL.md#switching-the-graphics-backend-to-metal) answers |
 | A red full-screen message tells you to install Iris | [The pack asks for Iris](#the-pack-asks-for-iris) |
 | An effect does nothing at all | [The effect never ran](#the-effect-never-ran) |
 | Blocks have no relief, however smooth the pack promises | [Everything is flat](#everything-is-flat) |
@@ -97,14 +97,15 @@ log. The served flags are also the only `IRIS_FEATURE_` defines a pack finds: a 
 is a promise, so each appears the day its feature is served and not before, and the optional
 declarations keep reading the truth.
 
-One of those names is the device's answer rather than the engine's. `PER_BUFFER_BLENDING` lets a
-pack give one of the targets a pass writes a different blend function from the others, and Vulkan
-allows two attachments of one pass to differ only where the driver has `independentBlend`. Where it
-has not, the name is refused and the whole-program function stands on every target the pass writes.
+One of those names is the backend's answer rather than the engine's. `PER_BUFFER_BLENDING` lets a
+pack give one of the targets a pass writes a different blend function from the others, and Metal
+keeps a blend state per colour target, which Metallum configures target by target and publishes as
+the device's answer once device creation returns. Where that answer does not come, the name is
+refused and the whole-program function stands on every target the pass writes.
 Iris withholds the name where its own API cannot part the targets either, its driver needing
-`ARB_draw_buffers_blend` or OpenGL 4.0. Same rule, asked of a different API: one is a Vulkan device
-feature and the other a GL extension, and a machine can be told yes by one and no by the other, so
-a pack refused here is not for that reason refused there.
+`ARB_draw_buffers_blend` or OpenGL 4.0. Same rule, asked of a different API: one is a Metal
+capability asked of the backend and the other a GL extension, and a machine can be told yes by one
+and no by the other, so a pack refused here is not for that reason refused there.
 
 Iris refuses a required flag only when the name is unknown to it or the hardware cannot serve
 it, and it has built every one of the ones Reverie asks for: some outright, some wherever the
@@ -119,9 +120,9 @@ Apple refused them with `'sampler' attribute parameter is out of bounds: must be
 A pass past that count is given its textures through a Metal argument buffer, one table a stage
 reads far more than sixteen textures out of, while every other pass, and every pass on any other
 machine, is handed them the way the game hands them. Such a table needs macOS 11 and a graphics card
-in Apple's second tier of argument buffers, which every Apple Silicon Mac is: on an older Mac, or
-with MoltenVK's argument buffers turned off, the pass is still handed its textures one by one and
-refused. A pass the card refuses stops the pack:
+in Apple's second tier of argument buffers, which every Apple Silicon Mac is: on an older Mac, or on
+a card below that tier, the pass is still handed its textures one by one and refused. A pass the
+card refuses stops the pack:
 the world goes back to the game's own look and the settings screen says an error stopped it, which
 is what the reference does with a pack that fails the same way.
 
@@ -134,7 +135,7 @@ refused, and the log names it. How is in
 [the game's graphics API](internals/game-graphics-api.md#compute-and-storage-images-the-facade-vs-the-backend).
 
 **A full-screen pass that fails to compile takes the whole pack with it**, and the log names the
-program. One shape of that was a `const` whose initialiser Vulkan will not take as a constant,
+program. One shape of that was a `const` whose initialiser the compiler will not take as a constant,
 which OpenGL drivers accepted as merely immutable; that spelling is now rewritten, see
 [Translation](translation.md). Other compile failures still refuse the pack.
 
@@ -382,7 +383,7 @@ amplitude the pack asked for, stay the pack's. The gusts are not Iris's field.
 clock this engine hands the pack, which advances once per presented frame, never repeats and never
 goes backwards; the rounding of that clock to the millisecond; the world position, which cancels
 exactly against the camera position; the write into the terrain's uniform block; and the moment a
-frame is handed to the swapchain against the moment its content is dated.
+frame is handed to the drawable against the moment its content is dated.
 
 A report about a jump that remains is only useful if it carries something none of those explain:
 another pack that still does it, a machine or a driver where it stops, or a setting that changes
@@ -516,8 +517,8 @@ A short reference, if you are writing a pack or wondering why yours is treated d
   `shadowcolor0` stands whatever the pack writes, which is the reference's own floor: it builds
   that buffer before a program has asked for anything, for the framebuffer its depth copy is taken
   through. **Where a program names none, or names more buffers than it writes outputs, it is
-  given only as many as it writes**: a buffer short of the reference. That is deliberate: Vulkan
-  leaves an attachment no fragment writes undefined for the whole draw, where the GL these packs
+  given only as many as it writes**: a buffer short of the reference. That is deliberate: an
+  attachment no fragment writes is left undefined for the whole draw, where the GL these packs
   were written against leaves it standing, and what a pack reads out of an untouched shadow buffer
   is the white a coloured shadow multiplies by. The second buffer is not decoration: one pack of the
   corpus writes the tint of its light shafts there and reads it back for every ray that reaches

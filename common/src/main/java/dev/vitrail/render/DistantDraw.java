@@ -826,15 +826,14 @@ public final class DistantDraw extends FamilyDraw {
 		// nothing drawn, which converts to the far plane the pack tests for.
 		//
 		// Paid as the load-op of the pass that is about to attach the image, and not as a command of
-		// its own: an encoder clear is a vkCmdClearDepthStencilImage plus the full pipeline drain the
-		// backend appends to every clear it performs, where a load-op costs the pass nothing it was
-		// not already paying. That drain is not what ordered the emptying against the draws before it,
-		// though: every pass already ends on the same ALL_COMMANDS barrier the clear posted
-		// (VulkanCommandEncoder.submitRenderPass), so what the drain added was a second one. Nothing
-		// reads the image in between either: it leaves this class through served()
-		// alone, which answers null until drew is set, and drew is set below this pass. A half that
-		// gives up between here and the pass therefore leaves the image as the last frame left it,
-		// which the same guard keeps out of the pack's hands.
+		// its own: an encoder clear is the backend's own clear plus the full memory barrier it ends
+		// every clear with, where a load-op costs the pass nothing it was not already paying. That
+		// barrier is not what ordered the emptying against the draws before it, though: every pass
+		// already ends on the same full memory barrier the clear posts ({@code submitRenderPass}),
+		// so what the clear added was a second one. Nothing reads the image in between either: it
+		// leaves this class through served() alone, which answers null until drew is set, and drew
+		// is set below this pass. A half that gives up between here and the pass therefore leaves
+		// the image as the last frame left it, which the same guard keeps out of the pack's hands.
 		OptionalDouble clear = OptionalDouble.empty();
 		if (!this.drew) {
 			if (into == this.depthView && coversDepth(descriptor)) {
@@ -1412,10 +1411,10 @@ public final class DistantDraw extends FamilyDraw {
 		 * <strong>And the second mapping of one frame keeps what the first wrote, which is the
 		 * game's own arithmetic rather than a habit of ours.</strong> The ring hands the same buffer
 		 * object back until it turns, {@code MappableRingBuffer.currentBuffer} indexing an array it
-		 * only advances in {@code rotate}; and mapping one is a {@code vmaMapMemory} onto the live
-		 * allocation, the write flag being tested against the buffer's usage and nothing else
-		 * ({@code com/mojang/blaze3d/vulkan/VulkanGpuBuffer.java:118-146}). There is no orphaning
-		 * and no staging copy for a second mapping to start empty from.
+		 * only advances in {@code rotate}; and mapping one hands back the live Metal buffer's own
+		 * contents rather than a staging copy, the write flag being tested against the buffer's
+		 * usage and nothing else ({@code com/metallum/render/shared/MetalGpuBuffer.java:162-178}).
+		 * There is no orphaning and no staging copy for a second mapping to start empty from.
 		 *
 		 * @param camera where the pass this belongs to measures its geometry from, which is the
 		 *               game's own camera and not DH's copy of it: everything else this engine

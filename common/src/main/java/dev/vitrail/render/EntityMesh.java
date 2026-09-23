@@ -66,7 +66,7 @@ import org.jspecify.annotations.Nullable;
  * What makes it safe is that the three go LAST. The game's entity vertex stage declares the six
  * names the game's format spells and knows nothing of the three after them;
  * {@code IntermediaryShaderModule.rebind} walks the format's names and only counts the ones it finds
- * in the SPIR-V, while {@code VulkanRenderPipeline} counts every element of the format, so an
+ * in the SPIR-V, while {@code RenderPipeline} counts every element of the format, so an
  * element the stage skips shifts the location of everything AFTER it and there has to be nothing
  * after them. That is already
  * this engine's answer for the chunk mesh, and {@code sodium/TerrainMesh} says it there for Sodium's
@@ -76,9 +76,9 @@ import org.jspecify.annotations.Nullable;
  *
  * Iris reads its gate live, at every buffer and at every call for a format, and can afford to: it
  * runs against a backend that rebuilds the vertex array from the pipeline's bindings at the draw.
- * Here {@code VulkanRenderPipeline.compile} bakes the stride into the compiled pipeline
- * ({@code VulkanRenderPipeline:99}, {@code .stride(bindings.getVertexSize())} over the bindings it
- * reads at {@code :82}), and {@code VulkanDevice.pipelineCache} is an identity map
+ * Here {@code RenderPipeline.compile} bakes the stride into the compiled pipeline
+ * ({@code RenderPipeline:99}, {@code .stride(bindings.getVertexSize())} over the bindings it
+ * reads at {@code :82}), and the device's pipeline cache is an identity map
  * that nothing empties but {@code ShaderManager.apply}. A live answer would therefore leave a mesh
  * built under one answer bound by a pipeline compiled under the other, which is the same wrong stride
  * by another road.
@@ -243,7 +243,7 @@ public final class EntityMesh {
 		// every static pipeline at the first world join, for a stride that did not change.
 		//
 		// Where it did move, a drop is owed: the game precompiles every static pipeline at every
-		// resource load and caches it by identity (ShaderManager.apply, VulkanDevice.pipelineCache),
+		// resource load and caches it by identity (ShaderManager.apply, the device's pipeline cache),
 		// this backend bakes the stride in at compile, so the entity ones standing here carry the
 		// other answer's stride. Left standing they read the mesh at the wrong offsets from now on,
 		// which on screen is the hand and every fallback entity as triangles stretched across the
@@ -260,12 +260,13 @@ public final class EntityMesh {
 		// the frame, it took the boot's world join down instead. So the two halves of eviction are
 		// split along what each one can bear. Leaving the map is map work, safe anywhere, and
 		// enough on its own: what no lookup can answer with, no NEW draw binds. The compiled
-		// pipelines wait in the mixin for clearPipelineCache, the game's one safe road, which
-		// quiesces first and now frees them with the rest. And the recompile happens at once
-		// rather than lazily at the next bind. The null asks the backend's default source, and it
-		// is never read: a source is only consulted on a miss of the device's shader module cache
-		// (VulkanDevice.getOrCompileShader, keyed by id, type and defines), the drop leaves that
-		// cache standing, and the moved answer changes none of the three keys. The recompile
+		// pipelines wait in the backend's own cache, which is the one safe road: {@link StalePipelines}
+		// asks the device to drop the matching keys and the backend frees the native objects at its
+		// own quiescence point, so nothing here has to know when that is. And the recompile happens
+		// at once rather than lazily at the next bind. The null asks the backend's default source,
+		// and it is never read: a source is only consulted on a miss of the device's shader module
+		// cache, which is keyed by id, type and defines, and the drop leaves that cache standing, so
+		// the moved answer changes none of the three keys. The recompile
 		// therefore reuses the very modules the last resource load compiled, core shaders a
 		// resource pack replaced included, and only the pipeline around them takes the new stride.
 		//

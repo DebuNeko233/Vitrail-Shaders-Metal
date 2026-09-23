@@ -105,12 +105,13 @@ public abstract class CommandEncoderMixin {
 	/**
 	 * Ends a hold nothing is drawing into before a buffer or texture transfer is recorded.
 	 * <p>
-	 * Every {@code createCommandEncoder()} is a new facade over the one Vulkan encoder, so the
+	 * Every {@code createCommandEncoder()} is a new facade over the one Metal command buffer, so the
 	 * facade's own refusal of a transfer inside a pass only sees the passes that same instance
 	 * opened. A transfer asked for through any other instance went straight into the pass the hold
 	 * kept open: the hand's projection block and its vertex upload into the pass of whichever family
-	 * drew last, the translucent terrain included. Vulkan forbids a transfer
-	 * inside a render pass, so what a driver makes of one is its own affair and differs between them.
+	 * drew last, the translucent terrain included. The command stream then asks for a transfer
+	 * inside a render pass, which is not a sequence Metal defines: the blit and the render pass are
+	 * separate encoder types, and what the driver makes of the overlap is its own affair.
 	 * <p>
 	 * The two-argument {@code writeToTexture} hands over to the six-argument one and is not listed;
 	 * both read backs are, the short one checking for a pass of its own, and ending a hold twice is

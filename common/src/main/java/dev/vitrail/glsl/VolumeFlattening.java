@@ -106,7 +106,7 @@ final class VolumeFlattening {
 	 * <strong>Every program carrying the declaration is rewritten, and Iris rewrites only the stage
 	 * the directive names.</strong> Its {@code TextureTransformer} runs per stage, so under it
 	 * Mellow's composites and its final keep a live {@code sampler3D colortex6} bound to nothing,
-	 * which GL tolerates and Vulkan does not. Renaming everywhere invents nothing: the pack has
+	 * which GL tolerates and Metal does not. Renaming everywhere invents nothing: the pack has
 	 * named exactly one file for that identifier, with its shape, its size and its format written
 	 * out, and that file is what every one of those declarations was going to read.
 	 * <p>

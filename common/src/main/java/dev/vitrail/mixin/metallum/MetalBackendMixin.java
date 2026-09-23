@@ -12,23 +12,25 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * Publishes the Metal capabilities Vitrail can prove from Metallum's backend implementation without
+ * Publishes the Metal capability Vitrail can prove from Metallum's backend implementation without
  * making the common shader-pack engine depend on Metallum classes.
  * <p>
- * {@link Pseudo} is deliberate: Metallum is an optional backend, so its classes are not on Vitrail's
- * compile classpath and may not exist at runtime. The target is therefore named as a string and this
- * mixin contains only Minecraft/Vitrail types in its bytecode-visible method signature.
+ * {@link Pseudo} is deliberate: this mixin targets a class of a mod that is not on Vitrail's compile
+ * classpath, so the target is named as a string and this mixin contains only Minecraft and Vitrail
+ * types in its bytecode-visible method signature.
  * <p>
- * This provider is intentionally narrow. The MRT foundation in Metallum configures a separate Metal
- * blend state for every non-null {@code RenderPipeline} color target, preserving target indices and
- * their individual blend functions. That is enough to publish Vitrail's
- * {@code PER_BUFFER_BLENDING} capability. No other Metal feature is inferred here: unsupported or
- * not-yet-bridged capabilities keep their conservative defaults until their implementation is
- * verified independently.
+ * This provider is intentionally narrow, and it is deliberately the only one there is. Metallum's
+ * pipeline compilation configures a separate Metal blend state for every non-null
+ * {@code RenderPipeline} color target, preserving target indices and their individual blend
+ * functions, and that is enough to publish Vitrail's {@code PER_BUFFER_BLENDING} capability. No
+ * other Metal feature is inferred here: unsupported or not-yet-bridged capabilities keep their
+ * conservative defaults until their implementation is verified independently.
  * <p>
- * The answer is published only after {@code MetalBackend#createDevice} returns successfully. If
- * Metal device creation fails and Minecraft falls back to Vulkan, this mixin leaves no Metal fact
- * behind and the Vulkan provider publishes the capabilities of the device that actually won.
+ * The answer is published only after {@code MetalBackend#createDevice} returns successfully. A
+ * session whose device never came up therefore leaves no capability behind, and there is nothing
+ * waiting to publish it instead: the two capabilities that used to be answered by the other
+ * backend's own provider - per-attachment blending and the storage resources - went with that
+ * backend, so what is left here is the whole of the question rather than one side of a race.
  */
 @Pseudo
 @Mixin(targets = "com.metallum.render.MetalBackend", remap = false)

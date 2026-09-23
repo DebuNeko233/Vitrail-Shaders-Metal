@@ -51,8 +51,8 @@ import java.util.function.Supplier;
  * are available, without waiting; a frame whose queries the card has not answered by the time its slot
  * comes round again, eight frames later, is dropped and counted as dropped in the report. A frame with
  * more passes than a slot holds is measured up to the last one that fits and counted as overflowed.
- * Where the backend really writes device timestamps, as the Vulkan encoder does, a row is the card's.
- * Where it fills the pool from the host clock, a row is the CPU time that pass took to RECORD, and
+ * Where the backend really writes device timestamps, a row is the card's. Where it fills the pool
+ * from the host clock, a row is the CPU time that pass took to RECORD, and
  * Metallum's Metal path is that backend: {@code MetalDevice.getTimestampNow()} is
  * {@code System.nanoTime()} and the device it reports carries a period of 1.0, so the ticks are the
  * host's nanoseconds. Read a row there as encoder cost and never as GPU time; the tell is a stamped
@@ -157,10 +157,10 @@ public final class PassTimings {
 	private static int censusCopies;
 
 	/**
-	 * Calls to {@code vkQueueSubmit2KHR}, which is the number a capture tool reports and the one
-	 * issue 161 is about. Counted rather than inferred: a pass, a clear and a copy each tend to
-	 * cost one, but the backend decides that and not this class, so the totals beside it are what
-	 * says which of them the count is made of.
+	 * Command-buffer submissions to the backend's queue, which is the number a capture tool reports
+	 * and the one issue 161 is about. Counted rather than inferred: a pass, a clear and a copy each
+	 * tend to cost one, but the backend decides that and not this class, so the totals beside it
+	 * say which of them the count is made of.
 	 */
 	private static int censusSubmits;
 	private static Supplier<String> censusOpenLabel;
@@ -482,7 +482,7 @@ public final class PassTimings {
 	}
 
 	/**
-	 * One call to {@code vkQueueSubmit2KHR}, counted where the backend really makes it rather than
+	 * One submit to the backend's queue, counted where the backend really makes it rather than
 	 * guessed from what was recorded into it.
 	 */
 	public static void censusSubmit() {

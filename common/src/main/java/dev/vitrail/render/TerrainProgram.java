@@ -20,8 +20,6 @@ import com.mojang.blaze3d.textures.GpuSampler;
 import com.mojang.blaze3d.textures.GpuTextureView;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormatElement;
-import com.mojang.blaze3d.vulkan.VulkanDevice;
-import com.mojang.blaze3d.vulkan.glsl.GlslCompiler;
 
 import java.io.IOException;
 import java.util.EnumMap;
@@ -46,9 +44,13 @@ import java.util.Optional;
  * translation and reach here already written into the text; only the blend is a property of the
  * pipeline, and it is one of the answers passed on below.
  * <p>
+ * These three are not among the families the pack-load worker warms: the chunk programs compile on
+ * the render thread while the world is still held back, which is where the renderer asks for its
+ * shader, and {@code PackChain} compiles them in that window rather than on a worker.
+ * <p>
  * <strong>The pipeline is named in a namespace containing {@code sodium}, and that is not a
  * cosmetic.</strong> blaze3d never declares a push constant range; Sodium adds one by a mixin on
- * {@code VulkanRenderPipeline}, and only when
+ * the game's compiled-pipeline class, and only when
  * {@code pipeline.getLocation().getNamespace().contains("sodium")}. Named anything else, this
  * pipeline is pushed twenty bytes into a layout with no room for them: the region offset never
  * arrives and the whole world draws itself on top of the camera. It is a {@code contains} and not an
@@ -91,20 +93,6 @@ public final class TerrainProgram extends FamilyProgram {
 				// Drawn in the game's own volume, so the dh matrices answer the game's.
 				false),
 				loaded, values, load, format, writes, targets, chainRuns));
-	}
-
-	/**
-	 * Never ahead: the chunk programs compile while the world is still held back, on the render
-	 * thread where the renderer asks for its shader, and the load worker leaves them alone. The
-	 * six on-demand families take the base's road; this one turns it off where it stands.
-	 */
-	@Override
-	public boolean warmAhead(VulkanDevice device, GlslCompiler compiler) {
-		return false;
-	}
-
-	@Override
-	public void discardAhead() {
 	}
 
 	/**

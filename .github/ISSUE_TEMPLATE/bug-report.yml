@@ -5,11 +5,12 @@ body:
   - type: markdown
     attributes:
       value: |
-        A world that looks entirely like vanilla is most often a game that came up on
-        OpenGL, which
+        A world that looks entirely like vanilla is most often a session that did not come up on
+        Metal, which
         [INSTALL.md](https://github.com/avpbynf/Vitrail-Shaders/blob/main/INSTALL.md) covers,
-        along with the two ways that failure hides itself. The log says which backend
-        the game is on.
+        along with the ways that failure hides itself. This engine draws on Metal alone, through
+        Metallum, so what the log says at startup about the backend, about Metallum and about the
+        device is the first thing worth reading.
 
   - type: textarea
     id: what
@@ -33,30 +34,61 @@ body:
     id: versions
     attributes:
       label: Versions
-      description: Vitrail and its loader, Minecraft, Sodium, and anything else in `mods/`.
-      placeholder: Vitrail 0.6.0-beta on NeoForge, MC 26.2, Sodium 0.9.1
+      description: Vitrail and its loader, Minecraft, Sodium, Metallum, and anything else in `mods/`.
+      placeholder: Vitrail 0.13.0 on Fabric, MC 26.2, Sodium 0.9.2, Metallum 0.0.24
     validations:
       required: true
 
   - type: input
-    id: gpu
+    id: mac
     attributes:
-      label: Graphics card and driver
+      label: Mac and macOS version
       description: >
-        The log names both, on its line "Using graphics backend Vulkan, using drivers". Everything
-        here is tried on one NVIDIA card, and a crash that comes with every pack is most often
-        something another card's driver refuses, so this is the line that tells.
-      placeholder: NVIDIA GeForce RTX 3060, driver 610.88
+        The Apple Silicon model and the macOS version. Metal is the only backend this engine draws
+        on, and it runs on macOS on Apple Silicon, so this is the line that tells.
+      placeholder: MacBook Pro (M3 Max), macOS 26.1
     validations:
       required: true
+
+  - type: input
+    id: metallum
+    attributes:
+      label: Metallum version or commit
+      description: >
+        The version or commit of Metallum in `mods/`. It is required rather than optional: the game
+        starts without it, and this engine then draws no pack at all.
+      placeholder: Metallum 0.0.24
+    validations:
+      required: true
+
+  - type: input
+    id: metal_api
+    attributes:
+      label: Metal API generation
+      description: >
+        What Vitrail's debug screen reports for this session, both the generation the frames are
+        encoded through and the newest one the device answers for. The two can differ, and the first
+        is the one that says what actually ran.
+      placeholder: Frames through Metal 3; device answers Metal 4
+    validations:
+      required: true
+
+  - type: input
+    id: pack
+    attributes:
+      label: Shader pack and settings, if one is loaded
+      description: >
+        The pack's name and version, and every setting you moved away from what the pack ships.
+        Leave this out when no pack is involved.
+      placeholder: BSL v10.1.3, shadow quality High
 
   - type: dropdown
     id: without
     attributes:
       label: Does it still happen with Vitrail taken out?
       description: >
-        Sodium on its own, on the Vulkan backend, with the same pack folder in place.
-        It separates this engine from the one mod it cannot run without.
+        Sodium on its own, on Metal, with the same pack folder in place. It separates this engine
+        from the mods it cannot run without.
       options:
         - It stops when Vitrail is out
         - It happens without Vitrail too

@@ -95,7 +95,8 @@ public enum TargetFormat {
 	 *
 	 * @param declared    the name the pack wrote, as written
 	 * @param alphaAdded  the declared format had no alpha channel and the allocated one does, so
-	 *                    a GL sampler would have read 1.0 where a Vulkan one reads the clear value
+	 *                    a GL sampler would have read 1.0 where the allocator's own reads the
+	 *                    clear value
 	 */
 	public record Resolution(String declared, TargetFormat used, Reason reason, boolean alphaAdded) {
 	}

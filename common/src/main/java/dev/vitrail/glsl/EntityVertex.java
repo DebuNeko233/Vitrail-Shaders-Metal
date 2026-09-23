@@ -32,7 +32,7 @@ import java.util.stream.Stream;
  * <strong>All nine are declared, and no fewer.</strong> The pairing is by name and asymmetric in
  * both directions. A name the stage declares that the format has not got is refused outright,
  * {@code IntermediaryShaderModule.rebind:205-207}. An element the stage does not declare is simply
- * stepped over, and since {@code VulkanRenderPipeline} counts every element while {@code rebind}
+ * stepped over, and since {@code RenderPipeline} counts every element while {@code rebind}
  * only counts the ones it found, everything after the gap lands one location too low without a
  * word being said.
  * <p>

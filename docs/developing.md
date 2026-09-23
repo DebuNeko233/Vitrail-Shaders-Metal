@@ -262,7 +262,7 @@ changes need one.
 
 **The narrowed synchronisation can be put back.** An empty file `vitrail/full-pass-barrier` in the
 instance, or `-Dvitrail.fullPassBarrier=true` among the JVM arguments, closes every pass on the
-game's full memory barrier and puts that same barrier between the levels of a mip chain. It is
+game's own full wait and puts that same wait between the levels of a mip chain. It is
 slower and it cannot be the cause of a wrong image, so it is the first thing to ask of a machine
 that draws one this one does not.
 
@@ -312,12 +312,11 @@ between passes; the gap to the third is the CPU, the limiter or vertical sync. T
 read back a few frames late without waiting, so the table costs nothing to speak of, and nothing at
 all when the property is absent.
 
-**Read the backend before reading the table.** The rows are the device's own where the backend
-really writes device timestamps, which is what the Vulkan encoder does. They are not the device's
-where the backend fills the pool from the host clock, and Metallum's Metal path is that backend:
-`MetalDevice.getTimestampNow()` is `System.nanoTime()` and the device it reports carries a timestamp
-period of `1.0`, so a row there is the **CPU cost of encoding that pass** and never the GPU time it
-took to run. The tell is arithmetic rather than a smell: a stamped total of 1.348 ms in a window
+**Read the backend before reading the table.** The rows are not the device's own: the Metal path
+fills the pool from the host clock, so `MetalDevice.getTimestampNow()` is `System.nanoTime()` and the
+device it reports carries a timestamp period of `1.0`, and a row there is the **CPU cost of encoding
+that pass** and never the GPU time it took to run. The tell is arithmetic rather than a smell: a
+stamped total of 1.348 ms in a window
 whose frames take 28.25 ms, and a total that grows when the window shrinks while the frame gets
 faster. The GPU time a frame costs is the probe's `gpuMs`, which comes from the driver's own
 `GPUStartTime`/`GPUEndTime`; the per-pass table answers which pass costs the render thread, and a

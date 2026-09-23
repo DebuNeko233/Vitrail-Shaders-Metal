@@ -7,7 +7,7 @@ FIXTURE = ROOT / "tests/fixtures/shaderpacks/wide-resources-contract/shaders"
 PACK_TEXTURES = ROOT / "common/src/main/java/dev/vitrail/pack/texture/PackTextures.java"
 PACK_IMAGES = ROOT / "common/src/main/java/dev/vitrail/render/PackImages.java"
 SAMPLER_REACH = ROOT / "common/src/main/java/dev/vitrail/render/SamplerReach.java"
-WIDE_VULKAN = ROOT / "common/src/main/java/dev/vitrail/render/WideSamplerSets.java"
+WIDE_HANDLING = ROOT / "common/src/main/java/dev/vitrail/render/WideSamplerSets.java"
 
 
 def text(path: Path) -> str:
@@ -36,17 +36,31 @@ class WideResourcesContract(unittest.TestCase):
         textures = text(PACK_TEXTURES)
         images = text(PACK_IMAGES)
         reach = text(SAMPLER_REACH)
-        vulkan = text(WIDE_VULKAN)
         self.assertIn('CUSTOM_PREFIX = "customTexture."', textures)
         self.assertIn("key.startsWith(CUSTOM_PREFIX)", textures)
         self.assertIn("declared.supplied()", images)
         self.assertIn("samplers.removeIf", reach)
         self.assertIn("spvc_compiler_get_active_interface_variables", reach)
-        self.assertIn("MoltenVK", vulkan)
-        self.assertIn("VulkanCommandEncoder", vulkan)
         fixture_text = "\n".join(text(path) for path in (FIXTURE / "final.vsh", FIXTURE / "final.fsh", FIXTURE / "shaders.properties"))
         self.assertNotIn("ArgumentBuffer", fixture_text)
         self.assertNotIn("Metal", fixture_text)
+
+    def test_the_wide_set_decision_is_the_backends_and_not_vitrails(self):
+        """How a wide resource set is bound is the backend's call, and Vitrail no longer makes it.
+
+        A stage reading more samplers than a Metal argument buffer has slots for used to be handled
+        here: this engine recognised the portability layer, read two driver limits, took the push
+        flag off a set layout and allocated a set instead, so that the driver would bind the layout
+        through an argument buffer. None of that vocabulary survives - there is no set layout, no
+        push and no driver limit to read - and the decision now belongs where the binding is built.
+        What Vitrail keeps is the semantic half, which is the reached-versus-declared reading
+        `SamplerReach` performs, and that is what the assertions above pin.
+        """
+        self.assertFalse(WIDE_HANDLING.exists(),
+                         "the wide-set workaround is back: binding a wide resource set is the "
+                         "backend's decision, taken from the logical resource layout, and an engine "
+                         "that reads driver limits to make it is one that will make it wrongly on "
+                         "the next backend")
 
 
 if __name__ == "__main__":

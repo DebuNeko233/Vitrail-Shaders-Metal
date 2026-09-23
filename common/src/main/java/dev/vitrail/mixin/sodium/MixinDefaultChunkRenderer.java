@@ -45,9 +45,9 @@ import java.util.function.Supplier;
  * <p>
  * <strong>Backend boundary.</strong> Terrain uniforms and samplers are bound at the common Sodium
  * call site that hands a {@link DrawContext} its {@link RenderPass} and {@link RenderPipeline}.
- * Sodium 0.9.2 selects the concrete context separately (OpenGL or Vulkan, with Metallum supplying
- * its own Metal context), so this class deliberately does not target {@code VKDrawContext} or any
- * Metal implementation. The pack binding belongs to the pass, not to the native backend.
+ * Sodium 0.9.2 selects the concrete context separately for each of the roads it supports (OpenGL,
+ * with Metallum supplying its own Metal context), so this class deliberately does not target any
+ * one native implementation. The pack binding belongs to the pass, not to the native backend.
  * <p>
  * <strong>Draw buffer nought comes here too, and the sky and the entities still do not.</strong>
  * What a {@code gbuffers_terrain} puts there is not a colour but whatever the pack packed there, and

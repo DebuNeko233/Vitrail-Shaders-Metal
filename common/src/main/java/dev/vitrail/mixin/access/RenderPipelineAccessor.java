@@ -13,7 +13,7 @@ import org.jspecify.annotations.Nullable;
  * getter while the entity mesh carries, and it has to, that being how the game's own pipelines
  * compile against the mesh this engine really builds.
  * <p>
- * {@code VulkanDeviceMixin} asks a different question, WHOSE pipeline this is: one that names the
+ * {@code MetalDeviceMixin} asks a different question, WHOSE pipeline this is: one that names the
  * game's entity format was written by the game and is recompiled when the mesh's answer moves, one
  * that names the extended format was built by a pack's program and follows its chain instead. The
  * rewritten getter folds those two into one answer, so telling them apart takes the raw field.

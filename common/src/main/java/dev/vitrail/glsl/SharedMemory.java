@@ -17,8 +17,8 @@ import java.util.regex.Pattern;
  * kernel holding more than 32768 bytes of it as the pipeline is built:
  * {@code Threadgroup memory size (36864) exceeds the maximum threadgroup memory allowed (32768)}.
  * That is Photon's sky light, {@code shared vec3 shared_memory[256][9]} at sixteen bytes a
- * {@code float3}, and without it everything the sky lights renders dark. Vulkan reports no such
- * limit, so the figure is the one Metal's refusal names and not an answer asked of the device.
+ * {@code float3}, and without it everything the sky lights renders dark. The cap is Metal's own,
+ * so the figure is the one its refusal names rather than a device limit this seam can ask for.
  * <p>
  * <strong>Why a buffer is the same memory, and when it is not.</strong> A shared variable is one
  * copy for the invocations of one local work group, and a buffer is one copy for every invocation of
@@ -36,7 +36,12 @@ import java.util.regex.Pattern;
  * {@code coherent} block would ask SPIRV-Cross for a Metal qualifier not accepted by the native
  * compiler used here; neither is needed when every communicating invocation is in one work group.
  * <p>
- * Off until {@code VulkanBackendMixin} says the driver is MoltenVK, which is what the harness gets.
+ * <strong>Always on, because the limit it answers is Metal's and not a driver's.</strong> The cap
+ * below is the figure Metal's own refusal names, and the device this engine draws on is always a
+ * Metal one, so there is no switch: {@link #read} is applied to every compute stage that mentions
+ * {@code shared} at all. An earlier shape asked a driver whether it was the portability layer that
+ * presents Metal on Apple hardware and turned this off otherwise, which is how a limit Metal imposes
+ * came to be reached only on one of the two roads a session could take.
  */
 public final class SharedMemory {
 
@@ -71,8 +76,6 @@ public final class SharedMemory {
 
 	private static final Map<String, Layout> TYPES = types();
 
-	private static volatile boolean moltenVk;
-
 	private SharedMemory() {
 	}
 
@@ -91,16 +94,6 @@ public final class SharedMemory {
 		public boolean over() {
 			return this.threadgroupBytes > THREADGROUP_BYTES;
 		}
-	}
-
-	/** Set once by {@code VulkanBackendMixin}, at device creation. */
-	public static void serve(boolean moltenVkDriver) {
-		moltenVk = moltenVkDriver;
-	}
-
-	/** Whether the driver is MoltenVK, the one driver whose threadgroup memory is capped. */
-	public static boolean moltenVk() {
-		return moltenVk;
 	}
 
 	/** Whether the text says {@code shared} at all, asked before paying for a preprocessing. */

@@ -15,13 +15,14 @@ import java.util.OptionalDouble;
 import java.util.function.Supplier;
 
 /**
- * Keeps one Vulkan render pass open across geometry that Iris would have drawn into the same FBO.
+ * Keeps one Metal render pass open across geometry that Iris would have drawn into the same FBO.
  * <p>
  * Iris binds {@code defaultFB} once and leaves it bound through solid, cutout, sky pieces and
  * entities ({@code pipeline/IrisRenderingPipeline.java:1383-1388}). Each of those is a
- * {@code createRenderPass} here, and closing one is {@code vkCmdEndRendering} plus a barrier: a GPU
- * stop OpenGL's bind is not. Consecutive programs that write the same colour and depth images, at
- * the same area, therefore keep the pass that is already recording and only switch pipeline.
+ * {@code createRenderPass} here, and closing one is the encoder's end plus the full memory barrier
+ * the backend puts after a pass: a GPU stop OpenGL's bind is not. Consecutive programs that write
+ * the same colour and depth images, at the same area, therefore keep the pass that is already
+ * recording and only switch pipeline.
  * <p>
  * A later pass that samples what the last one wrote, or that names different attachments, or that
  * is a composite, a copy or a clear, ends the hold first. The encoder mixin is that door: every
@@ -181,7 +182,8 @@ public final class GeometryHold {
 	 * into it.
 	 * <p>
 	 * Between two families the pass is only kept, and a transfer recorded then lands inside it,
-	 * which Vulkan forbids. While a family is drawing it is that family's pass: closing it would
+	 * which is not a sequence Metal defines: the transfer and the render pass are separate encoder
+	 * types. While a family is drawing it is that family's pass: closing it would
 	 * leave the family drawing into a closed pass, so a transfer arriving there is not this hold's
 	 * to end.
 	 *

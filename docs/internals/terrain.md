@@ -362,20 +362,19 @@ Where a terrain program's outputs land, and which half of a doubled target it wr
 
 ## Push constants belong to a namespace
 
-The game's Vulkan backend never fills the push-constant ranges of a pipeline layout: it creates the
-layout with descriptor sets only. The chunk renderer repairs that for itself, from its own patch,
-and **only for pipelines whose identifier namespace names the renderer**. It then pushes the region
-offset, the region age and the region id into whatever layout is currently bound.
+The game's renderer declares no pushed-constant range at all. Sodium adds one for itself, from its
+own patch, and **only for pipelines whose identifier namespace names the renderer**: that is where
+the region offset, the region age and the region id are published, and Metallum is what pushes them
+on Metal, where under OpenGL Sodium sets the same three as ordinary uniforms.
 
 The consequence for a substituted pipeline is severe and easy to miss: a pipeline named outside that
-namespace receives a push into a layout that has no range for it, the region offset never arrives,
-and the entire terrain draws stacked on top of the camera. The remedy costs nothing and is not
-another patch: the test is a substring, so any namespace that contains the renderer's name is
-enough.
+namespace never gets the range, so the region offset never arrives, and the entire terrain draws
+stacked on top of the camera. The remedy costs nothing and is not another patch: the test is a
+substring, so any namespace that contains the renderer's name is enough.
 
 The trap has a mirror image, and it bites in the other direction. A render pass the game opened for
-itself has no region and no push constants; borrowing the terrain's namespace there pushes constants
-the pass cannot satisfy. That case is covered in
+itself has no region and no pushed constants; borrowing the terrain's namespace there pushes
+constants the pass cannot satisfy. That case is covered in
 [Sky and shadows](../sky-and-shadows.md).
 
 ## The view bob is in the projection, and packs expect it in the model-view

@@ -498,7 +498,8 @@ public final class ProgramTranslator {
 	/**
 	 * Names a stage samples first, unused declarations after, so both the bind group and the
 	 * shader text meet the used names first. The compiler assigns bindings in the order it first
-	 * meets a name, and MoltenVK turns that into a Metal sampler that only accepts 0 through 15.
+	 * meets a name, and the backend turns that into a Metal sampler slot that only accepts 0
+	 * through 15.
 	 * <p>
 	 * This is no longer what decides whether a pack fits under those sixteen, and it was never
 	 * enough on its own: what counts as sampled here is read off the translated TEXT, where every

@@ -9,18 +9,21 @@ import java.util.Set;
 
 /**
  * The GLSL functions that pack floats into whole numbers and back, written out in integer
- * arithmetic for a MoltenVK device, so that Apple's compiler never sees its own pack builtins.
+ * arithmetic for the SPIR-V, then MSL, then Apple-compiler road this engine takes, so that Apple's
+ * compiler never sees its own pack builtins.
  * <p>
  * <strong>What it costs a pack to keep them there.</strong> Noble writes its material into an
  * unsigned target as two {@code packUnorm4x8} words and a {@code packUnorm2x16}, one statement
- * each, and reads the two words back with {@code unpackUnorm4x8}. MoltenVK's SPIRV-Cross renders
- * those calls correctly, each on its own vector, and on an M4 through MoltenVK 1.4.2 the first
- * word still reached the target holding the float bits of its vector's first component, the
- * second word right. A pack changed so that one function packs a single distinct vector lands the
- * first word right, and so does packing it by shifts; the decode is hit the same way, the image
- * staying wrong with the pack fixed and the unpack left standing. The same stages draw right on
- * NVIDIA. So on MoltenVK every call to one of the eight goes to a helper of this translation's
- * own, and every other driver keeps the builtins, its text byte for byte what it was.
+ * each, and reads the two words back with {@code unpackUnorm4x8}. SPIRV-Cross renders those calls
+ * correctly, each on its own vector, and on an M4 through this road the first word still reached
+ * the target holding the float bits of its vector's first component, the second word right. A pack
+ * changed so that one function packs a single distinct vector lands the first word right, and so
+ * does packing it by shifts; the decode is hit the same way, the image staying wrong with the pack
+ * fixed and the unpack left standing. The same stages draw right on NVIDIA. So every call to one of
+ * the eight goes to a helper of this translation's own on this road, the gate that used to decide
+ * it having gone with the backend it asked: the miscompile these helpers route around lives on the
+ * SPIR-V to MSL to Apple-compiler road, which is now the only road, so the answer is always the
+ * same and needs no device to ask.
  * <p>
  * <strong>The helpers are the definitions of GLSL 4.60, section 8.4.</strong> A unorm pack clamps
  * to nought to one and a snorm pack to minus one to one, scales by 255, 65535, 127 or 32767,

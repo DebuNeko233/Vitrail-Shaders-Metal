@@ -11,9 +11,9 @@ import com.mojang.blaze3d.textures.GpuTexture;
  * <p>
  * It exists because Minecraft 26.2's public encoder has no {@code generateMipmaps}. Iris pays one
  * {@code glGenerateMipmap} per chain; Vitrail asks the active command backend for the equivalent
- * operation through {@link MipmapCommands}. Vulkan fills the levels with explicit image blits and
- * barriers. Metallum currently delegates eligible colour textures to Metal's native blit mipmap
- * command; depth/stencil chains are deliberately refused there until a correct Metal path exists.
+ * operation through {@link MipmapCommands}. Metallum currently delegates eligible colour textures
+ * to Metal's native blit mipmap command; depth/stencil chains are deliberately refused there until
+ * a correct Metal path exists.
  * <p>
  * What the packs do with those levels is not decoration: BSL drives its automatic exposure from
  * {@code texture2DLod(colortex0, vec2(0.5), log2(viewHeight * R))}, which without a chain reads
@@ -21,11 +21,10 @@ import com.mojang.blaze3d.textures.GpuTexture;
  * wholesale the moment a jump moves that pixel from the ground to the sky. The same pack reads lods
  * for its depth of field and for the tiles of its bloom.
  * <p>
- * Backend details stay below this class. The Vulkan implementation uses linear filtering for
- * filterable colour images and nearest filtering for depth/integer cases where Vulkan requires it;
- * the Metal implementation follows the native mipmap-generation rules of the texture format.
- * Failure remains explicit: callers keep sampling the base level when a backend cannot safely fill
- * a requested chain.
+ * Backend details stay below this class. A backend fills a colour chain by linear filtering where
+ * the format is filterable and by nearest filtering where it is not, which is what the native
+ * mipmap-generation rules of the texture format allow. Failure remains explicit: callers keep
+ * sampling the base level when a backend cannot safely fill a requested chain.
  */
 final class MipmapReduction {
 

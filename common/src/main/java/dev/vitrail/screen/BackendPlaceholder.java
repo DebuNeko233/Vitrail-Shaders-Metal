@@ -1,111 +1,61 @@
 package dev.vitrail.screen;
 
+import dev.vitrail.HostReport;
 import dev.vitrail.ScreenText;
 import dev.vitrail.Vitrail;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.PreferredGraphicsApi;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.TextAlignment;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.MultiLineLabel;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.network.chat.Component;
 import org.jspecify.annotations.Nullable;
 
 /**
- * What a door to the pack screen opens on a backend this engine does not currently draw on.
+ * What a door of this mod to the pack screen opens on a session that cannot reach the Metal path.
  * <p>
- * OpenGL keeps the reference behaviour: a sentence saying so, a button that switches the game to
- * Vulkan and closes it, and one that goes back. Metal is deliberately different. When the actual
- * device is Metal and Vitrail will not draw on it, this screen only explains that state and returns:
- * it names the compatible backend the session needs rather than a launch argument, because the
- * developer opt-in that used to gate the path is gone. It never rewrites the graphics API on
- * Metallum's behalf.
+ * There is one such screen and one message, where there used to be two: a session on Metal that never
+ * got a device and a session on some other backend are the same statement now. Metal is the only
+ * backend this engine draws on, so a pack picked or a setting moved on this engine's own screens
+ * would change nothing on screen, and the one useful thing to say is the clause
+ * {@link HostReport#diagnosis()} returns - which of the facts the Metal path needs is missing, and
+ * therefore what to do about it.
  * <p>
- * The OpenGL switch is the reference's screen for the same situation the other way round, which Iris
- * opens on Vulkan in place of its pack screen ({@code IrisConfig.java:50-51},
- * {@code IrisVKOnly.java:24}). The layout, the words with the two backends swapped and what the
- * switch does are {@code ShaderPackScreenPlaceholder.java}'s, line for line.
- * <p>
- * The switch closes the game rather than leaving that to the player, because the backend is chosen
- * once, in the {@code Minecraft} constructor, and the saved option does nothing before the next
- * start. The integrated server is halted and the world left through the game's saving screen first,
- * {@code ShaderPackScreenPlaceholder.java:48-53}.
+ * <strong>This screen never writes the graphics API.</strong> An earlier shape of it offered a button
+ * that switched the game to the other backend and closed it, which was the reference's gesture for the
+ * same situation the other way round: Iris opens such a screen in place of its pack screen on a
+ * renderer it cannot use ({@code IrisConfig.java:50-51}, {@code IrisVKOnly.java:24}), and the layout,
+ * the words with the two backends swapped and what the switch did were
+ * {@code ShaderPackScreenPlaceholder.java}'s, line for line. There is no other backend to switch to
+ * here, and the preference the Metal path is selected through belongs to the game and to Metallum
+ * rather than to this mod, so the button that remains only goes back.
  */
 public final class BackendPlaceholder extends Screen {
 
 	private final @Nullable Screen parent;
-	private final boolean metalValidation;
 
 	private @Nullable MultiLineLabel message;
 
 	public BackendPlaceholder(@Nullable Screen parent) {
-		this(parent, false);
-	}
-
-	private BackendPlaceholder(@Nullable Screen parent, boolean metalValidation) {
 		super(Component.literal(Vitrail.MOD_NAME));
 		this.parent = parent;
-		this.metalValidation = metalValidation;
-	}
-
-	/** A Metal-specific blocked screen that never changes the user's graphics preference. */
-	public static BackendPlaceholder metalValidation(@Nullable Screen parent) {
-		return new BackendPlaceholder(parent, true);
 	}
 
 	@Override
 	protected void init() {
 		super.init();
 		MultiLineLabel label = MultiLineLabel.create(this.font,
-				this.metalValidation ? metalMessage() : Component.translatable(ScreenText.BACKEND_PLACEHOLDER),
+				Component.translatable(ScreenText.BACKEND_PLACEHOLDER, HostReport.diagnosis()),
 				this.width - 50);
 		this.message = label;
 		int textSize = (label.getLineCount() + 1) * 9;
 
-		if (this.metalValidation) {
-			this.addRenderableWidget(Button.builder(Component.translatable(ScreenText.BACKEND_RETURN),
-						_ -> onClose())
-					.bounds(this.width / 2 - 75, 100 + textSize, 150, 20)
-					.build());
-			return;
-		}
-
-		this.addRenderableWidget(Button.builder(Component.translatable(ScreenText.BACKEND_SWITCH),
-						_ -> switchToVulkan())
-				.bounds(this.width / 2 - 155, 100 + textSize, 150, 20)
-				.build());
 		this.addRenderableWidget(Button.builder(Component.translatable(ScreenText.BACKEND_RETURN),
 						_ -> onClose())
-				.bounds(this.width / 2 - 155 + 160, 100 + textSize, 150, 20)
+				.bounds(this.width / 2 - 75, 100 + textSize, 150, 20)
 				.build());
-	}
-
-	private static Component metalMessage() {
-		// One sentence rather than two, now that the developer opt-in is gone: there is no longer a
-		// session that has everything the path needs and is being held back anyway, so a session on
-		// Metal that Vitrail will not draw on is missing a compatible backend or a live device.
-		return Component.literal(Vitrail.MOD_NAME + " is running on Metal, but this session did not get "
-				+ "the compatible Metallum preference and device capabilities the Metal path needs, so "
-				+ "no shader pack will be read or drawn. Install or update Metallum and check that Metal "
-				+ "is selected as its preference. Vitrail will not change your Graphics API here; use "
-				+ "Video Settings and restart if you want a different backend.");
-	}
-
-	private void switchToVulkan() {
-		Minecraft minecraft = Minecraft.getInstance();
-		minecraft.options.preferredGraphicsBackend().set(PreferredGraphicsApi.VULKAN);
-		minecraft.options.save();
-
-		IntegratedServer server = minecraft.getSingleplayerServer();
-		if (minecraft.isLocalServer() && server != null) {
-			server.halt(true);
-		}
-
-		minecraft.disconnectWithSavingScreen();
-		minecraft.stop();
 	}
 
 	@Override

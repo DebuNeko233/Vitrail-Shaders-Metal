@@ -213,7 +213,7 @@ public final class ShadowTerrain {
 		// The same refusal the pipeline mixin makes, and it has to be made here too: under OpenGL
 		// nothing of ours is ever served, so the stage would walk and draw the whole world a second
 		// time with the game's own shader, into the game's own target. This is exactly the state a
-		// failed Vulkan boot leaves the machine in.
+		// failed Metal boot leaves the machine in.
 		if (DrawBackend.BACKEND == DrawBackend.OPENGL) {
 			return;
 		}

@@ -24,12 +24,13 @@ import java.nio.file.Path;
  * Both are Iris's own, {@code iris.keybind.reload} and {@code iris.keybind.shaderPackSelection} at
  * {@code Iris.java:811} and {@code 813}, so a player who has configured a pack before will try them
  * first and find them. The game hands a press to every mapping bound to its key, so beside Iris one
- * press reaches both mods, and only one of them may answer it. Off Vulkan this engine draws nothing and
- * both keys do nothing, which beside Iris on OpenGL leaves each press to Iris's own, its reload
- * answering only with its debug options on ({@code Iris.java:181}). Where Iris does not draw, on
- * Vulkan, Iris binds I to a screen saying it cannot run there ({@code IrisVKOnly.java:17}), and the
- * press is taken from Iris's mapping before Iris asks it ({@link #beforeTick}). A player who moved
- * either key on Vulkan gets each screen on its own.
+ * press reaches both mods, and only one of them may answer it. Off Metal this engine draws nothing
+ * and both keys do nothing, which beside Iris leaves each press to Iris's own, its reload answering
+ * only with its debug options on ({@code Iris.java:181}). Where this engine draws, on Metal, Iris
+ * is on the arm it keeps its OpenGL hooks for and its own tick handler would open its pack screen
+ * over this one ({@code MixinMinecraft_Keybinds.java:23-27}, {@code Iris.java:211}), so the press
+ * is taken from Iris's mapping before Iris asks it ({@link #beforeTick}). A player who moved either
+ * key gets each screen on its own.
  * <p>
  * The mappings and what a press does are here; registering them and asking them on the tick is each
  * loader's own business, because those are the two things they do differently. Asking on a tick
@@ -52,17 +53,18 @@ public final class SettingsKey {
 	public static final KeyMapping RELOAD =
 			new KeyMapping(ScreenText.RELOAD_PACK, GLFW.GLFW_KEY_R, CATEGORY);
 
-	/** Iris's mapping for its pack screen, by the name it registers under on both backends. */
+	/** Iris's mapping for its pack screen, by the name it registers under on both of its arms. */
 	private static final String IRIS_SCREEN_KEY = "iris.keybind.shaderPackSelection";
 
 	private SettingsKey() {
 	}
 
 	/**
-	 * Takes the press of the key this mod shares with Iris from Iris's mapping, on Vulkan where this
+	 * Takes the press of the key this mod shares with Iris from Iris's mapping, on Metal where this
 	 * engine draws. Called before anything of the tick has asked a key, because Iris asks its own at
-	 * the end of the tick ({@code VKOnly_InitKeys.java:27}) and would open its screen over this one.
-	 * Off Vulkan Iris's mapping is left alone, whichever of Iris's two faces a fallback left it with.
+	 * the end of the tick ({@code MixinMinecraft_Keybinds.java:23-27}) and would open its pack
+	 * screen over this one. Off Metal Iris's mapping is left alone, whichever of the two arms its
+	 * plugin gave it.
 	 */
 	public static void beforeTick() {
 		if (!IrisBeside.installed() || HostReport.otherBackend()) {
@@ -77,7 +79,7 @@ public final class SettingsKey {
 
 	/**
 	 * Acts on whichever of the two was pressed since the last tick, and does nothing otherwise. Off
-	 * Vulkan the presses are only emptied, so that none of them waits to be answered on a later tick.
+	 * Metal the presses are only emptied, so none of them waits to be answered on a later tick.
 	 */
 	public static void poll() {
 		if (HostReport.otherBackend()) {

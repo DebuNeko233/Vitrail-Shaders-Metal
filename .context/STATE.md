@@ -18,10 +18,13 @@ companion's first release.
 
 ## Confirmed now
 
-**Metal is the only maintained path.** `AGENTS.md` no longer requires the Vulkan baseline to be preserved: the
-Vulkan path is still in the tree (49 files call Vulkan APIs, 58 mention it, 15 documents name it) and its removal is
-scheduled work - phase P7 of `docs/performance.md`, which is where the plan and its reasoning live. Metal 4 is
-frozen as an experimental backend: kept, compilable, manually selectable, and not a performance target.
+**Metal is the only path, and the tree is Metal-only.** `AGENTS.md` states that as a current
+architecture fact rather than a migration: macOS on Apple Silicon, Metallum and Apple Metal is the
+single supported target, Metallum is a required runtime dependency and the only provider, and the
+deleted graphics API is gone from code and documentation. Its name, at any case and inside any
+identifier, is refused by a contract test, so a reintroduction fails the build rather than being
+caught in review. Metal 4 is frozen as an experimental backend: kept, compilable, manually
+selectable, and not a performance target.
 
 **The port's status is `docs/metallum-port.md`, and it is the authority.** PHASE 2, PHASE 5-15 and PHASE 16 are
 closed with real-device evidence; PHASE 17 is closed by the owner's judgement with no per-row status, and no run
@@ -140,7 +143,6 @@ abbreviated away: the numbers are the finding.
   narrowed to, and the audit material behind them.
 - No PHASE 17 reviewed screenshot/reference evidence was ever collected, so no pack carries a compatibility status
   and four of the five matrix rows have never run on device.
-- The Vulkan path's removal (phase P7) is scheduled and not done.
 - The companion has no release.
 - The Metal 4 line stays verifiable while frozen: all four of its architecture contracts pass on the current head.
 

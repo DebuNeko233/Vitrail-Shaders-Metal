@@ -81,8 +81,9 @@ public abstract class MixinShaderChunkRenderer {
 	@Inject(method = "compileProgram", at = @At("HEAD"), cancellable = true)
 	private void vitrail$terrain(TerrainRenderPass pass,
 			CallbackInfoReturnable<RenderPipeline> callback) {
-		// The region offset arrives through push constants, which only the Vulkan backend pushes at
-		// all: under OpenGL Sodium sets it as an ordinary uniform and our shader would read nothing.
+		// The region offset arrives through a pushed constant, which the Metal backend is the one
+		// to push at all: under OpenGL Sodium sets it as an ordinary uniform and our shader would
+		// read nothing.
 		if (DrawBackend.BACKEND == DrawBackend.OPENGL) {
 			return;
 		}

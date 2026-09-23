@@ -5,7 +5,7 @@ import dev.vitrail.pack.model.ProgramStage;
 import java.util.List;
 
 /**
- * One unit of pack source turned into Vulkan GLSL, with what the translation had to decide along
+ * One unit of pack source turned into GLSL 460 core, with what the translation had to decide along
  * the way and what the engine now owes it.
  * <p>
  * The notes are not decoration. A translation that produces text a compiler accepts can still be

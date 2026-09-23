@@ -32,7 +32,7 @@ public final class RawTexels {
 	 * matter of writing more: it is read through an integer sampler nothing here is written for.
 	 * <p>
 	 * A single float a channel goes up as the pack declared it, which is what Iris uploads and what
-	 * GL filters for it. Vulkan only PERMITS a device to filter a thirty two bit float format
+	 * GL filters for it. A device is only PERMITTED to filter a thirty two bit float format
 	 * linearly where it requires it of a half, so on a device that does not the sampler falls back
 	 * to nearest and says so, which costs the blend between two entries of a lookup table and
 	 * nothing else. Laying such a blob out in halves instead would keep the filtering and round

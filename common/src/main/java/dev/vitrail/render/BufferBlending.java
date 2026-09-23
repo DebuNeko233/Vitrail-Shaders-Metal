@@ -5,14 +5,13 @@ package dev.vitrail.render;
  * {@code blend.<program>.<buffer>} directive asks for and what it declares as
  * {@code PER_BUFFER_BLENDING}.
  * <p>
- * Vulkan writes one {@code VkPipelineColorBlendAttachmentState} per attachment and the game's
- * backend fills each of them from that slot's own {@code ColorTargetState}
- * ({@code VulkanRenderPipeline:178-191}), so the shape is already there. What is not is the
- * permission, and it comes in two halves.
+ * Metal writes one blend state descriptor per attachment, and the backend fills each of them from
+ * that slot's own {@code ColorTargetState} while it builds the render pipeline, so the shape is
+ * already there. What is not is the permission, and it comes in two halves.
  * <p>
- * The device's half. Without the {@code independentBlend} feature every element of that array has
- * to be identical, and the game asks for the feature nowhere. {@code VulkanBackendMixin} asks for
- * it, and answers here whether the device gave it.
+ * The device's half. Every element of that list has to describe the same blend unless the backend
+ * keeps them apart, and the game asks for the feature nowhere. {@link #serve} is where the Metal
+ * backend's answer arrives, and the answer is what this holds.
  * <p>
  * The game's half. Its pipeline builder refuses two colour targets naming different blend functions
  * outright ({@code RenderPipeline:457-468}), before any backend is reached, which it has to while
@@ -26,7 +25,7 @@ package dev.vitrail.render;
  * <p>
  * Iris withholds the same flag where its own API cannot part the attachments either, the driver
  * needing {@code ARB_draw_buffers_blend} or OpenGL 4.0 ({@code features/FeatureFlags.java:15} into
- * {@code gl/IrisRenderSystem.java:334-336}). Same rule, different question: a Vulkan device feature
+ * {@code gl/IrisRenderSystem.java:334-336}). Same rule, different question: a Metal device limit
  * and a GL extension are asked of two different APIs, and a machine can be told yes by one and no
  * by the other, so a pack refused here is not for that reason refused there.
  * <p>
@@ -61,7 +60,7 @@ public final class BufferBlending {
 		return served;
 	}
 
-	/** Set once by {@code VulkanBackendMixin}, at device creation and before any pack is read. */
+	/** Set once by the Metal backend's own mixin, at device creation and before any pack is read. */
 	public static void serve(boolean independentBlend) {
 		served = independentBlend;
 	}

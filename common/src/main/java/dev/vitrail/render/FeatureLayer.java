@@ -119,7 +119,7 @@ final class FeatureLayer {
 
 	/**
 	 * The game's own colour format, and it has to be: the features are drawn by the game's
-	 * pipelines, which declare this format for their target, and a Vulkan pipeline bound to an
+	 * pipelines, which declare this format for their target, and a Metal pipeline bound to an
 	 * attachment of another format is undefined behaviour rather than a clean refusal.
 	 */
 	private static final GpuFormat FORMAT = GpuFormat.RGBA8_UNORM;

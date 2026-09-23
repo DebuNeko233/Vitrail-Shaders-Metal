@@ -1,3 +1,12 @@
+# This metadata describes the NeoForge half of the build, and that half is NOT a working product.
+# Vitrail draws shader packs only through Metallum on Apple Metal, and Metallum ships a Fabric mod
+# alone, so no Metal provider exists on this loader for a device or a command submission to come
+# from. The source is kept for a possible future port and is not published as something that works.
+# What says so is the description below, because NeoForge metadata has no field for "not published",
+# "unmaintained" or "experimental": there is no key here that a mod list, a launcher or a store would
+# read as any of those, and inventing a fake dependency to signal it would only refuse a launch with
+# a reason that is untrue.
+
 modLoader = "javafml"
 loaderVersion = "[4,)"
 license = "LGPL-3.0-only"
@@ -11,7 +20,7 @@ displayURL = "https://github.com/avpbynf/Vitrail-Shaders"
 logoFile = "vitrail.png"
 authors = "avpbynf"
 displayTest = "IGNORE_ALL_VERSION"
-description = '''OptiFine-format shader packs, on Minecraft's native Vulkan renderer'''
+description = '''OptiFine-format shader packs on Minecraft's Metal renderer, through Metallum. This NeoForge build is not a working product: Metallum publishes no NeoForge distribution, so no Metal provider exists on this loader and no shader pack can be drawn. The source is kept for a possible future port.'''
 
 # Sodium reads this block out of every mod's own metadata and turns the named mixin off.
 # features.render.world.sky hides the whole sky pass whenever the camera is in a fluid, which with a
@@ -38,6 +47,10 @@ config = "vitrail.mixins.json"
 [[mixins]]
 config = "vitrail-neoforge.mixins.json"
 
+# There is deliberately no Metallum dependency below, and it is deliberately not a declaration with a
+# made-up mod id: Metallum has no NeoForge distribution, so there is no mod id on this loader to
+# depend on. A required entry naming one that cannot be installed would stop the loader at the mod
+# list with a reason that is false, which is worse than the honest description above.
 [[dependencies.${mod_id}]]
 modId = "minecraft"
 type = "required"

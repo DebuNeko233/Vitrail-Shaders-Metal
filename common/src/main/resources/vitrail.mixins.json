@@ -77,18 +77,6 @@
 		"access.TextureManagerAccessor",
 		"TextFeatureRendererMixin",
 		"TextSubmitMixin",
-		"VulkanBackendMixin",
-		"VulkanBindGroupLayoutMixin",
-		"access.VulkanCommandEncoderAccessor",
-		"VulkanCommandEncoderMixin",
-		"VulkanCommandEncoderSetsMixin",
-		"VulkanCommandEncoderTransferMixin",
-		"VulkanConstMixin",
-		"VulkanDeviceMixin",
-		"VulkanGpuTextureViewMixin",
-		"VulkanQueueSubmitMixin",
-		"VulkanRenderPassMixin",
-		"VulkanRenderPipelineMixin",
 		"WeatherEffectRendererMixin"
 	]
 }

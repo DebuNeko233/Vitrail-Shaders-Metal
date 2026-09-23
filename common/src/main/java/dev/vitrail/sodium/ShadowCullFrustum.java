@@ -42,7 +42,7 @@ import org.joml.Vector4f;
  * {@code -w <= z_c <= w}, and its two z planes are {@code rowW + rowZ} for the near side and
  * {@code rowW - rowZ} for the far one ({@code BaseClippingPlanes.java:32-35}, which asks for them by
  * transposing the matrix and transforming {@code (0,0,-1,1)} and {@code (0,0,1,1)}).</li>
- * <li><strong>What this engine RASTERISES with</strong>: Vulkan, z from zero to one, and REVERSED,
+ * <li><strong>What this engine RASTERISES with</strong>: Metal, z from zero to one, and REVERSED,
  * near at one and far at nought. Iris's two lines are false against that matrix.</li>
  * <li><strong>What is handed in, and therefore the conversion this file applies</strong>: the
  * PUBLISHED view projection, which {@code ViewMatrices} has already put into Iris's volume, once a

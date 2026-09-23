@@ -15,9 +15,10 @@ the key bound in the game's controls (`I` by default), or from wherever else you
 options. A second key, `R`, reads the pack again from disk without opening anything, which is what
 makes editing a shader by hand and seeing the result a two second loop.
 
-On a backend other than Vulkan the engine draws nothing, so its page in the video settings opens an
-offer to switch to Vulkan, which closes the game, Iris installed or not. Its two keys do nothing
-there, and its own page of settings is not listed in the video settings.
+On a session that is not on Metal the engine draws nothing, so its page in the video settings opens
+an offer to switch the game to Metal - the game's own **Prefer Metal** entry - which closes the
+game, Iris installed or not. Its two keys do nothing there, and its own page of settings is not
+listed in the video settings.
 
 ## The backend row
 

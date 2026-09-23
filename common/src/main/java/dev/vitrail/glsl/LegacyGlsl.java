@@ -12,7 +12,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * What the OptiFine dialect says and what Vulkan GLSL says instead.
+ * What the OptiFine dialect says and what the dialect this engine emits says instead.
  * <p>
  * Every entry here is a name-for-name substitution with no judgement in it, which is what makes
  * the translation safe to do on text no compiler has read yet. Anything that has to know what the
@@ -561,7 +561,7 @@ public final class LegacyGlsl {
 
 	/**
 	 * Whether a uniform of this type has to keep its own declaration. Everything else is plain
-	 * data, and Vulkan will only take that inside a block.
+	 * data, and the emitted GLSL will only take that inside a block.
 	 */
 	public static boolean isOpaqueType(String type) {
 		for (String prefix : OPAQUE_PREFIXES) {
@@ -667,9 +667,9 @@ public final class LegacyGlsl {
 	 * an 8 or 16 bit one, which becomes its 32 bit form.
 	 * <p>
 	 * A workaround, and it is paid in nothing the image can see. Iris leaves the declaration as the
-	 * pack wrote it, since OpenGL takes a narrow output on any card that takes the extension. On
-	 * Vulkan a narrow variable in the input or output storage class asks the module for the
-	 * {@code StorageInputOutput16} capability, which GeForce does not expose, so the module is
+	 * pack wrote it, since OpenGL takes a narrow output on any card that takes the extension. In
+	 * the emitted dialect a narrow variable in the input or output storage class asks the module for
+	 * the {@code StorageInputOutput16} capability, which GeForce does not expose, so the module is
 	 * invalid on that card. The value written is the same either way: the attachment holds the
 	 * format the pack gave it, and a half is widened to float on the way in whether the conversion
 	 * happens in the shader or in the write. A varying declared narrow is left as written, no pack

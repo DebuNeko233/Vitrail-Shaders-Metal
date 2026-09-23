@@ -6,11 +6,9 @@ import dev.vitrail.HostReport;
 import dev.vitrail.IrisBeside;
 import dev.vitrail.render.PackChoice;
 import dev.vitrail.render.ShadowAmortisation;
-import dev.vitrail.render.StartupGuard;
 import dev.vitrail.render.TerrainDraw;
 import dev.vitrail.screen.PackScreens;
 import dev.vitrail.ScreenText;
-import dev.vitrail.settings.GraphicsApiChoice;
 import dev.vitrail.settings.PackFile;
 import dev.vitrail.Vitrail;
 
@@ -40,9 +38,10 @@ import java.util.Set;
  * <p>
  * This is the same entry the reference takes, {@code IrisConfig} in its own tree, and by the same
  * public API rather than by reaching into Sodium: one page under the mod's own name, which opens
- * the pack screen with the video settings as the screen to come back to, and an offer to switch to
- * Vulkan on any other backend, Iris beside it or not ({@link PackScreens}), and, on Vulkan alone, a
- * second page for the settings that are this engine's own rather than a pack's. That second page is thin on purpose:
+ * the pack screen with the video settings as the screen to come back to ({@link PackScreens}, which
+ * answers with this engine's own settings where the Metal path came up and with the missing fact
+ * where it did not), and, on a session that draws, a second page for the settings that are this
+ * engine's own rather than a pack's. That second page is thin on purpose:
  * almost everything this engine has to offer is the pack's and lives on the pack's pages, and only
  * what a player sets over every pack belongs here. The one thing registered that is not a page is an
  * overlay over an option of Sodium's own, whose reason is written where it is registered.
@@ -87,10 +86,6 @@ public final class ConfigEntry implements ConfigEntryPoint {
 	private static final Identifier SHADOW_MAP_SCALE =
 			Identifier.fromNamespaceAndPath(Vitrail.MOD_ID, "shadow_map_scale");
 
-	/** Which backend a startup that ended badly comes back to. */
-	private static final Identifier GRAPHICS_API =
-			Identifier.fromNamespaceAndPath(Vitrail.MOD_ID, "graphics_api");
-
 	/**
 	 * Which Metal generation the next launch runs, which is the one option here that is about the backend
 	 * rather than about what the pack draws.
@@ -125,9 +120,10 @@ public final class ConfigEntry implements ConfigEntryPoint {
 								Minecraft.getInstance().gui.setScreen(PackScreens.open(parent))));
 
 		// Left out where this engine draws nothing, as Iris leaves its own out on the backend it does
-		// not draw on, IrisConfig.java:54-55. The game's own Graphics API setting stays in the video
-		// settings, and the rescue choice below is only read after a startup that crashed, so nothing
-		// here is needed to get back to Vulkan. The device is up by this walk.
+		// not draw on, IrisConfig.java:54-55. There is no choice of backend to offer beside the
+		// sliders any more: Metal is the only one this engine draws on, it is selected through the
+		// game's own Graphics API setting and Metallum's preference, and a session that did not get a
+		// Metal device has nothing here to change. The device is up by this walk.
 		if (!HostReport.otherBackend()) {
 			options.addPage(builder.createOptionPage()
 					.setName(Component.translatable(ScreenText.PAGE_TITLE))
@@ -140,7 +136,6 @@ public final class ConfigEntry implements ConfigEntryPoint {
 							.addOption(shadowDistance(builder))
 							.addOption(shadowMapScale(builder))
 							.addOption(shadowAmortisation(builder))
-							.addOption(graphicsApi(builder))
 							.addOption(moduleCacheCeiling(builder))));
 		}
 
@@ -205,9 +200,8 @@ public final class ConfigEntry implements ConfigEntryPoint {
 	 * reads a chip name or pre-empts that answer, so a player who turns this on for a device that cannot run
 	 * it gets Metallum's own refusal rather than a checkbox that lied.
 	 * <p>
-	 * No impact is declared, for the reason the crash-recovery choice below gives: this decides what a
-	 * <em>later</em> launch starts on and costs the running frame nothing, and Sodium's impact labels are
-	 * about the frame being drawn.
+	 * No impact is declared: this decides what a <em>later</em> launch starts on and costs the
+	 * running frame nothing, and Sodium's impact labels are about the frame being drawn.
 	 */
 	private static OptionBuilder metal4(ConfigBuilder builder) {
 		return builder.createBooleanOption(METAL4)
@@ -299,48 +293,6 @@ public final class ConfigEntry implements ConfigEntryPoint {
 				.setValueFormatter(percent -> Component.literal(percent + "%"))
 				.setStorageHandler(() -> {})
 				.setImpact(OptionImpact.HIGH);
-	}
-
-	/**
-	 * Which backend the game comes back to after a startup that ended badly.
-	 * <p>
-	 * The game's own answer is to walk the preferred API down to Default, then to OpenGL, whenever
-	 * the previous startup did not finish. That rescue is meant for a machine whose Vulkan cannot
-	 * start; here it fires for any crash at all, from any mod, and empties the session rather than
-	 * saving it, since nothing of this engine is drawn off Vulkan. So the default here is Vulkan.
-	 * <p>
-	 * The two other answers are real answers and not politeness. OpenGL is for a machine where Vulkan
-	 * really does not start, and leaving it to the game is for anyone who would rather have the
-	 * vanilla behaviour back.
-	 * <p>
-	 * Written through {@link GraphicsApiChoice} into a file of its own, which is what lets it be read
-	 * inside {@code Minecraft}'s constructor, long before this screen or the mod exists.
-	 * {@link StartupGuard#forget} is what makes the next startup read the new value.
-	 *
-	 * @see StartupGuard
-	 */
-	private static OptionBuilder graphicsApi(ConfigBuilder builder) {
-		return builder.createEnumOption(GRAPHICS_API, GraphicsApiChoice.class)
-				.setName(Component.translatable(ScreenText.CRASH_API))
-				.setTooltip(_ -> Component.translatable(ScreenText.CRASH_API_TOOLTIP))
-				.setDefaultValue(GraphicsApiChoice.DEFAULT)
-				.setBinding(chosen -> {
-					GraphicsApiChoice.write(Vitrail.platform().gameDirectory(), chosen);
-					StartupGuard.forget();
-				}, GraphicsApiChoice::read)
-				.setElementNameProvider(chosen -> Component.translatable(switch (chosen) {
-					case VULKAN -> ScreenText.CRASH_API_VULKAN;
-					case OPENGL -> ScreenText.CRASH_API_OPENGL;
-					case GAME -> ScreenText.CRASH_API_GAME;
-				}))
-				// Empty for the same reason the slider above leaves it empty, and required for the
-				// same reason: Sodium refuses to build a stateful option without one, at the loading
-				// screen rather than at compile time. The binding has already written the file.
-				//
-				// No impact is declared either, and that is not an omission: this decides what a
-				// LATER launch starts on and costs the running frame nothing at all. Sodium's own
-				// impact labels are about the frame being drawn.
-				.setStorageHandler(() -> {});
 	}
 
 	/**

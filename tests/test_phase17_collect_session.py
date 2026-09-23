@@ -33,7 +33,7 @@ BROKEN_LOG = """\
 [10:00:01] [Worker-Main-1/INFO]: [pack] BrokenFixture 100 0 0 0
 [10:00:02] [Render thread/ERROR]: Vitrail stopped drawing this pack after an error
 java.lang.IllegalStateException: Failed to compile shader vitrail:pack/3/world0/prepare/vertex
-Caused by: com.mojang.blaze3d.vulkan.glsl.ShaderCompileException: Couldn't parse GLSL: syntax error
+Caused by: com.mojang.blaze3d.shaders.ShaderCompileException: Couldn't parse GLSL: syntax error
 [10:00:03] [Render thread/INFO]: Stopping!
 """
 

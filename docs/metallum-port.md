@@ -46,7 +46,7 @@ PHASE 17 real shader-pack compatibility is closed by the project owner's judgeme
 
 ### Backend-neutral Sodium terrain binding
 
-Sodium 0.9.2 calls `pass.setPipeline(...)` before `DrawContext#setContext(...)`. The former Vitrail Vulkan mixin injected `TerrainDraw.bind(...)` at the head of `VKDrawContext#setContext`; the current common wrapper performs the same bind immediately before delegating to the generic `DrawContext#setContext` invocation. The effective order is therefore unchanged: pipeline set, Vitrail resources bound, draw-context native state captured, then chunk draws.
+Sodium 0.9.2 calls `pass.setPipeline(...)` before `DrawContext#setContext(...)`. The former Sodium draw-context mixin injected `TerrainDraw.bind(...)` at the head of `DrawContext#setContext`; the common wrapper performs the same bind immediately before delegating to the generic `DrawContext#setContext` invocation. The effective order is therefore unchanged: pipeline set, Vitrail resources bound, draw-context native state captured, then chunk draws.
 
 ### Optional Metal capability providers
 
@@ -60,15 +60,15 @@ Missing capabilities remain explicit narrow interfaces rather than backend-name 
 
 ### Shader-storage buffers and images
 
-`StorageBuffers` and `StorageImages` continue to own shader-pack declaration and lifetime policy. Vulkan keeps its direct VMA resource paths. A backend provider instead returns normal Minecraft facade resources.
+`StorageBuffers` and `StorageImages` continue to own shader-pack declaration and lifetime policy. A backend provider returns normal Minecraft facade resources.
 
 For backend-neutral compute:
 
 - `StorageBuffers.facadeSlice(name)` exposes a backend-owned SSBO strictly as `GpuBufferSlice`;
 - `StorageImages.facadeView(name)` exposes a backend-owned storage image as `GpuTextureView`;
-- `CustomImages.storage(name)` decides whether a custom-image name is the writable image uniform rather than a sampled alias. That answer comes from the pack declaration, not from whether a Vulkan-native handle exists.
+- `CustomImages.storage(name)` decides whether a custom-image name is the writable image uniform rather than a sampled alias. That answer comes from the pack declaration, not from whether a backend-native handle exists.
 
-No `VkBuffer`, `VkImageView`, `MTLBuffer`, `MTLTexture` or backend argument index crosses these facade paths.
+No native buffer, image view, texture or backend argument index crosses these facade paths.
 
 ### Shader-writable colour targets
 
@@ -76,7 +76,7 @@ A compute can write a normal pack colour target through `colorimgN`, so the targ
 
 `TargetSurface` continues to decide whether a target is compute-writable. It unwraps the `GpuDeviceBackend` through the existing `GpuDeviceAccessor` and, when the backend implements `ShaderWritableTextureBackend`, asks for the same ordinary target texture with the one missing allocation fact added. The result remains a normal `GpuTexture`, including the existing render-attachment, sampled, copy and mip-chain semantics.
 
-Vulkan remains unchanged: when no explicit capability is present, `TargetSurface` still raises `TextureUsage` around the ordinary `GpuDevice.createTexture(...)` call and `VulkanConstMixin` adds `VK_IMAGE_USAGE_STORAGE_BIT`. Metallum instead uses its optional `MetalTextureBridge`, which selects the already-existing `MetalGpuTexture(..., shaderWrite=true)` path and therefore adds `MTLTextureUsageShaderWrite` without teaching Metallum any `colorimgN` naming or pack policy.
+Metallum uses its `MetalTextureBridge`, which selects the already-existing `MetalGpuTexture(..., shaderWrite=true)` path and therefore adds `MTLTextureUsageShaderWrite` without teaching Metallum any `colorimgN` naming or pack policy. Where no explicit capability is present, the target is still created through the ordinary `GpuDevice.createTexture(...)` call with its `TextureUsage`.
 
 Graphics-stage storage-image writes use the same ownership model. Metallum marks the written texture contents dirty and ends the native render encoder at the logical pass boundary so its existing fence transition makes untracked shader writes visible to later passes. Shader-pack resource meaning remains Vitrail-owned.
 
@@ -94,17 +94,17 @@ Graphics-stage storage-image writes use the same ownership model. Metallum marks
 - `Map<String, GpuSampler>` for sampled-image sampler states;
 - exact workgroup counts and exact local workgroup dimensions.
 
-Metallum remains responsible for SPIR-V-to-MSL translation, resource binding indices, `MTLComputePipelineState`, Metal arguments, encoder transitions, fences and native lifetime. It uses `dispatchThreadgroups:threadsPerThreadgroup:` because Vitrail's established Vulkan `vkCmdDispatch(x,y,z)` values are workgroup counts, not total thread counts.
+Metallum remains responsible for SPIR-V-to-MSL translation, resource binding indices, `MTLComputePipelineState`, Metal arguments, encoder transitions, fences and native lifetime. It uses `dispatchThreadgroups:threadsPerThreadgroup:` because the values Vitrail resolves are workgroup counts, not total thread counts.
 
 ### Caller-side compute split
 
 The caller-side migration uses three backend-neutral pieces:
 
 1. `ComputeResources` reflects only the resource names actually present in an already-compiled SPIR-V module. It inventories uniform buffers, storage buffers, sampled images and storage images without rewriting any binding decoration or creating a native object.
-2. `PackComputeBindings` resolves those names to Minecraft facade resources. It preserves the existing Vulkan policy order: custom-image resources and pack texture overrides first, then the selected ping-pong colour target, pass depth/distant/centre depth, engine textures, the stage default target and finally the existing black fallback.
-3. `BackendComputePass` owns the non-Vulkan pass state: the uniform ring, opaque backend pipeline token, resource inventory and resolved dispatch. Existing Vulkan layout creation, push descriptors, barriers, `WideSamplerSets`, native pipeline and destruction stay in `PackCompute.Pass` and have not been moved into this class.
+2. `PackComputeBindings` resolves those names to Minecraft facade resources. It preserves the established policy order: custom-image resources and pack texture overrides first, then the selected ping-pong colour target, pass depth/distant/centre depth, engine textures, the stage default target and finally the existing black fallback.
+3. `BackendComputePass` owns the pass state that is not backend-native: the uniform ring, opaque backend pipeline token, resource inventory and resolved dispatch. Native pipeline construction, resource binding, encoder ordering and destruction stay in the backend.
 
-`PackCompute` routes shadow, chained and standalone computes through this path when both device and command capabilities are present. Otherwise it retains the existing Vulkan route. Pass teardown closes the backend-owned pipeline and uniform ring. Backend dispatch diagnostics name each program and its group/local dimensions only after an accepted non-zero dispatch. Compile refusal, binding failure, encoder rejection and zero-group no-ops do not produce a success line; acceptance still does not prove GPU completion or correct output.
+`PackCompute` routes shadow, chained and standalone computes through this path when both device and command capabilities are present. Pass teardown closes the backend-owned pipeline and uniform ring. Backend dispatch diagnostics name each program and its group/local dimensions only after an accepted non-zero dispatch. Compile refusal, binding failure, encoder rejection and zero-group no-ops do not produce a success line; acceptance still does not prove GPU completion or correct output.
 
 The optional Metallum adapter resolves all three bridge methods inside a normal call and caches them only after every lookup succeeds. A missing class or incompatible signature raises a catchable exception without poisoning class initialization; backend runtime exceptions and fatal errors retain their original type.
 
@@ -144,9 +144,9 @@ The same rule now covers the other source-audited families without changing thei
 
 A reference-unbacked classification is narrower than value parity. Iris can read OpenGL generic-attribute state at an unbacked location, whereas Vitrail supplies its existing deterministic synthesized constant. These changes say only that the vertex buffer is not missing a reference-required field; they do not claim that every unbacked value equals Iris draw-for-draw.
 
-### Vulkan-specific code that stays Vulkan-specific
+### Native ordering stays native
 
-`WideSamplerSets` remains a MoltenVK/Vulkan push-descriptor workaround. Vulkan synchronization barriers and direct descriptor writes remain on the Vulkan branch. They are not translated into Metal operations; Metallum's render/blit/compute encoder transitions and `MTLFence` chain provide Metal ordering.
+Ordering is not carried across the seam as an API. Metallum's render/blit/compute encoder transitions and its `MTLFence` chain provide Metal ordering, and Vitrail states a dependency rather than naming a barrier.
 
 ## Current validation status
 
@@ -200,7 +200,7 @@ The list below is what was still outstanding when PHASE 17 closed, not a gate th
 4. **Not done.** The real Photon compute-dispatch evidence and its paired-head metadata exist in device logs but were never carried into the formal evidence path;
 5. **Maintained.** Comparison, sampler and first-frame resource diagnostics stay separate from vertex-input classification and are investigated only against reference semantics or persistent visual evidence;
 6. **Not done.** The matrix's BSL-family and Sildur-family rows have never run under Vitrail on Metal. Neither has Complementary, and MakeUp Ultra Fast reached a first full frame and clean shutdown without a compatibility record;
-7. **Maintained.** Vulkan and shared-path regression coverage is kept for every backend-neutral contract changed while fixing these findings.
+7. **Maintained.** Backend-neutral and shared-path regression coverage is kept for every contract changed while fixing these findings.
 
 A green Gradle build, successful client launch, full warm-up count or successful compute dispatch is useful evidence, but none alone proves rendering correctness or shader-pack compatibility.
 

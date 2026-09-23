@@ -35,12 +35,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 /**
- * Turns one flattened pack unit into GLSL a Vulkan compiler will take.
+ * Turns one flattened pack unit into GLSL the toolchain will take: the compiler lowers it to
+ * SPIR-V, SPIRV-Cross renders MSL, and Apple's compiler builds the pipeline.
  * <p>
  * The pack dialect is GLSL 120 with OptiFine's additions: fixed function state, {@code varying}
  * and {@code attribute}, texture lookups renamed twenty years ago, and plain uniforms declared
- * loose at file scope, which Vulkan does not allow at all. None of that needs the program to be
- * understood, only read, so the work here is a rewrite over a token stream rather than a compiler.
+ * loose at file scope, which the compilation the backend performs does not take at all. None of
+ * that needs the program to be understood, only read, so the work here is a rewrite over a token
+ * stream rather than a compiler.
  * <p>
  * The tokens themselves, and every way of reading them or changing them, belong to
  * {@link TokenStream} rather than to this class, and the header written in front of what the
@@ -65,12 +67,13 @@ import java.util.stream.Stream;
  * <p>
  * Depth is the other rule that is not the language's. The game rasterises with a reversed Z over
  * zero to one and a pack is written for the OpenGL volume, minus one to one with the near plane at
- * minus one; Iris ends by putting the old volume back with {@code glClipControl}, which Vulkan has
- * no equivalent of. So the conversion is emitted into the shader, in both directions, out of the
- * one uniform {@code of_DepthConv}: {@code .xy} says how to write a clip depth, {@code .zw} how to
- * read a window depth back. What it costs to leave undone was measured rather than argued: Body
- * Camera's motion blur asks for a depth past 0.6 and, reading a reversed depth, would only blur
- * what stands within eight centimetres of the camera, so it blurred nothing at all.
+ * minus one; Iris ends by putting the old volume back with {@code glClipControl}, a call the GL
+ * road makes and Metal has no equivalent of. So the conversion is emitted into the shader, in both
+ * directions, out of the one uniform {@code of_DepthConv}: {@code .xy} says how to write a clip
+ * depth, {@code .zw} how to read a window depth back. What it costs to leave undone was measured
+ * rather than argued: Body Camera's motion blur asks for a depth past 0.6 and, reading a reversed
+ * depth, would only blur what stands within eight centimetres of the camera, so it blurred
+ * nothing at all.
  * <p>
  * The fragment outputs carry one rule that is not GLSL's and cannot be read off the language.
  * 26.2 does not keep the location a stage declares: {@code IntermediaryShaderModule.createFromSpirv}
@@ -1586,7 +1589,7 @@ public final class GlslTranslator {
 	 * code USES an extension is unchanged either way: its own macro test, answered by the compiler,
 	 * which for a vendor
 	 * extension the device has not got is given the device's answer to read
-	 * ({@link #hideAbsentExtensionMacros}, {@link VendorExtensions}).
+	 * ({@link #hideAbsentExtensionMacros}, {@link ShaderExtensionCapabilities}).
 	 */
 	private void dropVersionAndExtensions() {
 		for (int index = 0; index < this.tokens.size(); index++) {
@@ -1600,9 +1603,9 @@ public final class GlslTranslator {
 				String named = extensionNamed(index);
 				// Not hoisted where the device has not got it in this stage: the compiler would
 				// take the line and emit the instruction, which is the one thing the device cannot
-				// run (VendorExtensions). The pack's own guard on the macro is hidden further down,
+				// run (ShaderExtensionCapabilities). The pack's own guard on the macro is hidden further down,
 				// so its fallback is what compiles.
-				if (named != null && !VendorExtensions.absent(named, this.stage)) {
+				if (named != null && !ShaderExtensionCapabilities.absent(named)) {
 					this.extensions.add(named);
 				}
 			} else if (!token.directive().equals("version")) {
@@ -2108,7 +2111,7 @@ public final class GlslTranslator {
 	 * Renames, in the pack's own preprocessor lines, the macro of every extension the device has not
 	 * got in this stage, so that the compiler answers {@code defined} the way the device would.
 	 * <p>
-	 * The reason is with {@link VendorExtensions}: the compiler defines the macro of every
+	 * The reason is with {@link ShaderExtensionCapabilities}: the compiler defines the macro of every
 	 * extension it knows, and a pack gating a vendor instruction on that macro takes the branch on
 	 * a card that cannot run the instruction. Under a GL driver the macro is only defined where the
 	 * card has the extension, which is the answer restored here. Every line is rewritten, live or
@@ -2119,8 +2122,8 @@ public final class GlslTranslator {
 		for (int index = 0; index < this.tokens.size(); index++) {
 			Token token = this.tokens.get(index);
 			if (token.directive() != null && token.kind() == Kind.IDENTIFIER
-					&& VendorExtensions.absent(token.text(), this.stage)) {
-				this.tokens.replace(index, VendorExtensions.hidden(token.text()));
+					&& ShaderExtensionCapabilities.absent(token.text())) {
+				this.tokens.replace(index, ShaderExtensionCapabilities.hidden(token.text()));
 			}
 		}
 	}
@@ -2339,11 +2342,15 @@ public final class GlslTranslator {
 				}
 			}
 
-			// The same two exclusions, and on MoltenVK alone: PackBuiltins says what Metal does with
-			// these calls. Above the directive guard like the sine, a call in a #define body being
-			// code the preprocessor pastes into the program.
+			// Always, and not behind a driver question any more: PackBuiltins says what the road to
+			// Apple's compiler does with these calls, and that road is the only one this engine
+			// takes. It used to be gated on the portability layer that presented Metal on Apple
+			// hardware, which meant a session reaching Metal any other way kept the builtins and
+			// inherited the miscompile the helpers exist to route around. Above the directive guard
+			// like the sine, a call in a #define body being code the preprocessor pastes into the
+			// program.
 			String packed = PackBuiltins.helper(name);
-			if (packed != null && VendorExtensions.moltenVk() && this.tokens.callOpener(index) >= 0
+			if (packed != null && this.tokens.callOpener(index) >= 0
 					&& !this.declaredNames.contains(name)) {
 				this.tokens.replace(index, packed);
 				this.packBuiltinCalls.add(name);
@@ -3000,7 +3007,7 @@ public final class GlslTranslator {
 	 * once a program's {@code colortexNMipmapEnabled} turned the chain on
 	 * ({@code CompositeRenderer.setupMipmapping}). Under OpenGL a minification filter without a
 	 * mipmap in its name never selects a level: whatever level of detail a lookup computes from its
-	 * derivatives, or carries as an argument, the base image answers it. Vulkan has no such filter.
+	 * derivatives, or carries as an argument, the base image answers it. Metal has no such setting.
 	 * Every sampler selects a level, and the one this engine binds where no chain exists is told to
 	 * stay within a quarter of a level of the base, which ought to come to the same thing.
 	 * Measured, it does not: AstraLex marches a reflection ray across {@code depthtex1} in its
@@ -3604,10 +3611,10 @@ public final class GlslTranslator {
 	}
 
 	/**
-	 * {@code const} on a variable demands a compile-time constant under Vulkan, and OpenGL drivers
-	 * accepted a lot that is not one: {@code transpose} of a matrix literal, a constructor from a
-	 * uniform, {@code normalize} of a vector the pack treated as immutable. The keyword is the lie,
-	 * not the value, so it comes off and the declaration stays.
+	 * {@code const} on a variable demands a compile-time constant in the SPIR-V the compiler emits,
+	 * and OpenGL drivers accepted a lot that is not one: {@code transpose} of a matrix literal, a
+	 * constructor from a uniform, {@code normalize} of a vector the pack treated as immutable. The
+	 * keyword is the lie, not the value, so it comes off and the declaration stays.
 	 * <p>
 	 * An array size still needs a real constant, so a declaration whose initialiser is only literals
 	 * and type constructors is left alone. Parameters keep {@code const}: that spelling means
@@ -3655,8 +3662,8 @@ public final class GlslTranslator {
 	}
 
 	/**
-	 * Whether this {@code const} declaration assigns something Vulkan will not take as a constant
-	 * expression: any identifier {@link #constantName} does not vouch for.
+	 * Whether this {@code const} declaration assigns something the compiler will not take as a
+	 * constant expression: any identifier {@link #constantName} does not vouch for.
 	 */
 	private boolean nonConstantInitialiser(int keyword, int end) {
 		boolean seenEquals = false;
@@ -4120,7 +4127,7 @@ public final class GlslTranslator {
 	 * With {@code clipA} and {@code clipB} at minus a half and a half that becomes
 	 * {@code 0.5 * (w - z)}, which is the reversed Z the game rasterises in; at a half and a half it
 	 * becomes {@code 0.5 * (z + w)}, which is the forward zero to one a target of ours carries. In
-	 * both, w is untouched, so x, y and the perspective divide do not move and the Vulkan clip test
+	 * both, w is untouched, so x, y and the perspective divide do not move and Metal's clip test
 	 * {@code 0 <= z <= w} is the OpenGL test {@code -w <= z <= w} exactly: the clipping is preserved
 	 * and not only the value.
 	 * <p>
@@ -4829,7 +4836,8 @@ public final class GlslTranslator {
 	}
 
 	/**
-	 * Moves every plain uniform into one block, because Vulkan takes no other kind. Samplers stay
+	 * Moves every plain uniform into one block, for the reason the backend's shader compilation
+	 * gives: a loose uniform at file scope has no form the SPIR-V it takes can carry. Samplers stay
 	 * opaque and loose, but their declarations leave the body the same way: the header writes them
 	 * in the order the program handed over, sampled names first. What that order buys, and what it
 	 * no longer decides, is on {@code ProgramTranslator.sampledFirst}.
@@ -4855,8 +4863,8 @@ public final class GlslTranslator {
 			// Iris registers them as such (CommonUniforms.java:184-186, MatrixUniforms.java:41-45)
 			// and OpenGL accepts the loose form. They enter OfGlobals only when that branch is
 			// live. If the expander never saw the symbol and the header still defines it, they
-			// stay in the body and Vulkan refuses the unit; PackChoice.load installs the table
-			// before SettingSet.resolve so the two readers agree.
+			// stay in the body and the compilation refuses the unit; PackChoice.load installs the
+			// table before SettingSet.resolve so the two readers agree.
 			if (this.unit.isLive(lines[index])) {
 				liftOne(index);
 			}
@@ -4924,7 +4932,8 @@ public final class GlslTranslator {
 		String type = this.tokens.get(parts.get(cursor)).text();
 
 		// An opaque uniform is recorded the same way, then taken out of the body: the header
-		// writes every sampler in the order the program settled, which is what MoltenVK numbers.
+		// writes every sampler in the order the program settled, which is the order the backend
+		// numbers the slots in.
 		boolean opaque = LegacyGlsl.isOpaqueType(type);
 
 		// Recorded under the spelling the token carries, which is the road decision made real:

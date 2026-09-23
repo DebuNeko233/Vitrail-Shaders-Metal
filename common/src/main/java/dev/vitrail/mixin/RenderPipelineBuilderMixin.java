@@ -15,34 +15,32 @@ import java.util.Optional;
  * device can really keep them apart.
  * <p>
  * The builder walks the active states and throws on the first two that name different functions
- * ({@code RenderPipeline:457-468}, the throw at {@code :464}). It is right to, on both of the
- * game's roads. OpenGL turns blending on and off per buffer but sets the function once for the
- * whole draw, {@code _enableBlend(i)} beside an unindexed {@code _blendFuncSeparate}
+ * ({@code RenderPipeline:457-468}, the throw at {@code :464}). It is right to. The game's OpenGL road
+ * turns blending on and off per buffer but sets the function once for the whole draw,
+ * {@code _enableBlend(i)} beside an unindexed {@code _blendFuncSeparate}
  * ({@code GlCommandEncoder:842-858}), so the last target's function would quietly stand on all of
- * them. Vulkan fills one {@code VkPipelineColorBlendAttachmentState} per slot from that slot's own
- * state ({@code VulkanRenderPipeline:178-191}), which is the shape wanted, but every element of
- * that array has to be identical unless {@code independentBlend} is enabled, and the game asks for
- * that feature nowhere.
+ * them. On this engine's road the shape wanted is already there: Metallum's pipeline compilation
+ * fills one blend state per colour target from that target's own state, preserving indices and their
+ * individual functions, so the permission rather than the mechanism is what has to be lifted.
  * <p>
- * So this is the second half of the permission {@link BufferBlending} describes, the device
- * feature being the first: {@code VulkanBackendMixin} asks for the feature and answers there
- * whether it was given, and this lifts the refusal standing in front of it.
+ * So this is the second half of the permission {@link BufferBlending} describes, the backend's
+ * per-target blend support being the first: {@code MetalBackendMixin} answers it once the Metal
+ * device exists, and this lifts the refusal standing in front of it.
  * <p>
  * <strong>The builder below is the one every pipeline of the process is built through</strong>, the
- * game's own and every other mod's, none of which asked for anything. So the device's answer is not
- * by itself a narrow enough condition to lift on, and {@code parting()} is the two together: a
- * Vulkan device has to have granted {@code independentBlend}, and the build has to be one of this
- * engine's own, which {@code GeometryProgram.part} marks on its thread for the length of the call.
- * Everything else keeps the game's own word, the OpenGL road and a device that refused among them,
- * and so does every builder in the process this engine is not standing in. What our own passes get
- * where the device refused is the whole program function on every attachment
- * ({@code GeometryProgram.state}), which no two states of one pipeline can disagree over.
+ * game's own and every other mod's, none of which asked for anything. So the backend's answer is not
+ * by itself a narrow enough condition to lift on, and {@code parting()} is the two together: a Metal
+ * device that parts its attachments, and the build being one of this engine's own, which
+ * {@code GeometryProgram.part} marks on its thread for the length of the call. Everything else keeps
+ * the game's own word - the OpenGL road, and every builder in the process this engine is not standing
+ * in - and so does a build of ours on a device that did not answer, which is instead given the whole
+ * program function on every attachment ({@code GeometryProgram.state}).
  */
 @Mixin(RenderPipeline.Builder.class)
 public abstract class RenderPipelineBuilderMixin {
 
 	/**
-	 * Two functions read as one where this engine is building and the device parts its attachments,
+	 * Two functions read as one where this engine is building and the backend parts its attachments,
 	 * which is the comparison the refusal hangs off and the only thing here that moves.
 	 */
 	@WrapOperation(method = "build()Lcom/mojang/blaze3d/pipeline/RenderPipeline;", require = 1,

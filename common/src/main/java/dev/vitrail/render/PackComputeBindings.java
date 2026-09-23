@@ -24,7 +24,7 @@ import java.util.regex.Pattern;
  * Resolves shader-pack compute resource names to Minecraft GPU-facade objects.
  * <p>
  * This class contains policy but no native binding code. The priority deliberately mirrors the
- * established Vulkan descriptor path: custom storage images and pack textures first, then the
+ * established resource-binding path: custom storage images and pack textures first, then the
  * selected ping-pong colour target, stage depth, engine textures, the stage default target, and
  * finally the same black fallback used by the adjacent graphics pass.
  */

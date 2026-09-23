@@ -6,15 +6,20 @@
 # stops before anything is uploaded when they disagree: that is the one mistake that would otherwise
 # ship a jar under a version number nothing inside it agrees with.
 #
-# What ships is ONE jar, the merged one the root build assembles, and it runs under either loader:
-# each loader reads its own metadata file and ignores the other's, so the union of the two loader
-# jars is a mod to both of them. It is found rather than named. Its name is built out of
-# archivesName and archiveVersion on the mergedJar task in the root build.gradle, and spelling it a
-# second time here would be a second home for it, out of step the day the first one moves.
+# What ships is ONE jar, the merged one the root build assembles, and it is published as a Fabric
+# mod and nothing else. Fabric reads fabric.mod.json out of it and ignores the NeoForge metadata
+# beside it, so the union of the two loader jars still boots there. It is NOT published as a
+# NeoForge product, and the store row below names Fabric alone, because the NeoForge half cannot
+# work: this engine draws through Metallum, Metallum ships a Fabric mod alone, and a NeoForge
+# install therefore has no Metal device to draw with. That module is retained source for a possible
+# future port, and neoforge.mods.toml says so in its own description. It is found rather than named.
+# Its name is built out of archivesName and archiveVersion on the mergedJar task in the root
+# build.gradle, and spelling it a second time here would be a second home for it, out of step the
+# day the first one moves.
 #
-# One upload per store, filed under both loaders at once, which both stores take on a single file.
-# That also unties the version number: with one upload per release there are no two rows on a store
-# left to tell apart, so nothing is added after a plus any more.
+# One upload per store, filed under Fabric alone, which both stores take on a single file. That also
+# unties the version number: with one upload per release there are no two rows on a store left to
+# tell apart, so nothing is added after a plus any more.
 #
 # **The stores are mirrored from HERE and not from a workflow of their own**, and that is not a
 # matter of taste. A release this job creates is authored by the token the job runs under, and a
@@ -283,29 +288,29 @@ jobs:
           modrinth-id: ${{ secrets.MODRINTH_ID || vars.MODRINTH_ID }}
           modrinth-token: ${{ steps.mirror.outputs.modrinth == 'true' && secrets.MODRINTH_TOKEN || '' }}
           files: ${{ steps.jars.outputs.merged }}
-          # The two loaders are named in the row's own title because the file no longer names
-          # them: what ships is one merged jar, where the pair it replaced said neoforge or
-          # fabric in the file name. A store lists its files under this title and hangs its own
-          # loader tags elsewhere on the page, so the question a reader arrives with is answered
-          # in the list rather than one click further in.
-          name: ${{ steps.which.outputs.tag }} (Neo/Fabric)
+          # The loader is named in the row's own title because the file no longer names it: what
+          # ships is one merged jar, where the pair it replaced said neoforge or fabric in the file
+          # name. A store lists its files under this title and hangs its own loader tags elsewhere
+          # on the page, so the question a reader arrives with is answered in the list rather than
+          # one click further in. Fabric alone, and not the pair: the NeoForge half is retained
+          # source that cannot draw, so a row tagged for it would be an advertisement for a product
+          # that does not exist.
+          name: ${{ steps.which.outputs.tag }} (Fabric)
           version: ${{ steps.version.outputs.version }}
           version-type: beta
           changelog-file: changelog.md
           loaders: |
-            neoforge
             fabric
           game-versions: "26.2"
           environment: client
           java: 25
           # Written out rather than read off the jar, which carries TWO metadata files: whichever
-          # one the action read, its list would be wrong for half the audience. Both stores call
-          # the whole of Fabric API `fabric-api`; the two modules fabric.mod.json names one by one
-          # are projects of neither store and would be dropped in silence. And fabric-api is
-          # optional here while that file says required, both on purpose: a store hangs a
-          # dependency on the upload as a whole, so `required` would send a NeoForge install
-          # chasing a mod that has no NeoForge build, while on Fabric the metadata inside the jar
-          # is what refuses to boot without it, which is where the requirement actually bites.
+          # one the action read, its list would be wrong for the audience this row is filed under.
+          # Both stores call the whole of Fabric API `fabric-api`; the two modules fabric.mod.json
+          # names one by one are projects of neither store and would be dropped in silence. And
+          # fabric-api is optional here while that file says required, both on purpose: a store hangs
+          # a dependency on the upload as a whole, while on Fabric the metadata inside the jar is
+          # what refuses to boot without it, which is where the requirement actually bites.
           dependencies: |
             sodium(required)
             chloride(optional)

@@ -10,13 +10,13 @@ import org.joml.Vector4f;
  * <p>
  * <strong>The matrix we draw with is not the matrix we publish.</strong> Minecraft 26.2 rasterises
  * with a reversed Z over zero to one on both backends: {@code Projection} swaps the near and far
- * planes before building the matrix, and the Vulkan device reports {@code isZZeroToOne}. A pack is
+ * planes before building the matrix, and the Metal device reports {@code isZZeroToOne}. A pack is
  * written against the OpenGL form, z from minus one to one with the near plane at minus one, and
  * it is written against that form everywhere: in the matrices it reads, in the depth it samples,
  * and in the {@code gl_FragCoord.z} it inspects.
  * <p>
  * Iris undoes the whole thing at the source, ending with a {@code glClipControl} back to the old
- * volume. That half is not available here, and not because the call is missing: Vulkan has no
+ * volume. That half is not available here, and not because the call is missing: Metal has no
  * minus one to one clip volume at all, short of an extension the game does not enable. So the
  * matrix is decoupled from the pipeline instead, which is an identity rather than an approximation
  * and is the reason the conversion has a test of its own.

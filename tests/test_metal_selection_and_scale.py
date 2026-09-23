@@ -150,9 +150,16 @@ def check_toggle(config_entry: Path) -> None:
         raise SystemExit("metal selection contract: the row has a storage handler again, so the file would be "
                          "written by a second road beside the binding and a change Sodium's own Undo takes back "
                          "could still leave a choice on disk")
-    # The row is on the page, and the page is the video settings rather than a shader-pack sub-page.
-    before("addOption(metal4(builder))", "addOption(graphicsApi(builder))", text,
-           "metal selection contract: the Metal 4 row is not on the engine's own page")
+    # The row is on the page, and the page is the video settings rather than a shader-pack sub-page. The
+    # backend choice that used to sit beside it is gone: Metal is the only backend this engine draws on, so
+    # the row that decides which Metal generation encodes the frame is the last one on the group that is
+    # about the backend at all, and the pack's own numbers follow it.
+    before("addOption(metal4(builder))", "addOption(renderScale(builder))", text,
+           "metal selection contract: the Metal 4 row is not on the engine's own page, or the pack's own "
+           "sliders have moved above the one row that is about the backend")
+    if "graphicsApi(builder)" in text or "GRAPHICS_API" in text:
+        raise SystemExit("metal selection contract: a graphics-API selector is back on the page, so a player "
+                         "would be offered a backend this engine does not draw on")
 
 
 def check_render_scale(render_scale: Path, pack_choice: Path, pack_file: Path) -> None:

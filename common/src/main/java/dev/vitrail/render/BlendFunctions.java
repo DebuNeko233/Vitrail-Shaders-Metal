@@ -19,7 +19,7 @@ import java.util.Set;
  * place that knows the enum, which keeps the reader of packs free of every engine API.
  * <p>
  * A name this backend has no constant for gives no blending rather than a guess, and is said once.
- * The two that GL has and Vulkan does not, the dual source factors, are the case this is for.
+ * The two that GL has and Metal does not, the dual source factors, are the case this is for.
  */
 final class BlendFunctions {
 

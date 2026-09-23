@@ -23,13 +23,13 @@ import java.util.Map;
  * and every translated stage carries the same header ({@code #version 460 core}, {@link Emitter}),
  * so what is left to vary is the stage. Asked by compiling, in each of the six stages, a unit
  * testing every name the shaderc library carries in a define string, the answer is one set shared
- * by all six, the same under either Vulkan target, plus the one macro naming the stage. It has to
+ * by all six, the same under either compiler target, plus the one macro naming the stage. It has to
  * be asked through {@code shaderc_compile_into_spv}: the preprocessed text road preprocesses as a
  * vertex stage whatever kind it is handed, and answers {@code GL_VERTEX_SHADER} in every stage. A
  * newer shaderc can add a name, and asking it the same way is how this list is brought level.
  * <p>
  * The table for a stage leaves out what the translator hides from the compiler in that stage
- * ({@link VendorExtensions#absent}), since the compiler then reads those names undefined.
+ * ({@link ShaderExtensionCapabilities#absent}), since the compiler then reads those names undefined.
  */
 public final class CompilerMacros {
 
@@ -118,14 +118,25 @@ public final class CompilerMacros {
 	public static Map<String, String> definedIn(ProgramStage stage) {
 		Map<String, String> defined = new LinkedHashMap<>();
 		for (String name : PREAMBLE) {
-			if (!VendorExtensions.absent(name, stage)) {
+			if (!ShaderExtensionCapabilities.absent(name)) {
 				defined.put(name, "1");
 			}
 		}
 
-		// The Vulkan GLSL version the compiler targets, which it writes whatever the target's own
+		// The GLSL dialect version the compiler targets, which it writes whatever the target's own
 		// version is.
-		defined.put("VULKAN", "100");
+		//
+		// <strong>This entry is the one place in the tree where the deleted API's name is still
+		// spelled, and it is not an API name here.</strong> It is the preprocessor macro glslang
+		// defines in every stage when it compiles GLSL to SPIR-V, and it is shader-pack-visible
+		// contract rather than a backend detail: packs written for the reference compilers test
+		// {@code #ifdef} on it to pick their SPIR-V branch, and {@code #ifdef} is evaluated by the
+		// include expander against this table before the compiler ever sees the file. Drop the entry
+		// and an include inside such a guard is not taken here and is taken by the compiler, which is
+		// the class of divergence the table exists to prevent. There is no API to read the name from,
+		// so it has to be written down, and the Metal-only surface contract test carries a
+		// marker-based allowlist for this line alone.
+		defined.put("VULKAN", "100"); // no-vulkan-contract-allow: glslang's SPIR-V target macro, a pack-visible contract
 		// glslang's names for the stages are the enum's, GL_FRAGMENT_SHADER for FRAGMENT.
 		defined.put("GL_" + stage.name() + "_SHADER", "1");
 

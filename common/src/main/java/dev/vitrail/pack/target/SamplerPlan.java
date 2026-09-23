@@ -17,8 +17,8 @@ import java.util.Set;
  * What every sampler a program declares is bound to.
  * <p>
  * It is total by construction, and that is the point rather than a nicety. The list of names
- * here is the same list, in the same order, that builds the bind group layout, and the Vulkan
- * backend throws {@code Missing sampler} the moment a name in the layout is not bound. So a name
+ * here is the same list, in the same order, that builds the bind group layout, and the backend
+ * refuses to bind a name in the layout the engine has no answer for. So a name
  * this engine has no answer for cannot be dropped; it has to come back as {@link Kind#UNSERVED}
  * and be given something harmless.
  * <p>

@@ -15,13 +15,14 @@ import com.mojang.blaze3d.textures.GpuSampler;
  * <p>
  * Vitrail owns the semantic decision: {@link ShadowCompare} records which sampler names in which
  * pipeline are comparison reads. The ordinary {@link GpuSampler} already carries the pack's
- * NEAREST/LINEAR, mip and addressing choices, so the optional backend is asked only to clone those
- * generic properties and add LEQUAL comparison. That is the same split Iris uses when selecting
- * one of its ordinary/hardware, nearest/linear and mipped/non-mipped shadow sampler combinations.
+ * NEAREST/LINEAR, mip and addressing choices, so the backend is asked only to clone those generic
+ * properties and add LEQUAL comparison. That is the same split Iris uses when selecting one of its
+ * ordinary/hardware, nearest/linear and mipped/non-mipped shadow sampler combinations.
  * <p>
- * Vulkan keeps its established native descriptor substitution. Metallum receives the same
- * semantic answer through its optional late-bound sampler bridge, with no shadow name crossing the
- * backend boundary.
+ * There is one road and it goes through Metallum's late-bound sampler bridge, with no shadow name
+ * crossing the backend boundary. An earlier shape of this returned the ordinary sampler and left a
+ * descriptor walk to substitute a native one behind it; that walk is gone with the backend it
+ * belonged to, and the branch that relied on it is gone with the walk.
  */
 public final class ComparisonSamplers {
 
@@ -42,8 +43,15 @@ public final class ComparisonSamplers {
 
 		GpuDeviceBackend backend = ((GpuDeviceAccessor) device).vitrail$backend();
 		if (!MetallumSamplerBridge.supports(backend)) {
-			// Vulkan's descriptor walk supplies its native comparison sampler later.
-			return ordinary;
+			// Handing back the ordinary sampler here would be worse than a refusal: the shader is
+			// already compiled to a depth-reference sample, and that read against a sampler with no
+			// comparison state is undefined rather than merely degraded, which is the shape of
+			// failure this engine refuses everywhere else. The comparison state is a capability of
+			// the one backend this engine draws on, so a backend that does not answer it is a broken
+			// session and says so.
+			throw new IllegalStateException("The " + device.getDeviceInfo().backendName()
+					+ " backend does not supply the comparison sampler that " + name + " is read "
+					+ "through, which a sampler2DShadow declaration in this pack requires");
 		}
 
 		return MetallumSamplerBridge.comparisonSampler(

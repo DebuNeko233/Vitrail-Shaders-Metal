@@ -13,7 +13,7 @@ import java.util.Locale;
  * frame it runs.
  * <p>
  * {@code prepareRender} rotates once for the camera. The shadow walk used to call it again, which
- * on the Vulkan indirect path fences a mapped buffer the GPU may still be reading. Issue 115 is
+ * fences a mapped buffer the GPU may still be reading. Issue 115 is
  * that wait. This clock sits around {@code DefaultChunkRenderer.rotate}, which is the call that
  * does the fence, the swap and the remap, so the number in the log is the stall itself rather than
  * a guess from the frame counter.

@@ -50,7 +50,11 @@ tasks.named("processResources", ProcessResources).configure {
 		mod_id: project.mod_id,
 		mod_version: rootProject.effectiveVersion,
 		minecraft_version: project.minecraft_version,
-		fabric_loader_min_version: project.fabric_loader_min_version
+		fabric_loader_min_version: project.fabric_loader_min_version,
+		// The backend's floor, named in the metadata because Metallum is required rather than
+		// optional: a loader that turns away a build too old to answer the integration API does it
+		// before any of this mod's code runs, which is the earliest and clearest refusal available.
+		metallum_min_version: project.metallum_min_version
 	]
 
 	inputs.properties(metadata)

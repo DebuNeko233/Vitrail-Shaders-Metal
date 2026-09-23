@@ -94,8 +94,8 @@ public final class CustomImages {
 	}
 
 	/**
-	 * The GLSL layout format a storage image declaration needs on Vulkan, where Iris's GL bind
-	 * supplies the format at bind time and the pack often writes none.
+	 * The GLSL layout format a storage image declaration needs in the emitted dialect, where Iris's
+	 * GL bind supplies the format at bind time and the pack often writes none.
 	 */
 	public static Optional<String> layoutFormat(String name) {
 		ImageInformation image = byName.get(name);

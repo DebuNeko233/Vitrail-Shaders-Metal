@@ -57,7 +57,7 @@ import java.util.Set;
  * <p>
  * <strong>Only the elements the pack really reads are declared, and the format is built to
  * match.</strong> That is the chunk mesh's rule and it is forced by the same mechanism:
- * {@code VulkanRenderPipeline} gives every element of the format a location counting up from nought
+ * {@code RenderPipeline} gives every element of the format a location counting up from nought
  * ({@code :109-117}) while {@code IntermediaryShaderModule.rebind} only counts the ones that
  * survived into the compiled module ({@code :148-162}), so an element declared and never read may be
  * dropped and take the location of every element after it down one. Here the position and the meta

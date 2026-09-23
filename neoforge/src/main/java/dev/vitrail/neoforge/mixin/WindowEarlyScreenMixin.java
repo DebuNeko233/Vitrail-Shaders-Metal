@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.At;
 
 /**
  * The two places the window asks NeoForge for its early loading screen, and what
- * {@link EarlyWindow} answers under Vulkan.
+ * {@link EarlyWindow} answers under Metal.
  * <p>
  * Two and not one because the game asks twice. The static call is where the handle is either taken
  * over or created, so it is the one that decides and the one that takes ownership of what is left

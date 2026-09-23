@@ -63,7 +63,7 @@ import java.util.stream.Collectors;
  * {@code glClear} as the FBO is bound is not.
  * <p>
  * No caller ever holds a texture view. A resize destroys and recreates the texture behind a target
- * and closes every view onto it, and nothing on the Vulkan backend checks that a bound view is
+ * and closes every view onto it, and nothing on the Metal backend checks that a bound view is
  * still alive: a view kept across a resize is a silent use after free rather than an exception.
  * Views are therefore looked up again at every use, which is what {@link #view} is for. The views
  * themselves belong to {@link TargetSurface}, which closes them with the texture they look onto,
@@ -768,7 +768,8 @@ final class ColorTargets {
 	/**
 	 * How many colour attachments one pass may carry, asked of the device rather than assumed.
 	 * <p>
-	 * The Vulkan minimum a driver has to offer is four, not eight, and the count that matters here
+	 * The smallest number of colour attachments a device has to offer is four, not eight, and the
+	 * count that matters here
 	 * is whatever this device reports: a pass built with more attachments than it allows is not a
 	 * slow pass, it is an invalid one. Asked per call rather than held, because the only cost is a
 	 * record field and a device can be replaced under this class.
@@ -1321,7 +1322,7 @@ final class ColorTargets {
 						+ "no storage image of {}, so that shader cannot be served", name, format);
 			}
 			// Named before it is allocated, on purpose. RG11B10_FLOAT as a colour attachment is
-			// not something the Vulkan specification guarantees and nothing in the game asks the
+			// not something the graphics API guarantees and nothing in the game asks the
 			// driver whether it has it, so the last line written has to name the format asked for.
 			// The declaration comes with it, because a wrong image starts at a wrong declaration
 			// and reading it off the picture is what has to stop being necessary.
@@ -1431,8 +1432,8 @@ final class ColorTargets {
 
 	/**
 	 * Clears the whole chain, and that is the backend's choice rather than ours: there is no level
-	 * argument on {@code clearColorTexture}, and {@code VulkanCommandEncoder} sets the subresource
-	 * range's {@code levelCount} to the texture's full mip count. So a mipmapped target costs about
+	 * argument on {@code clearColorTexture}, and the backend's own clear reaches every level of the
+	 * chain rather than the base alone. So a mipmapped target costs about
 	 * four thirds of a clear rather than one.
 	 * <p>
 	 * Used for the one-pixel constants, which no pack pass writes and which therefore cannot fold

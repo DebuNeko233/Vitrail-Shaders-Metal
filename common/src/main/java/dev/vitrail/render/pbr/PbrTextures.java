@@ -325,8 +325,8 @@ public final class PbrTextures {
 		}
 
 		void close() {
-			// The views first: closing a texture does not close the views onto it, and nothing on the
-			// Vulkan backend checks that a bound view is still alive.
+			// The views first: closing a texture does not close the views onto it, and nothing
+			// checks that a view a draw still holds is alive.
 			this.views.values().forEach(GpuTextureView::close);
 			this.views.clear();
 			this.textures.values().forEach(GpuTexture::close);

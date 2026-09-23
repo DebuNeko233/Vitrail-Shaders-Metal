@@ -33,10 +33,11 @@ import java.util.function.BiFunction;
  * while drawing to it. OpenGL leaves such a read undefined and the drivers hand back what stood
  * at the texel for a fragment reading its own, which is the read these packs rely on.
  * <p>
- * <strong>Why a copy here, which is a divergence and is written up as one.</strong> Vulkan does
- * not let one image be a colour attachment and a sampled texture of the same pass, whatever the
- * layout; the game's backend has no feedback loop layout and no input attachment to offer, so the
- * read was answered with one black pixel, and Sildur's water lost its fog and its reflections.
+ * <strong>Why a copy here, which is a divergence and is written up as one.</strong> No backend
+ * lets one image be a colour attachment and a sampled texture of the same pass, whatever the
+ * view; the game's graphics API has no feedback loop layout and no input attachment to offer,
+ * so the read was answered with one black pixel, and Sildur's water lost its fog and its
+ * reflections.
  * What Iris's framebuffer holds when the world's translucents are drawn is the opaque world as
  * the deferred stage, the hand, the translucent entities and the game's features left it, and
  * what it holds when the translucent entities themselves are drawn is that world without the

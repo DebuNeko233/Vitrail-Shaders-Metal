@@ -595,12 +595,11 @@ public final class PackProgram {
 	 * <strong>A negative count is clamped to nought, and that is a divergence.</strong> What Iris
 	 * does: it stores the value as parsed ({@code ComputeDirectiveParser.java:34-37}) and hands it
 	 * to {@code glDispatchCompute} unexamined ({@code IrisRenderSystem.java:322-323}). What
-	 * prevents it here: {@code vkCmdDispatch} counts groups in unsigned words, so a minus one
-	 * arrives as four billion, which is past {@code maxComputeWorkGroupCount} on every device and
-	 * is a lost device rather than a slow frame. What it costs the image: nothing measurable, the
-	 * pack having asked for a dispatch no driver can make either way. Nought itself is NOT
-	 * clamped, a pack writing it to turn a pass off, which is why an absent directive is answered
-	 * with -1 and not with a count.
+	 * prevents it here: the backend's own dispatch counts groups in unsigned words, so a minus one
+	 * arrives as an enormous grid, past anything a device will accept, which is a fault rather than
+	 * a slow frame. What it costs the image: nothing measurable, the pack having asked for a
+	 * dispatch no driver can make either way. Nought itself is NOT clamped, a pack writing it to
+	 * turn a pass off, which is why an absent directive is answered with -1 and not with a count.
 	 */
 	private static int[] workGroupsOf(ExpandedUnit unit, List<String> lines,
 			Collection<String> unresolved) {

@@ -8,18 +8,20 @@ import net.minecraft.client.PreferredGraphicsApi;
  * Iris in the same instance, and which of the two engines draws this session.
  * <p>
  * <strong>Iris picks its side once, before the game is built</strong>, off the
- * {@code preferredGraphicsBackend} line of {@code options.txt}: a line asking for Vulkan takes its
- * Vulkan-only hooks and draws nothing, anything else takes its OpenGL hooks and draws there
+ * {@code preferredGraphicsBackend} line of {@code options.txt}: the game's native arm takes Iris's
+ * hooks for that renderer alone, and anything else takes its OpenGL hooks
  * ({@code IrisMixinPlugin.java:54} and {@code 72-73}). What this engine does beside it follows that
- * read and not the device. The two part company after a Vulkan boot that failed and fell back to
- * OpenGL, where the file still asks for Vulkan and Iris draws nothing, and under a launch argument
- * that forces a backend: asked of the device, both engines would register the same overlay of
- * Sodium's filtering option, which Sodium refuses at startup, or neither would say why the picture
- * is missing.
+ * read and not the device, which is why the answer is kept rather than asked of the device later.
+ * <p>
+ * <strong>The native arm is identified by elimination and never by name.</strong> This engine draws
+ * on Metal alone, and the renderer Iris keeps those hooks for is one Vitrail no longer names anywhere
+ * in its source - a contract test refuses the name outright. The question this class actually has is
+ * the narrow one, whether the file asked for the arm Iris has a separate set of hooks for, and
+ * Default and OpenGL are the two answers that are not it.
  * <p>
  * The line is taken from the options as the game has just loaded them, at the one read of this mod
- * that runs that early ({@code StartupGuard}), which is the same file Iris read and before anything
- * has written the backend back. A later question reads that answer.
+ * that runs that early ({@code StartupGuard}), which is the same file Iris read. A later question
+ * reads that answer.
  */
 public final class IrisBeside {
 
@@ -32,8 +34,11 @@ public final class IrisBeside {
 
 	private static volatile Boolean installed;
 
-	/** Whether the options the game loaded asked for Vulkan, or null until they have been seen. */
-	private static volatile Boolean askedVulkan;
+	/**
+	 * Whether the options the game loaded asked for the native arm Iris has hooks of its own for, or
+	 * null until they have been seen.
+	 */
+	private static volatile Boolean askedNativeArm;
 
 	private IrisBeside() {
 	}
@@ -56,28 +61,37 @@ public final class IrisBeside {
 	 * @param options the game's options, loaded and not yet touched by anything of this mod
 	 */
 	public static void loaded(Options options) {
-		if (askedVulkan == null) {
-			askedVulkan = options.preferredGraphicsBackend().get() == PreferredGraphicsApi.VULKAN;
+		if (askedNativeArm == null) {
+			askedNativeArm = asksNativeArm(options.preferredGraphicsBackend().get());
 		}
 	}
 
 	/**
-	 * Whether Iris draws this session: installed, and started on options that did not ask for
-	 * Vulkan. Where the startup read was never seen, the game's options stand in for it, which is
-	 * the same answer unless the player moved the setting during the session.
+	 * Whether Iris draws this session: installed, and started on options that did not ask for its
+	 * other set of hooks. Where the startup read was never seen, the game's options stand in for it,
+	 * which is the same answer unless the player moved the setting during the session.
 	 */
 	public static boolean draws() {
 		if (!installed()) {
 			return false;
 		}
 
-		Boolean asked = askedVulkan;
+		Boolean asked = askedNativeArm;
 		if (asked == null) {
 			Minecraft minecraft = Minecraft.getInstance();
 			asked = minecraft != null
-					&& minecraft.options.preferredGraphicsBackend().get() == PreferredGraphicsApi.VULKAN;
+					&& asksNativeArm(minecraft.options.preferredGraphicsBackend().get());
 		}
 
 		return !asked;
+	}
+
+	/**
+	 * Whether this preference is the arm Iris keeps hooks of its own for, which is every value that is
+	 * neither Default nor OpenGL.
+	 */
+	private static boolean asksNativeArm(PreferredGraphicsApi preference) {
+		return preference != PreferredGraphicsApi.DEFAULT
+				&& preference != PreferredGraphicsApi.OPENGL;
 	}
 }

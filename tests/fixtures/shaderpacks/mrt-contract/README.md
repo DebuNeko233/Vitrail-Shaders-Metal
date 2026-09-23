@@ -16,6 +16,6 @@ Evidence to record:
 1. The game reports the Metal backend and Vitrail reports the compatible Metallum preference/capability path after device creation.
 2. The final image contains red, green, blue, and white quadrants. Their vertical orientation is not significant.
 3. Metal validation reports no render-pass or pipeline attachment-index error while opaque terrain is visible.
-4. Switching away from Metal, disabling the pack, and the normal Vulkan path remain usable.
+4. Switching away from Metal and disabling the pack both stay usable: with no pack drawn the game renders its own image rather than a partial one from this fixture.
 
 A compile-green run only proves that the fixture and contract harness still have the intended shape. It is not a substitute for the real Apple-Silicon smoke run.

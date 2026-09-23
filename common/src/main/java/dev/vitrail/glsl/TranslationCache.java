@@ -378,11 +378,10 @@ public final class TranslationCache {
 		// the trig substitution and the shadow comparison both change what it emits and neither
 		// says so in the text it was handed.
 		feed(digest, GlslTranslator.emissionSwitches());
-		// And the device's answer on the vendor extensions, on the stages it runs subgroup
-		// operations in and on whether its driver is MoltenVK, which decide which branch of a pack
-		// compiles and what a float packing call becomes: a card that has one of them translates
-		// differently from a card that has not.
-		feed(digest, VendorExtensions.key());
+		// And the policy on the vendor extensions, which decides which branch of a pack compiles, and
+		// through that what a float packing call becomes: the names the policy counts as absent are
+		// joined into the key, so a change to it serves no translation made under the old one.
+		feed(digest, ShaderExtensionCapabilities.key());
 
 		// The whole table, in its own order, which is fixed by the code that builds it. It carries
 		// the game version, the operating system, the driver's vendor and renderer, the mipmap

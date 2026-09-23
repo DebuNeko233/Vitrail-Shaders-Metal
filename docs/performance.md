@@ -23,8 +23,9 @@ to all of them.
 3. **A phase ends with a picture as well as a counter.** Frame rate cannot see a wrong store action,
    which is why the exit criteria below name the comparison wherever the risk is a wrong image.
 
-`AGENTS.md` no longer requires the Vulkan baseline to be preserved. P7 is where that becomes code,
-and no other phase may use it as an excuse for a pack-visible change.
+There is one backend, and there is no second one whose baseline has to be preserved. The phases
+below are ordered around Metal alone, and no phase may use a deletion as an excuse for a
+pack-visible change: rule 2 above holds whatever is being removed underneath it.
 
 ## Where the code stands today
 
@@ -1220,10 +1221,10 @@ factory surface its own header describes**, which is the same lesson the spatial
 `newCommandAllocator` preferred where the device offers it.
 
 One trap that cost two runs and is worth writing down for anyone measuring here: **a crash during startup
-makes Vitrail put the graphics API back to Vulkan** ("The last startup ended badly", by design), so the next
-run comes up on MoltenVK with no Metal device, no pack and no probe window - and the harness reports that
-as an empty collection rather than as a wrong backend. The setting is `preferredGraphicsBackend` in the
-instance's `options.txt`.
+makes Vitrail put the graphics API back to the choice its own file records** ("The last startup ended badly",
+by design), so the next run can come up on a graphics API this engine does not draw on, with no Metal
+device, no pack and no probe window - and the harness reports that as an empty collection rather than as a
+wrong backend. The setting is `preferredGraphicsBackend` in the instance's `options.txt`.
 
 **Item 4's prize is sized, and the first reading of it was wrong.** The probe counted encoder *ends that
 were given a reason* and reported 30.35 a frame, which was read as "one boundary of the engine's own and
@@ -1753,8 +1754,8 @@ this engine's own settings screen, and the Sodium entry that puts a page under t
 video settings Sodium owns - which is also where a player with Reese's Sodium Options sees it, that mod
 implementing the same entry point. One thing there is stale and this work has to fix it: the entry
 registers its second page - the settings that are the engine's own rather than a pack's, which is
-exactly where an upscaler choice belongs - **on Vulkan alone**, and Metal has been the production path
-since the rule in `AGENTS.md` changed. A rung the device does not support is shown as unavailable there
+exactly where an upscaler choice belongs - **only on a session that is not Metal**, and Metal is the
+one path this engine draws a pack on. A rung the device does not support is shown as unavailable there
 rather than hidden, because "this Mac cannot do it" and "this build cannot do it" are different
 sentences and a player is owed the right one.
 
@@ -1882,48 +1883,32 @@ half-enabled upscaler is not.
 
 ---
 
-# Phase P7 - Remove the Vulkan path
+# Phase P7 - The removed graphics API (completed)
 
-**For.** `AGENTS.md` no longer requires the Vulkan baseline to be preserved. This phase turns that
-decision into the tree. It is deliberately last: deletion work is cheapest once the surviving paths
-are the ones that were measured, and doing it first would have removed the reference the earlier
-phases compare against.
+**For.** The product was already Metal-only in its rules; this phase made the tree match. It was
+deliberately last: deletion work is cheapest once the surviving paths are the ones that were
+measured, and doing it first would have removed the reference the earlier phases compare against.
 
-**Needs first.** P1 to P6 either done or explicitly abandoned. The engine's own claims about itself
-must be true at every step, and a half-removed backend is the worst state for that.
+**Done, and the outcome is simply that the removal happened.** What the phase covered:
 
-**Scope, measured today.**
+- the mixin family and the accessor mixins that reached the deleted API's types, together with
+  `common/src/main/java/dev/vitrail/cache/ModuleCache.java`;
+- the contract scripts that pinned the old path and their `build.yml` lines, in the same commit,
+  because a contract script that no workflow names fails the workflow contract instead;
+- `HostReport` and the status pages, so that a session on Metal is now accepted on its own answers
+  alone: a compatible Metallum, that build's Prefer Metal, and a device that came up;
+- the prose, last and deliberately, because comments describing a backend that no longer exists are
+  worse than no comments. The knowledge worth keeping was kept in one place, stating why a
+  divergence exists, and the rest was dropped on purpose.
 
-- **49 files call Vulkan APIs**: the Vulkan mixin family, the accessor mixins into the game's
-  Vulkan types, and `common/src/main/java/dev/vitrail/cache/ModuleCache.java`.
-- **58 further files mention Vulkan only in prose**, mostly to explain a divergence or a trap.
-- **One CI contract**: `tests/test_vulkan_recording_contract.py`, named at `.github/workflows/build.yml:92`.
-- **15 documents** name Vulkan, including `README.md` and `CONTRIBUTING.md`.
+**The seam was kept.** The point of deleting the path was to have one backend, not to have no
+boundary. The seam is what made P5 an implementation rather than a rewrite, and the backend contract
+still refuses shader-pack vocabulary in the backend exactly as it did before the deletion.
 
-**Work, in this order.**
-
-1. **`HostReport` and the status pages changed together, and half of that is already done.**
-   `HostReport.otherBackend()` no longer documents Vulkan as the production path, and the developer
-   switch that used to gate Metal (`-Dvitrail.experimentalMetal=true`) has been removed, so a session
-   on Metal is now accepted on its own answers alone: a compatible Metallum, that build's Prefer
-   Metal, and a device that came up. What remains under this step is the rest of the page's Vulkan
-   guidance, which still sends a non-Metal session to a graphics API this phase is meant to delete.
-2. **The Vulkan-only mixins and their accessors**, in batches that each keep the build green. The
-   mixins that exist only to reach Vulkan types are the easiest to remove first.
-3. **The contract test and its `build.yml` line in the same commit.** A contract script that no
-   workflow names fails the workflow contract instead, so the two cannot be separated.
-4. **The prose last, deliberately.** Ninety-nine comments describing a backend that no longer exists
-   are worse than no comments. This is where the remaining knowledge is either kept on purpose - one
-   place, stating why a divergence exists - or dropped on purpose. `docs/sky-and-shadows.md`,
-   `docs/internals/render-targets.md` and `docs/internals/game-graphics-api.md` carry most of it.
-5. **Keep the seam.** The point of deleting Vulkan is to have one backend, not to have no boundary.
-   The seam is what made P5 an implementation rather than a rewrite, and
-   `metallum/tools/ci-contracts.py` should keep refusing shader-pack vocabulary in the backend after
-   the deletion exactly as it does before it.
-
-**Exit criterion.** No Vulkan API call remains in the tree, the build and the contract suite are
-green, `HostReport` and every status page agree that Metal is the path, and the seam is intact with
-its contract still enforced.
+**Exit criterion, met.** No call into the deleted API remains in the tree, the build and the contract
+suite are green, `HostReport` and every status page agree that Metal is the path, and the seam is
+intact with its contract still enforced. A reintroduction is refused by a contract test rather than
+caught in review, which is the rule `AGENTS.md` now states.
 
 ---
 

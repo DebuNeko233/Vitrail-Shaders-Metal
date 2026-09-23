@@ -1,7 +1,7 @@
 # Translation
 
-Shader packs are written in OpenGL-era GLSL. The game renders through Vulkan. This page is
-about how the first becomes the second, and what does not survive the trip.
+Shader packs are written in OpenGL-era GLSL. The game renders through Metal, by way of Metallum.
+This page is about how the first becomes the second, and what does not survive the trip.
 
 ## Once, at load time
 
@@ -81,7 +81,7 @@ it correctly means finding the matching close parenthesis, which means tokenisin
 **Precision qualifiers are stripped.** They mean nothing on desktop, but two declarations of one
 function that disagree about them are a real conflict.
 
-**`const` on a variable whose initialiser is not a constant expression is stripped.** Vulkan
+**`const` on a variable whose initialiser is not a constant expression is stripped.** The compiler
 refuses a global `const mat3` initialised from `transpose(...)`, or from a uniform, which OpenGL
 drivers took as merely immutable. The keyword comes off and the value stays. The rule is coarser
 than the compiler's, which folds a builtin over literals and keeps the keyword: here a declaration
@@ -97,15 +97,15 @@ a builtin introduced after the version the pack targets, and the error does not 
 it complains about overload precision qualifiers. Renaming is triggered only on names the pack
 actually defines, so lengthening the reserved list costs nothing.
 
-**On MoltenVK, the float packing builtins are written out in arithmetic.** A call to
+**On Metal, the float packing builtins are written out in arithmetic.** A call to
 `packUnorm4x8`, `packUnorm2x16`, `packSnorm4x8`, `packSnorm2x16` or one of their four unpacks
 becomes a call to a helper of the translation's own, which does in integer arithmetic what GLSL
 defines the builtin to do, rounding included. Noble packs its material into two `packUnorm4x8`
 words, and on Apple Silicon the first word reached the target holding the bits of a float rather
 than the packed value, the second one right and the decode wrong the same way, where the same stages
-draw right on NVIDIA. Every other driver keeps the builtins, and a unit that declares or defines one
-of those names for itself keeps its own. Whether the driver is MoltenVK is part of the translation
-cache's key, so a translation kept on disk is never served to the other kind of device.
+draw right on NVIDIA. A unit that declares or defines one of those names for itself keeps its own.
+The Metal path is what the translation cache is keyed on, so a translation kept on disk is never
+served to a device it was not made for.
 
 **Depth reads are converted, and not by the translator.** The game renders in reversed Z; packs
 expect the legacy convention. The translated text does carry depth conversion, at three fixed sites:
@@ -121,7 +121,7 @@ bias or a pair of derivatives, which only ever chose a level, is dropped. The re
 depth textures nearest and never mipmapped, the noise linear, and a colour target through the
 target's own sampler, mipmapped once a program's `colortexNMipmapEnabled` turned its chain on; under
 OpenGL a filter without a mipmap in its name never selects a level, whatever level of detail the
-lookup computed or carried. Vulkan has no such filter. Every sampler selects a level, the one bound
+lookup computed or carried. Metal has no such filter. Every sampler selects a level, the one bound
 where no chain exists is capped a quarter of a level above the base, which ought to come to the same
 thing, and measured on one driver it did not: AstraLex marches a reflection ray across the opaque
 depth in its translucent pass, thirty steps with an early exit, reading the depth with `texture` at
@@ -181,10 +181,10 @@ inert here, they are what assigns what the emitter deliberately leaves unassigne
 
 Those assigned numbers follow the order the compiler first meets each name in the shader, and the
 game then renumbers every sampler over the layout it builds from the modules. A sampler a program
-declares and never reads used to take a place in that layout, which on MoltenVK is a Metal sampler
-index that can land above 15 and refuse the pipeline; the layout is built from what a module
-actually reaches now. Sampled names are still declared first in the header, which no longer decides
-that; see [the graphics API](internals/game-graphics-api.md).
+declares and never reads used to take a place in that layout, an index that can land above Metal's
+cap of 16 and refuse the pipeline; the layout is built from what a module actually reaches now.
+Sampled names are still declared first in the header, which no longer decides that; see
+[the graphics API](internals/game-graphics-api.md).
 
 The exception is fragment outputs, which keep their explicit location, because their **order** is
 the only thing that says which write lands on which attachment.
@@ -200,10 +200,10 @@ rewrite becomes the identity.
 Every vertex stage also declares `invariant gl_Position`. Two programs of one pack often place the
 same vertex with the same code and are expected to land it at the same depth to the last bit: a
 banner's colour is drawn over its cloth by another program, with a test that passes only at an
-equal or nearer depth. MoltenVK compiles with fast math unless a stage says otherwise, which leaves
-Metal free to fold each program's arithmetic its own way, and on Apple Silicon the colour lost that
-test in hatched patches until the qualifier was there. SPIRV-Cross reports it as position
-invariance, and MoltenVK compiles the stage with `preserveInvariance`, which every vertex stage
+equal or nearer depth. Metal compiles with fast math unless a stage says otherwise, which leaves the
+compiler free to fold each program's arithmetic its own way, and on Apple Silicon the colour lost
+that test in hatched patches until the qualifier was there. SPIRV-Cross reports it as position
+invariance, and Metallum compiles the stage with `preserveInvariance`, which every vertex stage
 pays. The qualifier only holds where the two programs spell the computation the same: a pack whose
 programs place a vertex by different code is not covered, nor a draw the game still makes with its
 own shader.
@@ -401,9 +401,10 @@ for that path, three different mechanisms, and it is worth knowing which:
   file escapes by being flattened onto a flat atlas long before it reaches here.
 - **Compute has nowhere to go through the Java facade.** The game's shader-type enumeration carries
   a vertex stage and a fragment stage and nothing else, and the device exposes no way to precompile
-  anything but a render pipeline. The Vulkan backend behind that facade already has a compute-capable
-  queue, a public `VkDevice`, and the shaderc the game embeds, whose compute kind the facade never
-  passes. That path has been made to dispatch and to write, and a pack's computes go down it:
+  anything but a render pipeline. The seam supplies the stage the facade cannot: Metallum takes the
+  SPIR-V the game's embedded shaderc produces, whose compute kind the facade never passes, compiles
+  it to MSL with SPIRV-Cross, owns the `MTLComputePipelineState`, binds the facade's resources and
+  dispatches. That path has been made to dispatch and to write, and a pack's computes go down it:
   translated like any other unit, compiled by the same shaderc. A shadowcomp is dispatched at the
   head of the frame, and a compute hanging off a pass the chain draws, begin, prepare, deferred,
   composite or final, right before that pass, the letter-less file first and then in letter
@@ -421,14 +422,14 @@ for that path, three different mechanisms, and it is worth knowing which:
   Reflection asks for uniform buffers, sampled images, outputs and inputs, and never enumerates
   them. On the facade's own walk they pass compilation and are bound to nothing, so the walk is
   widened around it: the reflected entries gain those names, the layout emits a storage type for
-  them, and the descriptor written at bind time carries the handle. An image of the pack's own is
-  allocated through VMA and bound as a push descriptor, because the game's texture usage bits
-  never set the Vulkan storage flag on their own; a colour target a compute stores into has to
-  stay the texture the passes attach, so there the flag is added to what that conversion returns,
-  for the one creation that asks.
+  them, and the descriptor written at bind time carries the handle. An image of the pack's own
+  cannot ask for the usage it needs, because the game's public API has no storage-image usage bit at
+  all; Metallum's optional bridge creates the ordinary texture with Metal's `ShaderWrite` usage. A
+  colour target a compute stores into has to stay the texture the passes attach, so there too the
+  usage is added to what that conversion returns, for the one creation that asks.
 
 No amount of translation work makes a pack compute unit or a pack storage image pass through the
-facade. Vulkan itself supports all of them. The layer above does not, and the backend below it
+facade. Metal itself supports all of them. The layer above does not, and the backend below it
 does; [the game's graphics API](internals/game-graphics-api.md) says where the split sits.
 
 **Defects in the pack itself.** A conditional directive the pack wrote loosely no longer costs it

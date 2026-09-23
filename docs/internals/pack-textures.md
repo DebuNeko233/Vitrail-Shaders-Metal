@@ -228,10 +228,11 @@ one's tiling produces, once again, something that looks like noise.
 
 **Divergence from Iris, and a deliberate one.** Iris rewrites a volume in the stage its directive
 names. Under a GL backend that suffices: the untouched three-dimensional declarations elsewhere are
-bound to nothing, which is tolerated. Vulkan refuses them, so the rename is applied in every program
-carrying the declaration, whatever stage the directive named. It invents nothing (the pack named
-exactly one file for that identifier, with its shape, size and format), and it is why a forged name
-is answered without consulting the stage at all. Iris remains the authority on what a directive
+bound to nothing, which is tolerated. The game's own compiler refuses a three-dimensional sampler
+wherever it is declared, read or not, so the rename is applied in every program carrying the
+declaration, whatever stage the directive named. It invents nothing (the pack named exactly one file
+for that identifier, with its shape, size and format), and it is why a forged name is answered without
+consulting the stage at all. Iris remains the authority on what a directive
 means; see [the note on sources](../README.md#a-note-on-sources) for how that authority is used and
 credited.
 

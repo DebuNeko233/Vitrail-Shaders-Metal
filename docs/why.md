@@ -1,15 +1,15 @@
 # Why this exists
 
-Minecraft ships a Vulkan renderer now, and not one of the shader packs written over the last decade
-ran on it. Two choices follow from that, and this page is the reasoning behind both: keeping the
-OptiFine format rather than inventing one, and writing an engine at all when others are already in
-the area.
+Minecraft 26.2 ships a renderer that the shader packs written over the last decade do not run on.
+It is Metal, reached through the Metallum backend. Two choices follow from that, and this page is
+the reasoning behind both: keeping the OptiFine format rather than inventing one, and writing an
+engine at all when others are already in the area.
 
 ## Why the OptiFine format
 
 Not because it is elegant, but because that is where the work is. Packs have been written against
 the OptiFine conventions for more than a decade, by a lot of people, and that is still where nearly
-all of the community writes today. Minecraft moving to Vulkan does not make any of that work worse.
+all of the community writes today. The game's move to Metal does not make any of that work worse.
 It just makes it unrunnable there, and asking every author to port to a new format is asking them
 to throw it away.
 
@@ -18,8 +18,8 @@ conventions that have held for ten years means the specification already exists,
 of real packs to test against, and there is an unambiguous definition of done. A new format closes
 the door on all three permanently.
 
-It also means an author can keep shipping one pack through the move to Vulkan rather than
-maintaining two. None of this rules out supporting a Vulkan-native format later, if one appears and
+It also means an author can keep shipping one pack through the move to Metal rather than
+maintaining two. None of this rules out supporting a Metal-native format later, if one appears and
 people write for it; it is simply not the problem worth solving first.
 
 The cost was measured before any code was written, against a corpus of real, widely used packs, and
@@ -37,10 +37,10 @@ the projects below.
   where the overwhelming majority of packs are still played. Where the format's own documentation
   runs out, Iris is the authority this engine is checked against; the parts adapted from it are
   credited in [NOTICE](../NOTICE).
-- **[Sulkan](https://github.com/mravatins/sulkanShaders)** is an open source Vulkan shader engine
-  for Minecraft, GPLv3, built as a Fabric mod. It was already running on the Vulkan renderer when
-  this project started, and reading where it hooks into the game was useful. None of its code is
-  reused here: its licence would not allow it without relicensing all of Vitrail.
+- **[Sulkan](https://github.com/mravatins/sulkanShaders)** is an open source shader engine for
+  Minecraft, GPLv3, built as a Fabric mod. It was already hooking into the game's renderer when this
+  project started, and reading where it does so was useful. None of its code is reused here: its
+  licence would not allow it without relicensing all of Vitrail.
 - **[Aperture](https://github.com/IrisShaders/Aperture-Example-Pack)**, from the Iris team, is a
   newer engine whose packs are written in Slang. Its example pack is public. It is a clean break
   from the OptiFine format rather than a way to keep running what already exists.

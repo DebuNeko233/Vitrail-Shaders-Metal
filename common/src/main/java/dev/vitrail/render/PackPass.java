@@ -627,8 +627,8 @@ final class PackPass {
 
 	/**
 	 * Opens and closes its own render pass, which is what makes the next one able to read what
-	 * this one wrote: the Vulkan backend ends a pass with a full memory barrier. Nothing is
-	 * allocated here. The first write of a target this frame loads as a clear, which is
+	 * this one wrote: the Metal backend ends a pass with the synchronisation its own encoder needs.
+	 * Nothing is allocated here. The first write of a target this frame loads as a clear, which is
 	 * {@code glClear} as the FBO is bound; later writes load what the last pass left.
 	 */
 	void draw(CommandEncoder encoder, ColorTargets targets, GpuTextureView depthView,

@@ -43,8 +43,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * text lands in the figure too when it compiles while a tally is live, the game's and Sodium's
  * own pipelines and this engine's helper passes alike; on a load into a world those follow the
  * first draws. Outside both figures: the {@code rebind} rewrite and the compute's layout, both
- * small, and the driver's own pipeline build behind {@code vkCreateGraphicsPipelines}, which on
- * a cold driver cache is not.
+ * small, and the pipeline build Apple's compiler does from the MSL, which on a cold compiler
+ * cache is not.
  * <p>
  * The counts are tallies in the sense the trig counter is: they are emptied at the head of a
  * load, a first report prints beside the pack-opened line for every installed chain, and a

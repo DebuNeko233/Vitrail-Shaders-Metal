@@ -110,8 +110,8 @@ final class ShadowTargets {
 	/**
 	 * Its own, and not the one {@link ColorTargets} empties under: the census groups a frame's passes
 	 * by label, so the two sharing a name made one flush of each read as two of the colour kind.
-	 * It still begins with {@code Vitrail}, which is what {@code VulkanCommandEncoderMixin} reads
-	 * to give our own passes the narrower barrier.
+	 * It still begins with {@code Vitrail}, which is what the census and the pass timing read
+	 * to tell this engine's own passes from the game's.
 	 */
 	private static final String CLEAR_LABEL = "Vitrail pending shadow clears";
 
@@ -181,7 +181,7 @@ final class ShadowTargets {
 	private GpuTextureView depthView;
 
 	/**
-	 * Level nought of the depth alone, which is what a render pass takes: Vulkan attaches a view of
+	 * Level nought of the depth alone, which is what a render pass takes: an attachment is a view of
 	 * exactly one level, and the light draws into the base. The same object as {@link #depthView} on
 	 * a map with no chain, where the whole view is one level already.
 	 */
@@ -345,7 +345,7 @@ final class ShadowTargets {
 	 * {@code glGenerateMipmap} gives them there.
 	 * <p>
 	 * <strong>And one level wherever the device will not fill the chain.</strong> The fill is a
-	 * blit, and Vulkan requires neither transfer bit of a depth format, where GL gave Iris
+	 * blit, and this backend cannot fill the chain of a depth format at all, where GL gave Iris
 	 * {@code glGenerateMipmap} on anything. A command buffer records what it is given without
 	 * answering, so there is no failure to catch afterwards: allocating the levels anyway would
 	 * hand a pack whatever the driver left in them under the name of a coarser map. Asked once,

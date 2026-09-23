@@ -480,7 +480,7 @@ carries the far edge in the
 gutter of each slice and the helper wraps, a clamped one carries the edge again and the helper
 clamps. The file is read to the length the declaration announces and no further, so a blob past the
 ceiling a shader source gets is read all the same and a tail past the declaration is uploaded by
-neither engine. Two of the four formats an atlas is allocated as are ones Vulkan only PERMITS a
+neither engine. Two of the four formats an atlas is allocated as are ones Metal only PERMITS a
 device to filter linearly rather than requiring it, the thirty two bit float and the sixteen bit
 normalised one, so the device is asked and a refusal leaves that atlas read at its nearest texel
 with a line in the log.

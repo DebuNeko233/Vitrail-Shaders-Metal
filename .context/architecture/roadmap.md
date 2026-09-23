@@ -160,7 +160,7 @@ GpuSampler
 
 # 4. Backend Extension 原则
 
-Vitrail 不应该认识 Metal，也不应该假定 Vulkan。
+Vitrail 不应该直接操作 Metal 原生对象，也不应该假定某个具体图形 API。
 
 采用小型 capability interface，而不是建立一个巨大的：
 
@@ -193,7 +193,7 @@ public interface MipmapCommands {
 而不是：
 
 ```java
-backend.vulkanPipelineBarrier(...);
+backend.metalPipelineBarrier(...);
 ```
 
 Backend abstraction 必须表达：
@@ -205,15 +205,15 @@ GPU 语义
 而不是表达：
 
 ```text
-Vulkan API
+具体图形 API
 ```
 
 错误示例：
 
 ```text
-VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
-VK_ACCESS_SHADER_READ_BIT
-VkImageLayout
+MTLRenderCommandEncoder
+MTLBarrierScope
+MTLTextureUsage
 ```
 
 这些不能出现在 backend-neutral API 中。
@@ -244,13 +244,11 @@ vitrail
 ├─ backend extension API
 └─ Minecraft integration
         │
+        ▼
+  vitrail-metallum
         │
-        ├───────────────┐
-        ▼               ▼
-vitrail-vulkan     vitrail-metallum
-                        │
-                        ▼
-                   neo-metallum
+        ▼
+   neo-metallum
 ```
 
 依赖方向：
@@ -274,10 +272,10 @@ vitrail-metallum
 
 这样：
 
-- Vitrail 不被 Metal 污染；
+- Vitrail 不被 Metal 原生细节污染；
 - Metallum 不被 Shader Pack Runtime 污染；
 - bridge 可以独立迭代；
-- Vulkan 与 Metal 可以同时存在；
+- Metal 原生对象只在 backend 一侧出现；
 - 更容易定位回归；
 - 更容易维护许可证边界。
 
@@ -352,53 +350,51 @@ LegacySodiumTerrainTranslator
 第一阶段必须是：
 
 ```text
-让现有 Vitrail Vulkan 实现经过 backend abstraction 后，
-仍然保持行为完全不变。
+让现有 Vitrail 实现经过 backend abstraction 后，
+对 Shader Pack 可见的行为完全不变。
 ```
 
 流程：
 
 ```text
-Vitrail Vulkan 当前实现
+Vitrail 现有实现
         │
         ▼
 抽出 Backend Extension
         │
         ▼
-Vulkan 实现 Backend Extension
+由 backend 实现 Backend Extension
         │
         ▼
-验证 Vulkan 行为零变化
+验证 Shader Pack 语义零变化
 ```
 
-只有 Vulkan baseline 没有回归后，才能开始 Metal backend。
+抽出的目的不是让多个 GPU backend 并行存在，而是把 Metal 原生细节隔离在 seam 的
+一侧。产品支持面只有一个 provider：Metallum / Metal，因此不存在第二个 backend
+的回归 baseline；"不变" 指的是 pack 观察到的东西不变，而不是某个 backend 被保留
+下来。没有任何路径可以回退到别的图形 API。
 
 ---
 
-# 8. Vitrail 中需要优先去 Vulkan 化的区域
+# 8. Backend 具体化已完成的清除面
 
-重点：
+这一节记录的是已经完成的工作。最初需要优先处理的是：
 
 ```text
-VulkanCommandEncoderMixin
-VulkanDeviceMixin
-VulkanRenderPassMixin
-VulkanRenderPipelineMixin
+CommandEncoder / Device / RenderPass 上的 backend mixin
 GlslCompilerMixin
-VulkanBindGroupLayout
-VKDrawContextMixin
+BindGroupLayout 访问
+Sodium DrawContext 注入点
 ComputeShader
 PushedDescriptor
 StalePipelines
 Texture / format capability queries
 ```
 
-目标不是立即删除 Vulkan 实现。
-
-目标是：
+这些具体实现已不再保留。目标是：
 
 ```text
-Vulkan-specific implementation
+具体图形 API implementation
             │
             ▼
 backend-neutral interface
@@ -406,6 +402,10 @@ backend-neutral interface
             │
  Metal implementation
 ```
+
+边界的方向是单向的：seam 只描述 GPU 语义，Metal 原生对象、descriptor index、
+resource usage 与 encoder 对象都留在 backend 一侧，不存在第二个 implementation，
+也不存在为它保留的行为分支。
 
 ---
 
@@ -531,16 +531,7 @@ oneBlendStateForAllAttachments
 
 # 12. Synchronization 方法论
 
-严禁把 Vulkan barrier 逐个翻译为 Metal barrier。
-
-Vulkan：
-
-```text
-pipeline stage
-access mask
-image barrier
-layout transition
-```
+严禁把底层 barrier API 逐个照搬为另一个 API 的 barrier。
 
 Metal：
 
@@ -639,10 +630,10 @@ Vitrail 不得知道 Metal mipmap 实现方式。
 
 # 15. Sodium 接入策略
 
-目前 Vulkan-specific：
+原先注入的是 backend-specific 的 draw context：
 
 ```text
-VKDrawContext
+Sodium DrawContext#setContext
 ```
 
 不能成为长期 Vitrail API。
@@ -658,14 +649,10 @@ Terrain pipeline selected
 TerrainDraw.bind(...)
 ```
 
-不同 backend：
+不同 backend 曾各有一条注入路径，现在只剩一条：
 
 ```text
-Sodium Vulkan
-      │
-      ├──► TerrainBindHook
-      │
-Sodium Metallum
+Sodium + Metallum
       │
       └──► TerrainBindHook
 ```
@@ -1654,8 +1641,8 @@ Real Pack Compatibility
 目标：
 
 ```text
-Vitrail Vulkan 行为不变，
-但 runtime 不再依赖具体 Vulkan 类型。
+Vitrail 行为不变，
+但 runtime 不再依赖任何具体图形 API 的类型。
 ```
 
 重点：
@@ -1672,7 +1659,7 @@ StorageBinding abstraction
 验收：
 
 ```text
-Vitrail + Vulkan
+Vitrail
 行为与重构前一致
 ```
 

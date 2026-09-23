@@ -1,15 +1,14 @@
 package dev.vitrail.render;
 
 import dev.vitrail.IrisBeside;
-import dev.vitrail.settings.GraphicsApiChoice;
 import dev.vitrail.Vitrail;
 
 import net.minecraft.client.Options;
 import net.minecraft.client.PreferredGraphicsApi;
 
 /**
- * Keeps the graphics API across a startup that ended badly, instead of losing it to a crash that had
- * nothing to do with the backend.
+ * Keeps the graphics preference across a startup that ended badly, instead of losing the Metal path
+ * to a crash that had nothing to do with it.
  * <p>
  * <strong>What the game does, and why it costs a launch every time.</strong> {@code Minecraft} reads
  * {@code Options.startedCleanly} once at the head of its constructor, sets it false, and saves.
@@ -27,88 +26,60 @@ import net.minecraft.client.PreferredGraphicsApi;
  * intervention: the fullscreen mode is kept by the same stroke, and it was the second half of the
  * same complaint.
  * <p>
- * The rescue is not wrong in itself, it is wrong here. It exists for a machine whose Vulkan cannot
- * start, and for a vanilla player who wandered into the setting it is the way back. For a player who
- * installed this mod it empties the session instead of saving it: the mod draws nothing off Vulkan
- * and says so. Which is why the default is to come back to Vulkan, and why the other two answers
- * exist beside it.
+ * <strong>What the Metal path needs from this setting, and why the guard writes Default.</strong>
+ * Metallum offers its Metal backend to the game only while the preference is Default and Metallum's
+ * own {@code config/metallum.properties} says {@code metal}; a preference of OpenGL, or of the native
+ * arm this engine no longer supports, takes the offer away. Default is therefore the value the Metal
+ * path is selected through, and it is also the value the game's own first rescue writes - so the
+ * guard is not fighting the game, it is holding that rescue's own answer and refusing the second one,
+ * the launch that would force OpenGL and leave no Metal backend to try.
+ * <p>
+ * <strong>Writing Default cannot move Iris.</strong> Iris takes one set of hooks when the file asks
+ * for that other native arm and its OpenGL hooks otherwise, so Default and OpenGL are the same answer
+ * to it. An earlier shape of this put the other arm back instead, and that could flip Iris's hooks
+ * after Iris had already read the file; nothing here does that, so no branch is needed for the case.
+ * <p>
+ * There is no choice left to make here and so no file to make it in. The engine draws on Metal alone,
+ * Default is the only preference that offers it, and a session that cannot get a Metal device has
+ * nothing this engine can fall back to by design. {@code vitrail/graphics-api.txt}, which held the
+ * three ways between two backends and the game's own behaviour, is gone with the backends.
  */
 public final class StartupGuard {
-
-	private static GraphicsApiChoice choice;
 
 	private StartupGuard() {
 	}
 
 	/**
-	 * Answers the game's question about the last startup, having first put the API back where the
-	 * player asked for it to be, except beside Iris, which has already chosen its side.
+	 * Answers the game's question about the last startup, having first put the preference at the value
+	 * the Metal path is selected through.
 	 *
 	 * @param options the game's options, already loaded, and the only thing that exists this early
 	 * @param cleanly what the field really holds
 	 * @return what the game should believe, which decides both resets it is about to consider
 	 */
 	public static boolean startedCleanly(Options options, boolean cleanly) {
-		// Before anything below can move the backend: Iris read the same file before the game was
+		// Before anything below can move the preference: Iris read the same file before the game was
 		// built, and which engine draws this session follows that value and nothing written after it.
 		IrisBeside.loaded(options);
 		if (cleanly) {
 			return true;
 		}
 
-		GraphicsApiChoice asked = asked();
-		if (asked == GraphicsApiChoice.GAME) {
-			return false;
-		}
-
-		// Beside Iris the backend is not this mod's to move. Iris took its hooks for the backend the
-		// file names before the game was built, so putting the API back to Vulkan here would leave
-		// Iris hooked for OpenGL on a Vulkan device. Kept as the file has it, and the resets are
-		// still refused, for the reason below. A player who chose the game's own rescue still has it,
-		// above: that one is theirs to take whatever it does to Iris.
-		if (IrisBeside.installed()) {
-			Vitrail.logger().warn("The last startup ended badly. The game was about to reset the "
-					+ "graphics API and the fullscreen mode; both are kept as they were, {}, and the API "
-					+ "is not put back to Vulkan because Iris is installed and has already chosen its "
-					+ "hooks for this backend",
-					options.preferredGraphicsBackend().get().getSerializedName());
-
-			return true;
-		}
-
-		PreferredGraphicsApi wanted = asked == GraphicsApiChoice.OPENGL
-				? PreferredGraphicsApi.OPENGL
-				: PreferredGraphicsApi.VULKAN;
-		// Set rather than merely kept: a launch that already walked the setting down to Default, or
-		// on to OpenGL, would otherwise stay there for good. Coming BACK is what was asked for.
-		if (options.preferredGraphicsBackend().get() != wanted) {
-			options.preferredGraphicsBackend().set(wanted);
+		// Set rather than merely kept: a launch that already walked the preference on to OpenGL would
+		// otherwise stay there, which is the one value at which the Metal backend stops being offered
+		// at all.
+		if (options.preferredGraphicsBackend().get() != PreferredGraphicsApi.DEFAULT) {
+			options.preferredGraphicsBackend().set(PreferredGraphicsApi.DEFAULT);
 		}
 
 		Vitrail.logger().warn("The last startup ended badly. The game was about to reset the "
-				+ "graphics API and the fullscreen mode; both are kept and the API is put back to "
-				+ "{}, because a crash during startup is almost never the backend. Change this under "
-				+ "Video Settings, in this mod's page, or in vitrail/graphics-api.txt",
-				wanted.getSerializedName());
+				+ "graphics API and the fullscreen mode; both are kept, and the preference is left at "
+				+ "Default, which is where Metallum offers the Metal backend this engine draws on. A "
+				+ "crash during startup is almost never the backend's doing, and a launch forced on to "
+				+ "OpenGL would leave this engine with no Metal device to draw through");
 
 		// True, so neither reset runs. The game still wrote the flag false and saved it just before
 		// this, so the marker itself goes on working for whatever else reads it.
 		return true;
-	}
-
-	/** Read once: this is asked inside a constructor, and the answer cannot change during it. */
-	private static GraphicsApiChoice asked() {
-		GraphicsApiChoice known = choice;
-		if (known == null) {
-			known = GraphicsApiChoice.read();
-			choice = known;
-		}
-
-		return known;
-	}
-
-	/** The screen has just written a new choice, so the next startup reads it rather than the old one. */
-	public static void forget() {
-		choice = null;
 	}
 }

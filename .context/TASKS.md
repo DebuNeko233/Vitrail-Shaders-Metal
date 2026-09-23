@@ -65,21 +65,6 @@ visual improvement and was reverted in `c3a619e`.
 
 Evidence: `docs/metallum-port.md` ("Next work"), `render/HorizonCone`, `render/SkyDraw`, `SceneSeed`.
 
-## P1 — Removing the Vulkan path (phase P7)
-
-Status: scheduled by `docs/performance.md`, not done. `AGENTS.md` no longer requires the Vulkan baseline to be
-preserved, but the path is still in the tree: 49 files call Vulkan APIs, 58 more mention it, 15 documents name it,
-and `tests/test_vulkan_recording_contract.py` is still in `build.yml`.
-
-- [ ] The Vulkan-only mixins and their accessors go in batches that each keep the build green.
-- [ ] A build with no Vulkan path is stated plainly as having no working path on a platform whose renderer is not
-      Metal. `HostReport` has already stopped calling Vulkan the production path, so this is the documentation half
-      rather than that one.
-- [ ] The 15 documents that name it are corrected as each batch lands, rather than left describing a path that is
-      gone.
-
-Evidence: `docs/performance.md`, "Phase P7 - Remove the Vulkan path".
-
 ## P1 — The Metal 4 audit's remaining phases, and section 25's standing documents
 
 Status: open. Only D1, C1, C2, C3, F1 and J1 of that audit are recorded, in `M:docs/metal4-full-frame-report.md`;
@@ -171,8 +156,8 @@ Evidence: `tests/fixtures/phase17/catalog.json`, `docs/phase17-compatibility.md`
   contract to implement; the current diagnostic records that the mixed declaration is undefined under Iris too.
 - First-frame `nothing fills them yet` material-map diagnostics are investigated only where they survive into a
   persistent visual or semantic mismatch.
-- Vulkan and shared-path regression coverage is kept for every backend-neutral contract changed while fixing these
-  findings: the path is not preserved, but a shared contract it exercises is still a contract.
+- Backend-neutral regression coverage is kept for every shared contract changed while fixing these findings: the
+  removed path is gone, but a contract it exercised is still a contract.
 - No pack-specific production special case is added for Bliss, Photon, Complementary, MakeUp or Solas; findings are
   fixed at the owning generic contract.
 - A green Gradle build, a successful launch, a full warm-up count or a successful compute dispatch is useful

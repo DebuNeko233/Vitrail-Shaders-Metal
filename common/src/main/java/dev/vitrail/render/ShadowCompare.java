@@ -3,21 +3,12 @@ package dev.vitrail.render;
 import dev.vitrail.glsl.GlslTranslator;
 import dev.vitrail.glsl.PackProgram;
 import dev.vitrail.glsl.TranslatedUnit;
-import dev.vitrail.mixin.access.GpuDeviceAccessor;
 import dev.vitrail.pack.target.SamplerPlan;
 import dev.vitrail.Vitrail;
 
 import com.mojang.blaze3d.pipeline.RenderPipeline;
-import com.mojang.blaze3d.systems.GpuDevice;
-import com.mojang.blaze3d.systems.GpuDeviceBackend;
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vulkan.VulkanDevice;
 import net.minecraft.client.Minecraft;
-import org.lwjgl.system.MemoryStack;
-import org.lwjgl.vulkan.VK12;
-import org.lwjgl.vulkan.VkSamplerCreateInfo;
 
-import java.nio.LongBuffer;
 import java.nio.file.Files;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -31,32 +22,36 @@ import java.util.WeakHashMap;
  * <p>
  * The translation leaves a comparison sampler its spelling wherever the map's own names are behind
  * it, so the lookup compiles to a depth-reference sample; what the hardware then needs is a sampler
- * with the comparison enabled, and {@code GpuSampler} cannot describe one. So the sampler is made
- * here, once, in Vulkan's own terms, and {@code VulkanRenderPassMixin} puts its handle into the
- * descriptor wherever the pipeline being drawn declared the name a comparison. That substitution
- * road already exists for the storage images, and this rides it rather than growing a second one.
+ * with the comparison enabled, and {@code GpuSampler} cannot describe one. That is a narrow
+ * capability rather than a backend detail, so the object is made by the backend:
+ * {@link ComparisonSamplers} asks it for a sampler cloned from the pack's own ordinary one with
+ * LEQUAL comparison added, and this class answers only the semantic half - which names, in which
+ * pipeline, are read through a comparison at all.
  * <p>
- * The pair it carries is the pair Iris binds when a pack asks for its hardware shadow filtering
- * ({@code ShadowRenderTargets.getSamplerFor}, under {@code shadowHardwareFiltering}), {@code
- * GL_LINEAR} plus {@code GL_COMPARE_REF_TO_TEXTURE}; every pack of the corpus that declares the
- * type writes that directive, and without it Iris leaves what such a declaration reads undefined.
+ * The pair the backend carries is the pair Iris binds when a pack asks for its hardware shadow
+ * filtering ({@code ShadowRenderTargets.getSamplerFor}, under {@code shadowHardwareFiltering}),
+ * {@code GL_LINEAR} plus {@code GL_COMPARE_REF_TO_TEXTURE}; every pack of the corpus that declares
+ * the type writes that directive, and without it Iris leaves what such a declaration reads
+ * undefined.
  * <strong>LINEAR here is unconditional where Iris's is not</strong>: a pack that writes one of the
  * nearest directives beside the hardware one gets NEAREST_HW from Iris. No pack of the corpus
- * writes both live, so nothing measures it today. This sampler is one object kept for the device's
- * life, so serving it would need a second one, and such a pack reads the map NEAREST on the
- * ordinary bind and blended over four texels here.
+ * writes both live, so nothing measures it today. The sampler is one object for the device's life,
+ * so serving it would need a second one, and such a pack reads the map NEAREST on the ordinary bind
+ * and blended over four texels here.
  * The sense is LEQUAL: OptiFine sets that on a shadow texture, so it is what every pack is written
  * against, and the map stores the forward window where nearer is smaller. Filtered, the hardware
  * compares each of the four texels and blends the RESULTS with the bilinear weights, which is
  * exactly the arithmetic the translation writes on its other road; the two roads answer the same
- * fraction. The level of detail is pinned to the base, and that is this sampler's own gap now that
+ * fraction. The level of detail is pinned to the base, and that is the sampler's own gap now that
  * the map does carry a chain wherever a pack asks for one: Iris hands a compared read a mipmapped
  * sampler under {@code shadowtexMipmap} and this one clamps. The line that sets it says why it is
  * kept.
  * <p>
  * The registry is weak on the pipeline, because that is the lifetime being described: a pipeline
  * dropped on a pack change takes its entry with it, and a reload registers the new ones as they
- * are built.
+ * are built. Nothing native is held here any more - an earlier shape created the sampler itself and
+ * handed its handle to a descriptor walk that no longer exists - so there is nothing to release at
+ * shutdown and {@link #close} only empties the registry.
  */
 public final class ShadowCompare {
 
@@ -65,12 +60,10 @@ public final class ShadowCompare {
 	private static final Map<RenderPipeline, Set<String>> COMPARED =
 			Collections.synchronizedMap(new WeakHashMap<>());
 
-	/** Whether anything is filed at all, so the walk over every descriptor asks one flag first. */
+	/** Whether anything is filed at all, so the walk over every binding asks one flag first. */
 	private static volatile boolean noted;
 
 	private static boolean announced;
-
-	private static long sampler;
 
 	private ShadowCompare() {
 	}
@@ -81,8 +74,7 @@ public final class ShadowCompare {
 	 * {@code -Dvitrail.softShadowCompare=true}. Called before a pack is read, every time one is,
 	 * so removing the file and reloading undoes it without a restart. The trade cannot be watched
 	 * from inside, a comparison bound wrong handing back a credible fraction rather than an error,
-	 * so an image that comes right with this on has named the comparison sampler in one launch,
-	 * the same bargain the pass barrier's file makes.
+	 * so an image that comes right with this on has named the comparison sampler in one launch.
 	 */
 	public static void armIfAsked() {
 		Minecraft minecraft = Minecraft.getInstance();
@@ -103,9 +95,9 @@ public final class ShadowCompare {
 	}
 
 	/**
-	 * Files which sampler names this pipeline reads through a comparison, which is the question the
-	 * descriptor substitution asks back at every push. Nothing is filed for a program with none,
-	 * which is what keeps the common case behind {@link #noted()}.
+	 * Files which sampler names this pipeline reads through a comparison, which is the question
+	 * {@link ComparisonSamplers} asks back at every binding. Nothing is filed for a program with
+	 * none, which is what keeps the common case behind {@link #noted()}.
 	 * <p>
 	 * The sampler follows the declaration, wherever that leads, because the shader's side is
 	 * already settled: the lookup compiles to a depth-reference sample, and a comparison sampler
@@ -173,7 +165,7 @@ public final class ShadowCompare {
 	/**
 	 * The names this pipeline reads through a comparison, empty for one that filed none. Asked
 	 * once per pipeline a pass draws with, the map behind it being a weak one under a monitor,
-	 * and the set answers for every descriptor of every draw after that.
+	 * and the set answers for every binding of every draw after that.
 	 */
 	public static Set<String> compared(RenderPipeline pipeline) {
 		Set<String> names = COMPARED.get(pipeline);
@@ -181,75 +173,9 @@ public final class ShadowCompare {
 		return names == null ? Set.of() : names;
 	}
 
-	/**
-	 * The comparison sampler itself, made on the first ask and kept for the device's life. Must run
-	 * on the render thread, which pushing descriptors always is.
-	 */
-	public static long sampler(VulkanDevice device) {
-		if (sampler != 0L) {
-			return sampler;
-		}
-
-		try (MemoryStack stack = MemoryStack.stackPush()) {
-			VkSamplerCreateInfo info = VkSamplerCreateInfo.calloc(stack)
-					.sType$Default()
-					.magFilter(VK12.VK_FILTER_LINEAR)
-					.minFilter(VK12.VK_FILTER_LINEAR)
-					.mipmapMode(VK12.VK_SAMPLER_MIPMAP_MODE_NEAREST)
-					.addressModeU(VK12.VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE)
-					.addressModeV(VK12.VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE)
-					.addressModeW(VK12.VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE)
-					.compareEnable(true)
-					.compareOp(VK12.VK_COMPARE_OP_LESS_OR_EQUAL)
-					// Level nought and no further, and that is now a KEPT gap rather than an
-					// absence: the map may carry a chain, and Iris hands a compared read a
-					// mipmapped sampler where the pack asked for one
-					// (ShadowRenderTargets.getSamplerFor, MIPPED_LINEAR_HW). Lifting the ceiling
-					// here would serve it, and it is not lifted, for two reasons that hold
-					// together. This is ONE object for the device's life, so it cannot follow a
-					// per-image directive, and no pack of the corpus asks for a chain and a
-					// comparison on the same image, so nothing would measure the change. What the
-					// ceiling is NOT is a defence against the implicit level a compared read used
-					// to keep: the translation pins those now, and an equal ceiling on the ordinary
-					// samplers is exactly what was measured not to hold. Lifting it belongs with
-					// the second comparison sampler, and with a pack to prove it on.
-					.minLod(0.0F)
-					.maxLod(0.0F);
-			LongBuffer handle = stack.mallocLong(1);
-			int result = VK12.vkCreateSampler(device.vkDevice(), info, null, handle);
-			if (result != VK12.VK_SUCCESS) {
-				throw new IllegalStateException("vkCreateSampler answered " + result);
-			}
-
-			sampler = handle.get(0);
-		}
-
-		return sampler;
-	}
-
-	/** Called when the client shuts down, while the device is still alive. */
+	/** Called when the client shuts down. Nothing native is held; the registry is emptied. */
 	static void close() {
 		COMPARED.clear();
 		noted = false;
-		if (sampler == 0L) {
-			return;
-		}
-
-		VulkanDevice device = vulkan();
-		if (device != null) {
-			VK12.vkDestroySampler(device.vkDevice(), sampler, null);
-		}
-
-		sampler = 0L;
-	}
-
-	private static VulkanDevice vulkan() {
-		GpuDevice device = RenderSystem.tryGetDevice();
-		if (device == null) {
-			return null;
-		}
-
-		GpuDeviceBackend backend = ((GpuDeviceAccessor) device).vitrail$backend();
-		return backend instanceof VulkanDevice vulkan ? vulkan : null;
 	}
 }

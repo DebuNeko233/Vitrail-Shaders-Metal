@@ -5,7 +5,7 @@
 <h1 align="center">Vitrail Shaders</h1>
 
 <p align="center">
-  OptiFine-format shader packs, on Minecraft's native Vulkan and Metal renderers.
+  OptiFine-format shader packs, on Apple Metal.
 </p>
 
 <p align="center">
@@ -17,37 +17,39 @@
 ---
 
 <p align="center">
-  <img src="docs/images/screenshot-mountains.jpg" alt="Snow-capped mountains over a cherry grove and a savanna, a mushroom island out at sea, under volumetric clouds, rendered on the Vulkan backend" width="830">
+  <img src="docs/images/screenshot-mountains.jpg" alt="Snow-capped mountains over a cherry grove and a savanna, a mushroom island out at sea, under volumetric clouds, rendered on Metal" width="830">
 </p>
 <p align="center">
-  <sub>An OptiFine-format pack, running unmodified on the Vulkan backend.</sub>
+  <sub>An OptiFine-format pack, running unmodified on Metal.</sub>
 </p>
 
 <details>
 <summary>More screenshots</summary>
 <br>
 <p align="center">
-  <img src="docs/images/screenshot-savanna-sunset.jpg" alt="The sun setting over a savanna and a lake, fog lying on the water, rendered on the Vulkan backend" width="830">
+  <img src="docs/images/screenshot-savanna-sunset.jpg" alt="The sun setting over a savanna and a lake, fog lying on the water, rendered on Metal" width="830">
 </p>
 <p align="center">
-  <img src="docs/images/screenshot-ocean-ruins.jpg" alt="Sunken ruins on the sea floor, drowned walking through the light shafts, a school of tropical fish beside them, rendered on the Vulkan backend" width="830">
+  <img src="docs/images/screenshot-ocean-ruins.jpg" alt="Sunken ruins on the sea floor, drowned walking through the light shafts, a school of tropical fish beside them, rendered on Metal" width="830">
 </p>
 <p align="center">
-  <img src="docs/images/screenshot-lush-cave.jpg" alt="A lush cave under a cliff, a shaft of sunlight falling through the opening onto glow berries and dripstone, rendered on the Vulkan backend" width="830">
+  <img src="docs/images/screenshot-lush-cave.jpg" alt="A lush cave under a cliff, a shaft of sunlight falling through the opening onto glow berries and dripstone, rendered on Metal" width="830">
 </p>
 </details>
 
-Minecraft 26.2 ships a native Vulkan renderer alongside the OpenGL one. Every
-shader pack that exists was written for OpenGL, and none of them run on it.
+Minecraft 26.2 does not render through OpenGL. Every shader pack that exists was
+written for OpenGL, and none of them run unmodified on what the game ships with
+instead.
 
 **Vitrail runs them anyway, unmodified.** It reads an OptiFine-format pack out
-of `shaderpacks/`, translates its GLSL once when the pack loads, and hands it to
-the compiler the game already embeds. Nothing translates while a frame is drawn.
+of `shaderpacks/`, translates its GLSL once when the pack loads, compiles it to
+SPIR-V, and hands that across to [Metallum](https://github.com/DebuNeko233/metallum),
+which turns it into Metal shaders. Nothing translates while a frame is drawn.
 
 It started as a question, whether packs written for OpenGL over more than a
-decade could run untouched on the renderer that now ships with the game. It is
-one person's side project, worked on every day since July, and an early one:
-the backend it runs on is marked experimental by the game itself.
+decade could run untouched on the renderer the game has now. It is one person's
+side project, worked on every day since July, and an early one: the backend it
+runs on is a separate mod with no release yet.
 
 It is built the way a lot of software gets built now: AI tools do a real share
 of the typing and the debugging, and a human decides, tests against real packs
@@ -61,37 +63,41 @@ are where I answer.
 
 | Component | Version |
 | --- | --- |
+| macOS on Apple Silicon | the only supported target |
 | Minecraft | 26.2, below 26.3 |
-| NeoForge | 26.2.0.32-beta or later in the 26.2 line |
-| or Fabric Loader | 0.19.3 or later, with Fabric API |
-| Sodium | 0.9.x, required, the build for whichever loader is in front |
+| Fabric Loader | 0.19.3 or later, with Fabric API |
+| Sodium | 0.9.x, required |
+| [Metallum](https://github.com/DebuNeko233/metallum) | required: the Metal backend, API v1 |
 | Java | 25 |
-| [Metallum](https://github.com/DebuNeko233/metallum) | optional: the Metal backend, API v1, on Apple Silicon only |
 
 **Sodium is not optional.** It owns the command submission this engine draws through, so the game
-refuses to start without it rather than showing a picture that is missing quietly. On Fabric, two
+refuses to start without it rather than showing a picture that is missing quietly. **Metallum is not
+optional either**: it owns Metal device creation, pipeline compilation, resource binding, encoder
+lifecycle, synchronization and presentation, so a session without it, with an incompatible API
+version, or whose Metal device does not come up draws nothing of a pack and says so. On Fabric, two
 modules of Fabric API are declared as required and they are the whole of what this mod takes from
 it; nothing of the world's rendering goes through Fabric API.
 
-Those ranges are what the jar's own metadata declares, so the loader enforces them whether or not
-this table is current: `fabric/src/main/resources/fabric.mod.json` on Fabric and
-`neoforge/src/main/resources/META-INF/neoforge.mods.toml` on NeoForge. Metallum appears in neither,
-because the Metal path is reached reflectively and a Vitrail without it still draws on the backend
-the game chose. [INSTALL.md](INSTALL.md) has the same set with the installation steps.
+There is no NeoForge product. Vitrail keeps its NeoForge source tree, but Metallum has no NeoForge
+distribution and no Metal provider exists for that loader, so the NeoForge artifact is built and not
+published. The install steps describe the Fabric jar, which is the one that runs;
+[INSTALL.md](INSTALL.md) has the same requirement set with those steps.
 
 ## Quick start
 
-- One jar for Fabric and NeoForge, on Minecraft 26.2. On
+- One jar for Fabric, on Minecraft 26.2 and macOS on Apple Silicon. On
   [CurseForge](https://www.curseforge.com/minecraft/mc-mods/vitrail-shaders), on
   [Modrinth](https://modrinth.com/mod/vitrail-shaders) and on every
   [release](https://github.com/avpbynf/Vitrail-Shaders/releases) here.
-- Put it in `mods/` next to Sodium. Client only.
-- Switch the game to Vulkan, in Options then Video Settings, and restart it.
+- Put it in `mods/` next to Sodium and Metallum. Client only.
+- In Options then Video Settings, set Graphics API to "Prefer Metal", and
+  restart the game. The change only takes effect on the next start, which the
+  game says itself when you pick it.
 - Packs go in `shaderpacks/` as they always have, and are picked from Vitrail's
   own settings screen.
 
 [INSTALL.md](INSTALL.md) has the versions this needs, the Chloride settings that
-decide what reaches your pack, and what a game that came up on the wrong backend
+decide what reaches your pack, and what a session that did not come up on Metal
 looks like.
 
 ## What goes through your pack

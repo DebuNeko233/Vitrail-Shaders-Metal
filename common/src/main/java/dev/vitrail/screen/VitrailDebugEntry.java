@@ -34,9 +34,10 @@ import org.jspecify.annotations.Nullable;
  * answer is.
  * <p>
  * Nothing is said on a backend this engine does not draw on, which is where Iris draws when it is
- * installed. Iris shows its own lines only off Vulkan, its mixin plugin applying the mixin that
- * registers them there alone ({@code mixin/IrisMixinPlugin.java:71-73},
- * {@code mixin/MixinDebugEntries.java:23}), so each engine's lines stand where that engine draws.
+ * installed. Iris picks the arm its own lines register on from the options file rather than from
+ * the device, its mixin plugin applying the mixin that registers them on the arm it keeps its
+ * hooks for ({@code mixin/IrisMixinPlugin.java:71-73}, {@code mixin/MixinDebugEntries.java:23}), so
+ * the suppression above is what keeps this engine's lines away from a picture Iris is drawing.
  * Before the device exists the backend has no name and the lines show.
  * <p>
  * Registration is {@code DebugScreenEntriesMixin}'s, and the line showing without a hand's turn of

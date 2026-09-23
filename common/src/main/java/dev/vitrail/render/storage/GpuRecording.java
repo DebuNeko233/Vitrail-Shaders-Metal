@@ -1,124 +1,41 @@
 package dev.vitrail.render.storage;
 
 import dev.vitrail.mixin.access.CommandEncoderAccessor;
-import dev.vitrail.mixin.access.VulkanCommandEncoderAccessor;
 
 import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.CommandEncoderBackend;
-import com.mojang.blaze3d.systems.GpuDevice;
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vulkan.VulkanCommandEncoder;
-import org.lwjgl.system.MemoryStack;
-import org.lwjgl.vulkan.KHRSynchronization2;
-import org.lwjgl.vulkan.VK12;
-import org.lwjgl.vulkan.VK13;
-import org.lwjgl.vulkan.VkCommandBuffer;
-import org.lwjgl.vulkan.VkDependencyInfo;
-import org.lwjgl.vulkan.VkMemoryBarrier2;
 
 /**
- * Recording helpers for storage work that cannot legally sit inside a dynamic render pass.
+ * The one recording helper storage work needs that sits outside a dynamic render pass.
+ * <p>
+ * <strong>Ending the pass is the whole of the ordering this engine asks for.</strong> Metal expresses
+ * a dependency as an encoder boundary rather than as a mask: a render encoder is ended, a blit or a
+ * compute encoder is encoded and ended, and the backend's own fence chain carries what a later reader
+ * has to wait for. So the operations a pack-visible contract needs are stated as intent and nothing
+ * here names a stage, an access flag or a layout.
+ * <p>
+ * An earlier shape of this built the driver's memory barriers directly - source and destination stage
+ * masks, storage/sampled/transfer access bits, one barrier to order a copy against the next - because
+ * the deleted backend had no other way to say "what the shaders wrote is visible to this transfer".
+ * That vocabulary is gone with it. Where the effects those barriers protected still exist, they are
+ * published as facts the backend acts on: {@code MetallumAttachmentBridge} tells the next pass what it
+ * reads and what it overwrites, and the backend's own storage-write tracking decides where a boundary
+ * is owed.
  */
 public final class GpuRecording {
 
 	private GpuRecording() {
 	}
 
-	/** Ends the encoder's open pass, if any, so a clear, fill or dispatch can be recorded. */
+	/**
+	 * Ends the encoder's open pass, if there is one, so a clear, copy or dispatch can be recorded.
+	 * <p>
+	 * Storage housekeeping can legally arrive between passes - shadow custom-image clears do - so this
+	 * is "end if any" rather than "end": the backend answers the ordinary no-pass state by doing
+	 * nothing, which is what keeps the call site from having to know whether a pass is open.
+	 */
 	public static void endPass(CommandEncoder encoder) {
 		CommandEncoderBackend backend = ((CommandEncoderAccessor) encoder).vitrail$backend();
-		if (backend instanceof VulkanCommandEncoder vulkan) {
-			// Minecraft's Vulkan encoder refuses submitRenderPass when no pass is open. Storage
-			// housekeeping can legally arrive between passes (shadow custom-image clears do), so
-			// asking the accessor first is the difference between "end if any" and throwing on the
-			// ordinary no-pass state.
-			if (((VulkanCommandEncoderAccessor) vulkan).vitrail$currentRenderPass() != null) {
-				vulkan.submitRenderPass();
-			}
-			return;
-		}
-
-		if (backend instanceof StorageImageCommands) {
-			backend.submitRenderPass();
-		}
-	}
-
-	/**
-	 * Runs a destruction only once the GPU is done with the frames that may still reference the
-	 * resource, through the game's own two-deep queue. Destroying inline is the shape this
-	 * backend cannot forgive: it records continuously, up to two submissions are in flight, and
-	 * a handle freed under one of them is a device loss with a stack that names nobody. When no
-	 * Vulkan encoder is there to queue on, the device is gone and took every handle with it, so
-	 * the destruction is dropped rather than run against a device that no longer exists.
-	 */
-	public static void destroyLater(Runnable destruction) {
-		GpuDevice device = RenderSystem.tryGetDevice();
-		CommandEncoderBackend backend = device == null
-				? null
-				: ((CommandEncoderAccessor) device.createCommandEncoder()).vitrail$backend();
-		if (backend instanceof VulkanCommandEncoder vulkan) {
-			vulkan.queueForDestroy(destruction::run);
-		}
-	}
-
-	/**
-	 * Makes what shaders and transfers did to an image before this point visible to a transfer
-	 * about to rewrite it or read it. Without it the clear races the previous frame's sampled reads
-	 * and the previous dispatch's stores on the same volume.
-	 * <p>
-	 * The read half is not spare. A volume moved onto this frame's anchor is COPIED OUT of first,
-	 * and what it is copied out of is exactly the previous frame's shadow geometry stores.
-	 */
-	static void beforeTransfer(VkCommandBuffer commands, MemoryStack stack) {
-		VkMemoryBarrier2.Buffer barrier = VkMemoryBarrier2.calloc(1, stack).sType$Default();
-		barrier.srcStageMask(VK13.VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT
-				| VK13.VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT
-				| VK13.VK_PIPELINE_STAGE_2_TRANSFER_BIT);
-		barrier.srcAccessMask(VK13.VK_ACCESS_2_SHADER_STORAGE_READ_BIT
-				| VK13.VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT
-				| VK13.VK_ACCESS_2_SHADER_SAMPLED_READ_BIT
-				| VK13.VK_ACCESS_2_TRANSFER_WRITE_BIT);
-		barrier.dstStageMask(VK13.VK_PIPELINE_STAGE_2_TRANSFER_BIT);
-		barrier.dstAccessMask(VK13.VK_ACCESS_2_TRANSFER_WRITE_BIT
-				| VK13.VK_ACCESS_2_TRANSFER_READ_BIT);
-		VkDependencyInfo dependency = VkDependencyInfo.calloc(stack).sType$Default();
-		dependency.pMemoryBarriers(barrier);
-		KHRSynchronization2.vkCmdPipelineBarrier2KHR(commands, dependency);
-	}
-
-	/**
-	 * Makes a {@code vkCmdClearColorImage} / {@code vkCmdFillBuffer} visible to shaders. The
-	 * game's compute-to-compute barrier does not wait for transfer writes; leaving it as the
-	 * only fence after a 3D clear is how the GPU died two seconds later (Windows TDR).
-	 */
-	static void afterTransfer(VkCommandBuffer commands, MemoryStack stack) {
-		VkMemoryBarrier2.Buffer barrier = VkMemoryBarrier2.calloc(1, stack).sType$Default();
-		barrier.srcStageMask(VK13.VK_PIPELINE_STAGE_2_TRANSFER_BIT);
-		barrier.srcAccessMask(VK13.VK_ACCESS_2_TRANSFER_WRITE_BIT);
-		barrier.dstStageMask(VK13.VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT
-				| VK13.VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
-		barrier.dstAccessMask(VK13.VK_ACCESS_2_SHADER_STORAGE_READ_BIT
-				| VK13.VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT
-				| VK13.VK_ACCESS_2_SHADER_SAMPLED_READ_BIT);
-		VkDependencyInfo dependency = VkDependencyInfo.calloc(stack).sType$Default();
-		dependency.pMemoryBarriers(barrier);
-		KHRSynchronization2.vkCmdPipelineBarrier2KHR(commands, dependency);
-	}
-
-	/**
-	 * Orders one copy against the next, which neither of the two above does: they carry a transfer
-	 * on one side only, and a volume copied out and back reads on the transfer side what the
-	 * transfer side has just written.
-	 */
-	static void betweenTransfers(VkCommandBuffer commands, MemoryStack stack) {
-		VkMemoryBarrier2.Buffer barrier = VkMemoryBarrier2.calloc(1, stack).sType$Default();
-		barrier.srcStageMask(VK13.VK_PIPELINE_STAGE_2_TRANSFER_BIT);
-		barrier.srcAccessMask(VK13.VK_ACCESS_2_TRANSFER_WRITE_BIT);
-		barrier.dstStageMask(VK13.VK_PIPELINE_STAGE_2_TRANSFER_BIT);
-		barrier.dstAccessMask(VK13.VK_ACCESS_2_TRANSFER_READ_BIT
-				| VK13.VK_ACCESS_2_TRANSFER_WRITE_BIT);
-		VkDependencyInfo dependency = VkDependencyInfo.calloc(stack).sType$Default();
-		dependency.pMemoryBarriers(barrier);
-		KHRSynchronization2.vkCmdPipelineBarrier2KHR(commands, dependency);
+		backend.submitRenderPass();
 	}
 }

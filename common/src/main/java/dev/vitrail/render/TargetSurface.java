@@ -159,9 +159,9 @@ final class TargetSurface implements AutoCloseable {
 	}
 
 	/**
-	 * The base level alone, which is what a storage descriptor takes: Vulkan binds an image view of
-	 * exactly one level there, and a compute writes level nought. The same object as {@link #view}
-	 * on a surface with no chain, where the whole view is one level already.
+	 * The base level alone, which is what a storage image binding takes: an image view of
+	 * exactly one level is bound there, and a compute writes level nought. The same object as
+	 * {@link #view} on a surface with no chain, where the whole view is one level already.
 	 */
 	GpuTextureView storageView() {
 		return this.baseView == null ? this.view : this.baseView;
@@ -209,17 +209,20 @@ final class TargetSurface implements AutoCloseable {
 			if (this.storage && backend instanceof ShaderWritableTextureBackend writable) {
 				this.texture = writable.vitrail$createShaderWritableTexture(this.label, USAGE,
 						this.format, width, height, 1, levels);
+			} else if (this.storage) {
+				// A pack's compute writes this target as a colour image, and a texture the game's
+				// facade allocates is not one on any backend that can say so: the allocation has to
+				// be the backend's, and a backend that cannot allocate it here is one this engine
+				// cannot draw the pack through. Refusing is the honest answer - the alternative this
+				// used to take was a thread-local flag that a mixin read inside the usage conversion
+				// below, and that whole mechanism went with the backend it belonged to. Handing over
+				// an ordinary texture instead would give a pack a write target nothing writes to.
+				throw new IllegalStateException("The " + device.getDeviceInfo().backendName()
+						+ " backend cannot allocate " + this.label + " as a shader-writable texture, "
+						+ "which this pack's compute writes as a colour image");
 			} else {
-				// The flag is read by the Vulkan usage conversion, inside this one call, and lowered
-				// whatever the call did. Backends with an explicit allocation capability never rely
-				// on this thread-local side channel.
-				TextureUsage.requestStorage(this.storage);
-				try {
-					this.texture = device.createTexture(this.label, USAGE, this.format, width, height, 1,
-							levels);
-				} finally {
-					TextureUsage.requestStorage(false);
-				}
+				this.texture = device.createTexture(this.label, USAGE, this.format, width, height, 1,
+						levels);
 			}
 
 			this.view = device.createTextureView(this.texture);
@@ -235,7 +238,7 @@ final class TargetSurface implements AutoCloseable {
 
 	/**
 	 * Frees the texture and every view onto it. The views go first: closing a texture does not close
-	 * the views onto it, and nothing on the Vulkan backend checks that a bound view is still alive.
+	 * the views onto it, and nothing on the Metal backend checks that a bound view is still alive.
 	 */
 	@Override
 	public void close() {

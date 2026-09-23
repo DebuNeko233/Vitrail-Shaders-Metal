@@ -19,7 +19,6 @@ import com.mojang.blaze3d.buffers.GpuBuffer;
 import com.mojang.blaze3d.buffers.GpuBufferSlice;
 import com.mojang.blaze3d.buffers.Std140Builder;
 import com.mojang.blaze3d.textures.GpuTextureView;
-import com.mojang.blaze3d.vulkan.glsl.IntermediaryShaderModule;
 import net.minecraft.client.renderer.MappableRingBuffer;
 import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.util.shaderc.Shaderc;
@@ -27,28 +26,63 @@ import org.lwjgl.util.shaderc.Shaderc;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * One shader-pack compute pass on a backend implementing Vitrail's facade compute seam.
+ * One shader-pack compute pass on Vitrail's backend compute seam, and the single implementation
+ * the compute road uses.
  * <p>
- * Vulkan deliberately does not use this class yet; its established module/layout/descriptor path
- * stays untouched in {@link PackCompute}. This class is the parallel backend-neutral road used by
- * Metallum: shader-pack scheduling and name resolution remain in Vitrail while native pipeline,
- * argument binding, synchronization and destruction stay behind {@link ComputeDeviceBackend} and
- * {@link ComputeCommands}.
+ * Shader-pack scheduling, name resolution and dispatch size stay in Vitrail, while native
+ * shader-language conversion, pipeline creation, argument binding, synchronization and destruction
+ * stay behind {@link ComputeDeviceBackend} and {@link ComputeCommands}. The SPIR-V this class
+ * produces from shaderc is what the seam takes, handed over as bytes; the game's own module type is
+ * not reached for, since it exists to build a native shader module this road never binds.
  */
 final class BackendComputePass implements AutoCloseable {
 
-	private static final int SHADERC_VULKAN_1_2 = 4202496;
+	/**
+	 * The shaderc target for the SPIR-V this engine compiles, one number because the call takes two:
+	 * environment zero, which shaderc names after the graphics API this engine no longer speaks, and
+	 * a version word of {@code (1 << 22) | (2 << 12)} for SPIR-V 1.2. The number is shaderc's and is
+	 * left alone; only the name says what it means here, which is the target both roads compile
+	 * against.
+	 */
+	private static final int SHADERC_TARGET_SPIRV_1_2 = 4202496;
 	private static final int SHADERC_COMPUTE = 2;
 	private static final int SHADERC_OPTIMIZATION_NONE = 0;
 	private static final int SHADERC_OPTIMIZATION_PERFORMANCE = 2;
-	private static final String MODULE_CACHE_STAGE_OPTIMIZED = "COMPUTE/shaderc-opt2-vulkan1.2";
-	private static final String MODULE_CACHE_STAGE_UNOPTIMIZED = "COMPUTE/shaderc-opt0-vulkan1.2";
+	private static final String MODULE_CACHE_STAGE_OPTIMIZED = "COMPUTE/shaderc-opt2-spirv1.2";
+	private static final String MODULE_CACHE_STAGE_UNOPTIMIZED = "COMPUTE/shaderc-opt0-spirv1.2";
 	private static final Pattern LOCAL_AXIS = Pattern.compile("\\blocal_size_([xyz])\\s*=\\s*");
 	private static final Pattern LOCAL_LITERAL = Pattern.compile("\\d+");
+
+	/**
+	 * The computes this run has compiled, under the module cache's own key, each with the resource
+	 * names reflected out of its SPIR-V.
+	 * <p>
+	 * <strong>Why this lives here and not in the store next door.</strong> That store keeps what the
+	 * game's compiler makes of a unit - the bytes, the uniform buffers and samplers its reflection
+	 * found, the inputs and outputs it numbered, the storage resources this engine appends behind
+	 * them - and it hands them back as one of the game's own module objects. A compute never enters
+	 * that compiler: its SPIR-V comes from shaderc here, and the only thing the store could carry
+	 * for it is the bytes. Keying on the same text and the same stage token keeps the two roads
+	 * apart, which is what the token is for: a graphics COMPUTE through the game's compiler cannot
+	 * serve this blob, and this road cannot serve one of its modules.
+	 * <p>
+	 * The reflection is kept beside the words for the reason the store keeps its own: it is the
+	 * other half of the same load cost, and a hit that still walked SPIRV-Cross would have saved the
+	 * cheaper half. What this costs against the store is the disk: a second pack load in the same
+	 * run pays nothing, and the first load after a restart pays the compile again. {@code keyOf}
+	 * answering null, which is the store having nowhere to write, means no reuse at all.
+	 * <p>
+	 * The words are held on the heap and a native buffer is cut for the backend per pass, because a
+	 * cached native buffer would outlive every reason to free it. Entries are never dropped: the key
+	 * carries the text and every switch that changes what the compile emits, so a session holds one
+	 * entry per distinct compute it has translated, and that is what a pack load costs anyway.
+	 */
+	private static final Map<String, Compiled> COMPILED_SPIRV = new ConcurrentHashMap<>();
 
 	private final PackProgram.Compute compute;
 	private final PackUniforms uniforms;
@@ -169,9 +203,9 @@ final class BackendComputePass implements AutoCloseable {
 			}
 			if (shared.over()) {
 				// A storage buffer is one copy for the whole dispatch, while GLSL shared memory is
-				// one copy per work group. They are equivalent only for a fixed single group. This
-				// is the same condition the established MoltenVK road uses; keeping it here avoids
-				// silently changing a multi-group reduction merely to fit Metal's memory limit.
+				// one copy per work group. They are equivalent only for a fixed single group. The
+				// condition is kept as this engine has always had it, because widening it would
+				// silently change a multi-group reduction merely to fit Metal's memory limit.
 				if (this.compute.groupsX() != 1 || this.compute.groupsY() != 1
 						|| this.compute.groupsZ() != 1) {
 					Vitrail.logger().warn("compute {} is not dispatched on native Metal: it asks for {} "
@@ -200,22 +234,24 @@ final class BackendComputePass implements AutoCloseable {
 		}
 
 		long began = System.nanoTime();
-		IntermediaryShaderModule module = null;
 		RawLocals.begin();
+		ByteBuffer spirv = null;
 		try {
 			String optimizedKey = ModuleCache.keyOf(source, MODULE_CACHE_STAGE_OPTIMIZED);
 			String unoptimizedKey = ModuleCache.keyOf(source, MODULE_CACHE_STAGE_UNOPTIMIZED);
+
+			// The optimized compile is the one that is wanted, and the unoptimized key is asked only
+			// because that is the blob a load which had to fall back holds.
 			String key = optimizedKey;
-			module = ModuleCache.lookup(optimizedKey, this.label);
-			if (module == null) {
-				module = ModuleCache.lookup(unoptimizedKey, this.label);
-				if (module != null) {
+			Compiled compiled = cached(optimizedKey);
+			if (compiled == null) {
+				compiled = cached(unoptimizedKey);
+				if (compiled != null) {
 					key = unoptimizedKey;
 				}
 			}
 
-			ByteBuffer spirv = null;
-			if (module == null) {
+			if (compiled == null) {
 				SpirvResult optimized = compileSpirv(source, SHADERC_OPTIMIZATION_PERFORMANCE);
 				if (optimized.spirv() != null) {
 					spirv = optimized.spirv();
@@ -233,17 +269,26 @@ final class BackendComputePass implements AutoCloseable {
 					spirv = unoptimized.spirv();
 					key = unoptimizedKey;
 				}
+
 				ModuleCache.building(this.label);
+				// The same zeroes the game's compiler road gets in GlslCompilerMixin: this road has
+				// its own shaderc call, so it has to ask for them itself, and before the reflection
+				// and the store, so a kept blob carries them too. Compiled at the performance level,
+				// this module has mostly values where that road has variables, and its undefined
+				// reads are what the pass turns into zeroes here. The patch takes over the buffer it
+				// is handed, freeing it where it replaces it, and the buffer it hands on is filled
+				// to its end: the position goes back to nought because the reflection and the
+				// backend both read from the start.
+				ByteBuffer patched = RawLocals.patch(this.label, spirv);
+				spirv = patched.rewind();
+				compiled = new Compiled(words(spirv), ComputeResources.inspect(spirv));
+				if (key != null) {
+					COMPILED_SPIRV.put(key, compiled);
+				}
 			}
 
-			if (module == null) {
-				module = IntermediaryShaderModule.createFromSpirv(this.label,
-						RawLocals.patch(this.label, spirv));
-				ModuleCache.store(key, module);
-			}
-
-			this.resources = ComputeResources.inspect(module.spirv());
-			this.pipeline = backend.vitrail$compileCompute(this.label, module.spirv().duplicate());
+			this.resources = compiled.resources();
+			this.pipeline = compilePipeline(backend, compiled.words());
 			this.owner = backend;
 			if (this.sharedMemoryBytes > 0L) {
 				this.sharedMemory = ((StorageBufferBackend) backend)
@@ -256,14 +301,43 @@ final class BackendComputePass implements AutoCloseable {
 			closePipeline();
 		} finally {
 			RawLocals.end();
-			if (module != null) {
-				module.close();
+			if (spirv != null) {
+				MemoryUtil.memFree(spirv);
 			}
 			LoadClock.module(System.nanoTime() - began);
 		}
 
 		if (this.pipeline != null) {
 			Vitrail.logger().info("Compiled compute {} through the active backend", this.path);
+		}
+	}
+
+	/** The compile this run already holds under that key, or null where the key is one of none. */
+	private static Compiled cached(String key) {
+		return key == null ? null : COMPILED_SPIRV.get(key);
+	}
+
+	/** The words on the heap, so the native buffer shaderc filled can be freed with the compile. */
+	private static byte[] words(ByteBuffer spirv) {
+		ByteBuffer view = spirv.duplicate();
+		byte[] words = new byte[view.remaining()];
+		view.get(words);
+		return words;
+	}
+
+	/**
+	 * One native buffer of these words for the backend, freed the moment it has read them, which is
+	 * the ownership the module store's own caller had: the buffer is handed over for the length of
+	 * the call and nothing may keep it.
+	 */
+	private Object compilePipeline(ComputeDeviceBackend backend, byte[] words) {
+		ByteBuffer spirv = MemoryUtil.memAlloc(words.length);
+		try {
+			spirv.put(words);
+			spirv.flip();
+			return backend.vitrail$compileCompute(this.label, spirv.duplicate());
+		} finally {
+			MemoryUtil.memFree(spirv);
 		}
 	}
 
@@ -279,6 +353,14 @@ final class BackendComputePass implements AutoCloseable {
 			this.uniforms.write(Std140Builder.intoBuffer(data), values.world());
 		}
 		return this.block.currentBuffer().slice(0, bytes);
+	}
+
+	/**
+	 * One compute as it is kept between loads: the shaderc words, and the names SPIRV-Cross read out
+	 * of them. Both halves of the load are here because either one alone would leave the other to be
+	 * paid again by the load that hit.
+	 */
+	private record Compiled(byte[] words, ComputeResources resources) {
 	}
 
 	private record SpirvResult(ByteBuffer spirv, String error) {
@@ -304,8 +386,12 @@ final class BackendComputePass implements AutoCloseable {
 			if (spirv == null) {
 				return new SpirvResult(null, "shaderc returned no SPIR-V bytes");
 			}
-			ByteBuffer copy = MemoryUtil.memCalloc(spirv.remaining());
-			MemoryUtil.memCopy(spirv, copy);
+			// Written and flipped rather than memCopy'd, because memCopy leaves the position at the
+			// end: both the patch and the reflection read from nought, and a buffer whose shape
+			// depends on how a helper left it is a buffer that changes shape when the helper moves.
+			ByteBuffer copy = MemoryUtil.memAlloc(spirv.remaining());
+			copy.put(spirv);
+			copy.flip();
 			return new SpirvResult(copy, null);
 		} finally {
 			if (result != 0L) {
@@ -351,7 +437,8 @@ final class BackendComputePass implements AutoCloseable {
 
 	private static long compileOptions(int optimization) {
 		long options = Shaderc.shaderc_compile_options_initialize();
-		Shaderc.shaderc_compile_options_set_target_env(options, 0, SHADERC_VULKAN_1_2);
+		// Environment zero, which is the SPIR-V road, and then the version word beside it.
+		Shaderc.shaderc_compile_options_set_target_env(options, 0, SHADERC_TARGET_SPIRV_1_2);
 		Shaderc.shaderc_compile_options_set_auto_bind_uniforms(options, true);
 		Shaderc.shaderc_compile_options_set_auto_map_locations(options, true);
 		Shaderc.shaderc_compile_options_set_generate_debug_info(options);

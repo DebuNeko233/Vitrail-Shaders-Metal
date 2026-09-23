@@ -7,8 +7,6 @@ import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderPassDescriptor;
 import com.mojang.blaze3d.textures.GpuTextureView;
-import com.mojang.blaze3d.vulkan.VulkanDevice;
-import com.mojang.blaze3d.vulkan.glsl.GlslCompiler;
 
 /**
  * What every family's program is over the {@link GeometryProgram} it holds: the part of the
@@ -20,7 +18,8 @@ import com.mojang.blaze3d.vulkan.glsl.GlslCompiler;
  * written out seven times as {@code return this.body.x();}, and a family that forgot one of them
  * silently took the interface's default: it compiled, it drew, and it paid shaderc on the render
  * thread at its first draw with nothing to say so. Here the default is the delegation, and the
- * one family that must not compile ahead says so where it stands.
+ * one family that must be left out of the warm-up says so where it stands, in
+ * {@link DumpedProgram#warmable}.
  */
 abstract class FamilyProgram implements DumpedProgram {
 
@@ -64,18 +63,6 @@ abstract class FamilyProgram implements DumpedProgram {
 	@Override
 	public void forgetCompiled() {
 		this.body.forgetCompiled();
-	}
-
-	/** @see GeometryProgram#warmAhead */
-	@Override
-	public boolean warmAhead(VulkanDevice device, GlslCompiler compiler) {
-		return this.body.warmAhead(device, compiler);
-	}
-
-	/** @see GeometryProgram#discardAhead */
-	@Override
-	public void discardAhead() {
-		this.body.discardAhead();
 	}
 
 	/** @see GeometryProgram#decoded */

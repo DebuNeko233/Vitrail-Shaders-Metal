@@ -89,7 +89,7 @@ badly drawn shadow map, and sends you looking in the wrong place.
 
 The engine answers it on two roads. Where the names behind the declaration are the shadow map's
 own, the declaration keeps its spelling, the lookup compiles to a depth-reference sample, and the
-binding slips a comparison sampler made in Vulkan's own terms under the name, past the game's
+binding slips a comparison sampler made in Metal's own terms under the name, past the game's
 abstraction: linear filtering, clamped edges, and the LEQUAL sense the format specifies, agreeing
 with the forward depth window where nearer to the light is smaller. It is the pair Iris binds when
 a pack asks for its hardware shadow filtering, and a projective comparison needs nothing more
@@ -653,9 +653,9 @@ Two consequences worth stating. **The pipeline has to declare the game's own two
 its way, because the pass fills them by name against whatever pipeline is bound; a pipeline that
 spelled either differently would be handed neither and the stage would read a buffer nothing filled.
 And **the vertex identifier is spelled `gl_VertexID` and not `gl_VertexIndex`**, which is not a
-preference: Vulkan has only the second and the game's OpenGL backend only the first, and the game's
-own compiler defines the first into the second before handing anything to shaderc. Only the first
-works on both sides.
+preference: the compiler that produces the SPIR-V knows only the second and the game's OpenGL
+backend only the first, and the game's own compiler defines the first into the second before handing
+anything to shaderc. Only the first works on both sides.
 
 ### Fancy and flat differ by a culling
 

@@ -14,7 +14,7 @@ import java.util.Set;
  * Folds a geometry stage that only hands each corner of its triangle on into the fragment stage
  * after it, for a device that cannot run a geometry stage at all.
  * <p>
- * Vulkan makes {@code geometryShader} an optional feature and Metal has no such stage, so on a Mac
+ * Metal has no geometry stage at all, so on a Mac
  * every program shipping a {@code .gsh} was set aside and drawn by the game. What iterationT writes
  * there needs no third stage: its terrain copies each of the three corners from the {@code v_} names
  * its vertex stage writes onto the names its fragment stage reads. Such a stage is taken out of the

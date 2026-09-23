@@ -37,21 +37,6 @@ public final class ScreenText {
 	public static final String PAGE_TITLE = "options.vitrail.page_title";
 
 	/**
-	 * The selector for what a startup that ended badly comes back to, its tooltip, and its three
-	 * values.
-	 * <p>
-	 * The two backends are named here rather than borrowed from the game's own setting, which was
-	 * the first shape of this and was wrong: its Vulkan entry reads "Prefer Vulkan (Experimental)",
-	 * which is right where it stands and runs off the end of a row here. A value in a selector is a
-	 * name, not a sentence.
-	 */
-	public static final String CRASH_API = "options.vitrail.crash_graphics_api";
-	public static final String CRASH_API_TOOLTIP = "options.vitrail.crash_graphics_api_tooltip";
-	public static final String CRASH_API_VULKAN = "options.vitrail.crash_graphics_api.vulkan";
-	public static final String CRASH_API_OPENGL = "options.vitrail.crash_graphics_api.opengl";
-	public static final String CRASH_API_GAME = "options.vitrail.crash_graphics_api.game";
-
-	/**
 	 * How far the light reaches, on the engine page this mod owns, with its two tooltips: what
 	 * the setting does, and what it says instead while a pack has taken the distance out of the
 	 * player's hands. The control is Iris's; the words on the row are this engine's, kept short
@@ -230,28 +215,27 @@ public final class ScreenText {
 	public static final String RELOAD_FAILED = "options.vitrail.reload_failed";
 
 	/**
-	 * The chat line said once, the first time a world is shown on a backend this engine is not
-	 * written for. Three arguments: the backend's name, then the two labels the game itself ships
-	 * for the setting and for its Vulkan entry. Those two are the game's keys and not ours, the one
-	 * exception to the rule above that a label the game ships is not repeated here: there is no
-	 * constant for them, and naming the setting in the player's own language is the whole of why
-	 * they are passed in rather than written into the sentence.
+	 * The chat line said once, the first time a world is shown on a session that did not reach the
+	 * Metal path this engine draws on. One argument: the backend's name.
+	 * <p>
+	 * It names no setting to change, which is the difference from the shape this had when there were
+	 * two backends: there is no other backend to send a player to. What it can do is say that the
+	 * picture is missing and that the log carries the exact reason, which
+	 * {@link HostReport#diagnosis()} writes there at startup.
 	 */
 	public static final String OTHER_BACKEND = "options.vitrail.other_backend";
-	public static final String GRAPHICS_API = "options.graphicsApi";
-	public static final String GRAPHICS_API_VULKAN = "options.graphicsApi.vulkan";
-
-	/** The game's own label for the other one, used by {@link #CRASH_API} for the same reason. */
-	public static final String GRAPHICS_API_OPENGL = "options.graphicsApi.opengl";
 
 	/**
-	 * What the pages leading to the pack screen open instead on a backend this engine does not draw
-	 * on, with its two buttons. Iris's words with the two backends swapped,
-	 * {@code ShaderPackScreenPlaceholder.java:30}, 19 and 38, since Iris makes the same offer the other
-	 * way round.
+	 * What the pages leading to the pack screen open instead on a session that cannot reach the Metal
+	 * path, with a single button that goes back. One argument: the clause naming which of the facts
+	 * that path needs is missing.
+	 * <p>
+	 * The layout is the reference's screen for the same situation the other way round: Iris opens one
+	 * in place of its pack screen on a renderer it cannot use ({@code IrisConfig.java:50-51},
+	 * {@code IrisVKOnly.java:24}), and this follows it. The button that switched the backend and
+	 * closed the game is gone with the second backend.
 	 */
 	public static final String BACKEND_PLACEHOLDER = "options.vitrail.backend_placeholder";
-	public static final String BACKEND_SWITCH = "options.vitrail.backend_switch";
 	public static final String BACKEND_RETURN = "options.vitrail.backend_return";
 
 	/**

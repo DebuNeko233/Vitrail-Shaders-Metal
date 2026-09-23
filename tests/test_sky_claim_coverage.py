@@ -96,8 +96,11 @@ class SkyClaimCoverageTest(unittest.TestCase):
     def test_geometry_stage_and_comparison_metadata_follow_claim_pipeline(self):
         ownership = OWNERSHIP.read_text(encoding='utf-8')
 
-        self.assertIn('GeometryStage.noteBeside(pipeline, owner);', ownership)
         self.assertIn('ShadowCompare.noteBeside(pipeline, owner);', ownership)
+        # Metal admits no geometry stage, so a rebuilt sibling has no filed geometry text to
+        # copy; the comparison note is the only one that survives, because it is keyed on the
+        # pipeline object rather than read off its states.
+        self.assertNotIn('GeometryStage', ownership)
         self.assertIn('device.precompilePipeline(this.pipeline, this.source)', ownership)
         self.assertIn('catch (GpuDeviceLossException e)', ownership)
         self.assertIn('claim = Claim.failed();', ownership)

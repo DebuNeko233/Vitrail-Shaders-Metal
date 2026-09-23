@@ -17,8 +17,7 @@ import java.util.List;
  * This is deliberately reflection only. Vitrail needs the names so it can resolve shader-pack
  * policy to Minecraft facade objects; native binding indices, shader-language conversion and
  * pipeline creation stay with the active backend. The four resource classes match the current
- * compute seam and are the same SPIRV-Cross resource classes already used by the Vulkan compute
- * reflection and Metallum bridge.
+ * compute seam and are the same SPIRV-Cross resource classes the Metallum compute bridge reads.
  */
 public record ComputeResources(
 		List<String> uniformBuffers,

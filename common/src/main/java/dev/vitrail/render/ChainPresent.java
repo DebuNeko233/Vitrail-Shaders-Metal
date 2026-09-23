@@ -37,12 +37,12 @@ import java.util.Optional;
  * class existed, cost I Like Vanilla and Pegasus their whole picture.
  * <p>
  * <strong>A draw and not a copy, for {@link SceneSeed}'s reason and it is the same one.</strong>
- * {@code copyTextureToTexture} reaches {@code vkCmdCopyImage}, which reinterprets bits rather than
- * converting them, and the two formats here are not the same: the game's target is RGBA8_UNORM and
- * a pack's {@code colortex0} is commonly RG11B10_FLOAT. Both are thirty two bits wide, so a copy
- * passes every check the Java side makes and hands back nonsense. Iris can copy because both sides
- * of its transfer are GL textures under a conversion its own call performs; here the conversion has
- * to be a sample and a write.
+ * {@code copyTextureToTexture} reaches the backend's own texture-to-texture copy, which reinterprets
+ * bits rather than converting them, and the two formats here are not the same: the game's target is
+ * RGBA8_UNORM and a pack's {@code colortex0} is commonly RG11B10_FLOAT. Both are thirty two bits
+ * wide, so a copy passes every check the Java side makes and hands back nonsense. Iris can copy
+ * because both sides of its transfer are GL textures under a conversion its own call performs; here
+ * the conversion has to be a sample and a write.
  * <p>
  * <strong>Loaded and never cleared</strong>, as the final it stands in for is: a chain that does not
  * cover every pixel leaves the world showing underneath, which is Iris's behaviour and the one a

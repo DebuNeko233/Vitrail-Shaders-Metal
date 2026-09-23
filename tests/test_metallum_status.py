@@ -149,38 +149,83 @@ class MetallumStatusTest(unittest.TestCase):
     def test_preference_and_a_served_device_are_all_that_is_required(self):
         self.run_fixture('preference-on')
 
-    def test_metal_blocked_ui_does_not_reuse_opengl_switch_prompt(self):
+    def test_blocked_ui_only_goes_back_and_names_no_setting_to_change(self):
         routing = PACK_SCREENS.read_text(encoding='utf-8')
         placeholder = BACKEND_PLACEHOLDER.read_text(encoding='utf-8')
 
-        self.assertIn('METAL.equals(HostReport.backend())', routing)
-        self.assertIn('BackendPlaceholder.metalValidation(parent)', routing)
-        # The placeholder no longer names a system property, because there is none to name: the
-        # answer for a session it describes is a usable backend rather than a launch argument.
+        # One screen for every session that cannot reach the Metal path: a session on some other
+        # backend and a Metal session whose device never came up are the same statement now, so there
+        # is one branch and no second placeholder factory.
+        self.assertIn('HostReport.otherBackend()', routing)
+        self.assertIn('new BackendPlaceholder(parent)', routing)
+        self.assertNotIn('metalValidation', routing)
+        self.assertNotIn('METAL.equals(HostReport.backend())', routing)
+        self.assertNotIn('metalValidation', placeholder)
+
+        # The screen says which fact the Metal path is missing, and offers one button.
+        self.assertIn('ScreenText.BACKEND_PLACEHOLDER', placeholder)
+        self.assertIn('HostReport.diagnosis()', placeholder)
+        self.assertIn('ScreenText.BACKEND_RETURN', placeholder)
+        self.assertNotIn('ScreenText.BACKEND_SWITCH', placeholder)
+
+        # And it never writes the graphics preference. The button that switched the game to the other
+        # backend and closed it is gone with the backend it switched to; the preference the Metal path
+        # is selected through belongs to the game and to Metallum, not to this mod.
+        self.assertNotIn('PreferredGraphicsApi', placeholder)
+        self.assertNotIn('preferredGraphicsBackend', placeholder)
+        self.assertNotIn('options.save', placeholder)
+        self.assertNotIn('stop()', placeholder)
         self.assertNotIn('experimentalMetal', placeholder)
         self.assertNotIn('SMOKE_PROPERTY', placeholder)
-        self.assertNotIn('validation-only', placeholder)
-        self.assertIn('Vitrail will not change your Graphics API here', placeholder)
 
-        branch = placeholder.split('if (this.metalValidation) {', 1)[1].split('\n\t\t}', 1)[0]
-        self.assertIn('ScreenText.BACKEND_RETURN', branch)
-        self.assertIn('return;', branch)
-        self.assertNotIn('switchToVulkan', branch)
-
-    def test_metal_session_is_never_told_to_switch_to_vulkan(self):
+    def test_no_session_is_ever_told_to_switch_backend(self):
         source = HOST_REPORT.read_text(encoding='utf-8')
         in_world = source.split('public static void sayInWorld() {', 1)[1].split(
             '\n\t/**\n\t * Says what an install decides', 1)[0]
         logged = source.split('private static void sayBackend() {', 1)[1]
 
-        # The guard used to be about the developer switch; it is now about the backend itself, and
-        # the reason is stronger than it was: a session on Metal is sent to a compatible Metallum,
-        # which is the maintained path, rather than to a Vulkan path that is scheduled for removal.
-        metal_guard = 'if (METAL.equals(backend())) {'
-        self.assertIn(metal_guard, in_world)
-        self.assertLess(in_world.index(metal_guard), in_world.index('ScreenText.OTHER_BACKEND'))
-        self.assertIn(metal_guard, logged)
-        self.assertLess(logged.index(metal_guard), logged.index('programs are translated'))
+        # The chat line names the backend and nothing else. There is no other backend to send a player
+        # to, so the line cannot name a setting to change: it says the picture is missing and the log
+        # carries the exact reason.
+        self.assertIn('ScreenText.OTHER_BACKEND, backend()', in_world)
+        self.assertNotIn('ScreenText.GRAPHICS_API', in_world)
+        self.assertNotIn('ScreenText.CRASH_API', in_world)
+
+        # The log line is built from the diagnosis, which is the clause naming the one fact that is
+        # missing, and never from a setting to move.
+        self.assertIn('diagnosis()', logged)
+        self.assertNotIn('Vitrail.logger().error("This game is running the {} backend and {}', logged)
+        for setting in ('ScreenText.GRAPHICS_API', 'ScreenText.CRASH_API', 'preferredGraphicsBackend'):
+            self.assertNotIn(setting, source)
+
+        # And the engine may not name the deleted API or its runtime portability layer anywhere.
+        lowered = source.lower()
+        self.assertNotIn('vulkan', lowered)
+        self.assertNotIn('moltenvk', lowered)
+
+    def test_host_report_diagnoses_the_missing_fact(self):
+        source = HOST_REPORT.read_text(encoding='utf-8')
+        body = source.split('public static String diagnosis() {', 1)[1].split(
+            '\n\t/** Whether this is the one platform', 1)[0]
+
+        # Seven facts, asked in the order in which each one only means anything given the last: the
+        # platform, the mod, its API version, its preference, and the device. Asked of the body of
+        # `diagnosis` and not of the file, which mentions the same answers in other orders elsewhere.
+        for clause in (
+            'MetallumStatus.status()',
+            'status.present()',
+            'status.compatible()',
+            'status.metalPreferred()',
+            'BufferBlending.served()',
+            'onAppleSilicon()',
+        ):
+            self.assertIn(clause, body, clause)
+        self.assertLess(body.index('onAppleSilicon()'), body.index('status.present()'))
+        self.assertLess(body.index('status.present()'), body.index('status.compatible()'))
+        self.assertLess(body.index('status.compatible()'), body.index('status.metalPreferred()'))
+        self.assertLess(body.index('status.metalPreferred()'), body.index('BufferBlending.served()'))
+        # And the first clause of the answer is the one that is not about the mod at all.
+        self.assertLess(body.index('onAppleSilicon()'), body.index('return "this engine draws'))
 
     def test_malformed_api_shape_fails_closed(self):
         self.run_fixture('shape')
