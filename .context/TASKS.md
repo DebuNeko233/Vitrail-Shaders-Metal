@@ -1,8 +1,9 @@
 # Active Tasks
 
-Updated: 2026-09-22
-Scope: `dev`, after the long-term performance programme was merged (it came from `perf/optimisation`; the backend
-half is on companion Metallum `master` at `5debcb9`)
+Updated: 2026-09-23
+Scope: `dev` and the Metal-only conversion branch, whose seam needs companion Metallum `feat/shader-module-seam`;
+`dev`'s own state is what the rest of this file records, and the branch's remaining acceptance is its own section
+below.
 
 This file held five days of closed phases, each with its measurements, and its long form is in `docs/`; it now holds
 only what is open. The previous, much longer form is in the history (`git show 94219c13:.context/TASKS.md`), the
@@ -21,6 +22,36 @@ Status: waiting on the owner, not on engineering.
       release request's own template and both places the version is written checked (`build/open-0.13.0-dev`).
 - [ ] The companion's first release: it has no version, so obtaining the backend is still a build-from-source
       matter (`docs/metallum-port.md`, "Current validation status").
+
+## P1 — The Metal-only tree's own real-device acceptance
+
+Status: open, and it is the one place where this branch's evidence is thinner than `dev`'s was. Every gate the
+port's phases closed was closed on `dev`, before the other backend's implementation was deleted, so none of it
+validates this tree. What has been driven on the converted build is seven fixtures, each through the framebuffer
+capture recipe in `.context/STATE.md` (which also says why the client's vignette option must be off for one):
+`mrt-contract`, `wide-resources-contract`, `composite-history-contract`, `composite-flip-contract`,
+`compute-storage-contract`, `phase16-advanced-contract` and `shadow-mipmap-contract` - the last on Metal 3 only.
+The task's own smoke list (`00-basic-color` through `15-compute`) names no artifact this repository has; the
+fixtures below are its equivalents and are finer grained.
+
+- [ ] The rest of the fixture corpus, one gate each: `terrain`, `sky`, `clouds`, `weather`,
+      `particles-opaque`, `particles-translucent`, `entity`, `block-entity`, `spider-eyes`, `armor-glint`,
+      `hand`, `hand-water`, `hand-glint`, `hand-water-glint`, `pre-hand`, `pre-translucent`, the six
+      `gbuffer-*` fixtures, `depth-conversion`, `depthtex0/1/2`, `shadow-depth`, `shadow-color`,
+      `shadow-terrain`, `shadow-entities`, `deferred`, `deferred-depth`, `deferred-mrt`, `deferred-tail`,
+      `deferred-mipmap`, `final-chain`, `final-direct`, `phase16-pbr`, `dimension-convention`,
+      `dimension-properties`, `attachment-traffic`.
+- [ ] The startup refusals, none of which has ever been run: Metallum absent, Metallum's API version
+      incompatible, and Metal device creation failing. Each has to refuse early and say which one it was, and
+      none of them may reach a world.
+- [ ] The behaviours no fixture covers: threadgroup-memory fallback, geometry fold-or-refuse,
+      pipeline eviction and reload, window resize, resource reload, shader reload, and a dimension change
+      mid-session.
+- [ ] Metal validation against a serious-error-free session is asserted in `docs/metallum-port.md` but has no
+      artifact of its own in this tree; the companion keeps the validation logs the runs produced.
+
+Evidence: `docs/metallum-port.md`, `.context/STATE.md` (the recipe and the seven closed gates),
+`tests/fixtures/shaderpacks/`, `tests/Verify*Screenshot.java`.
 
 ## P1 — The reviewed PHASE 17 evidence that was never collected
 

@@ -9,13 +9,21 @@ Short by design. The long form of almost everything here is in `docs/` - `docs/R
 names the document rather than restating it. The exception is a section of findings whose long form is nowhere else,
 which is what a memory file is for. The previous, much longer form of this file is in the history
 (`git show 2aa2ea9e:.context/STATE.md`); `M:` prefixes a path or a run directory in the companion repository.
+**Two copies of the companion exist on this machine** and only one of them is the one below: the checkout beside this
+repository, `/Users/neko/ProjectFile/github_proj/metallum`, is on the branch the seam is on and holds every run and log
+this file names; `/Users/neko/ProjectFile/metallum` is an older clone at `master` whose `run/` has the same shape and
+whose `run/logs` stops in September. A reading taken from the wrong one answers about a tree the runs never used.
 
 ## Current focus
 
-Nothing is in flight. The long-term performance programme is measured, decided and merged on both repositories, and
-so is the Metal port that preceded it. What is left is a short list of open verification boundaries
-(`.context/TASKS.md`) and two release decisions that are the owner's: `dev` -> `main` for the next tag, and the
-companion's first release.
+One thing is in flight on this branch and nothing on `dev`: the Metal-only conversion's own real-device
+acceptance (`.context/TASKS.md`, "The Metal-only tree's own real-device acceptance"). The conversion itself is
+done and green - the tree is Metal-only, its source, documentation and metadata carry no trace of the deleted
+backend, and `./gradlew build` and the whole CI contract list pass - so what remains is evidence, not code: the
+seven gates the recipe below has closed, the rest of the fixture corpus, the three startup refusals, and the
+behaviours no fixture covers. The long-term performance programme is measured, decided and merged on both
+repositories, and so is the Metal port that preceded this branch. Two release decisions are the owner's:
+`dev` -> `main` for the next tag, and the companion's first release.
 
 ## Confirmed now
 
@@ -38,7 +46,16 @@ render thread; and the seam's contract is *called*, not merely installed.
 
 **Family gates can be driven from a framebuffer capture, which needs no F2.** Metallum photographs
 its own render target when a request file is dropped in `run/metallum`, so an unattended session can
-run a screenshot gate by hand. Five are now closed on real hardware:
+run a screenshot gate by machine. The recipe, which is what a later session needs and what nothing
+else writes down: build `:fabric:jar`; copy the fixture into `M:run/shaderpacks/`; write
+`M:run/vitrail/pack.txt` as `pack=<fixture>`/`enabled=true`; set `vignette:false` in `M:run/options.txt`
+for the capture and put it back afterwards, because of the overlay below; launch
+`./gradlew runClient -PvitrailSmokeJar=<jar> -PvitrailPerfVmArgs="-Dmetallum.clientScreenshot=true"
+--args="--quickPlaySingleplayer <world>"`; wait for `first full frame opened`; `touch
+M:run/metallum/screenshot-request`; read `M:run/metallum/client-screenshot.png`; verify that picture
+with `java tests/Verify<Name>Screenshot.java <png>`. The profile's own window size wins over `--width`
+and `--height`, which is why this round's captures are 3416x1920 where the earlier ones were 1708x960.
+Seven are now closed on real hardware, all of them in `新的世界`:
 
 - **MRT** - `MRT screenshot quadrant swatches: [BLUE, WHITE, RED, GREEN]`, `MRT screenshot pixel
   check: PASS`. Attachment location, format, clear and store, in pixels.
@@ -59,44 +76,56 @@ run a screenshot gate by hand. Five are now closed on real hardware:
   solid terrain covered the pixel. `blend.gbuffers_terrain_solid.colortex3=ONE ZERO` and
   `.colortex1=ZERO ZERO` resolve to attachment ranks 0 and 1 and land that way.
 
-The same phase16 run reports `NOISE: PASS` and, for the other two quarters, **`MAGENTA=0`** - the
-failure colour of a 3D-volume read and a hardware shadow comparison - with only 73 per cent green,
-which is the radial falloff above and not a wrong value. Those two gates are therefore **not
-closed** despite no failure signature appearing, and neither is mipmap generation.
+- **PHASE 16 advanced features, closed.** One frame passes all four quarters with the overlay below
+  turned off: `VOLUME GREEN=332640 MAGENTA=0 OTHER=0`, `NOISE ... OTHER=0`, `BLEND
+  GREEN=213565 MAGENTA=0 OTHER=119075` - the black it paints where no solid terrain covered the pixel -
+  and `COMPARE GREEN=332640 MAGENTA=0 OTHER=0`. The 3D-volume read and the hardware comparison sampler
+  are closed with it, on a session with `vitrail/soft-shadow-compare` unarmed.
 
-**The capture has one known trap and one unexplained dimming, and the difference matters.** It
+- **Shadow depth mipmaps, closed on the generation that carries the road.** `shadow-mipmap-contract`
+  reads `GREEN=145081 BLUE=1183618 MAGENTA=133` and PASSES in a session executing Metal 3, whose probe
+  line shows the progressive reduction's own passes (1024x1024 then 512x512, 256x256 and 128x128 at 45
+  passes a second) and whose log carries the census's `Mip chains:` line every second. In a session
+  executing Metal 4 the same fixture reads a uniform `GREEN=0 BLUE=1328832 MAGENTA=0` - the
+  matching-depth colour, level nought everywhere - and the census line never appears, which is the
+  signature the fixture's own README calls "mip generation failed or both samplers remain clamped".
+  That is a fact about the frozen Metal 4 line and not about this engine's seam: the depth road is the
+  encoder's, and the encoder that implements it is the Metal 3 one.
+
+**The capture has one known trap and one dimming that is now named, and the difference matters.** It
 photographs the GUI, so a screen on top of the world fails a coverage rule, and `pauseOnLostFocus`
 does not reliably keep that screen away.
 
-The unexplained one: four of these captures show a smooth radial falloff at about `(1-r^2)^2`, pure
-green hue with every pixel `(0, g, 0)`, which pushes the *outer* quarters below a ninety-per-cent
-green rule while the middle is untouched. It first appeared on the wide-resource fixture and went
-away when the world changed, which was written here last round as the client's `vignette.png` world
-overlay - the player inside a block - "and not a rendering fault". **That attribution does not
-hold.** The phase16 fixture reproduces the same falloff byte for byte in the other world, with
-`pauseOnLostFocus` false and true alike, and with no block overlay to explain it. So the signature
-is characterised and its cause is NOT established: it is neither a menu nor a rendering fault that
-any check has named, and a gate that fails on it should not be read as a pass.
+**The dimming is the client's own moody-brightness vignette, and it is neither the pack's nor this
+engine's.** `Hud.extractCameraOverlays` blits `textures/misc/vignette.png` over the finished frame
+whenever `Options.vignette()` is on, at a strength `updateVignetteBrightness` eases toward
+`1 - Lightmap.getBrightness(dimensionType, level.getMaxLocalRawBrightness(eyePos))` - a multiply that
+is strongest when the light level at the camera entity's eye is lowest. Measured against the client's
+own texture on a flat-colour pack captured in the failing fixture's own world, the strength implied at
+38,758 samples is **0.7522 with a standard deviation of 0.0167**, flat across the texture's darkness
+bands from 0.0 to 0.8 (the residual is PNG quantisation), and 100 per cent of the frame's pixels are
+pure green hue. So the picture was the pack's image times that texture and nothing else. This is the
+attribution two earlier rounds got wrong in both directions: the wide-resource fixture's first
+`OTHER=157601` and the phase16 outer quarters' 73 per cent green were one overlay, seen at different
+strengths because each session's spawn put the camera entity's eye at a different light level - which
+is also why the wide-resource run passed after "the world changed". It is not a screen, not the pack
+chain, not the capture road and not the Apple Metal HUD. The recipe above turns the option off for a
+capture; a gate that fails on this signature with the option on has not tested the pack.
 
-**Two more facts narrow it, and they kill the two cheapest explanations.** It is not a screen that
-comes and goes: four captures taken across five minutes of one session were byte-identical to the
-digit (`VOLUME GREEN=241853 OTHER=90787`, `COMPARE GREEN=245536 OTHER=87104` every time), with
-`pauseOnLostFocus` false throughout. And it is applied *after* the pack's writes, because the
-phase16 fixture's own composite ends in `gl_FragData[0] = diagnostic` with a constant colour per
-quarter - green, magenta, or the black it paints where no solid terrain covered the pixel - so
-nothing the pack emitted carries a gradient. What is left is a static multiply over the finished
-frame. The decisive test is one run: a flat-colour pack captured in the same session and at the same
-player position as a failing one. If the flat pack comes out uniform while the other does not, the
-cause is in the chain; if both carry the falloff, it is in the capture or the present path. Until one
-of those is observed, no gate that fails on this signature may be read as a pass.
+**A refused mip chain is said out loud now, because the picture cannot say it.** Nothing filled the
+shadow depth chain in a Metal 4 session, and until this round nothing said so: the allocation line
+still read "the pack asks for a chain the light fills every frame, 10 levels", the census's `Mip
+chains:` line never appeared, and the only symptom was a diagnostic that reads the same as a pack that
+asked for no chain. `MipmapCensus.refused` now reports it once per image, on the branch that asked the
+backend, so a session that loses a chain says which image and how many levels. What is still not right
+there: `GpuFormats.blitsBothWays` is a constant `true`, so the levels are allocated whatever the
+generation can fill, where `ShadowTargets.levels`'s own javadoc says the question is asked before the
+memory is taken. The safety net is what makes that harmless rather than wrong - a sampler only gets mip
+access when the fill reported success - so this is an allocation and a log line to correct, not a
+picture.
 
-**The shadow-mipmap gate was reached and not closed.** It read a uniform `BLUE=1327968 MAGENTA=0`:
-no failure colour, but its GREEN region needs the scene the fixture was written for (shadow-casting
-geometry at the right distance), which an unattended spawn does not produce. It needs its own
-workflow's framing.
-
-What no run reached: a pixel check of per-attachment blend, comparison sampler, mipmap, 3D texture,
-threadgroup fallback, resize, resource reload, shader reload or dimension change. The compute run's
+What no run reached: a pixel check of threadgroup-memory fallback, geometry fold-or-refuse, pipeline
+eviction, resize, resource reload, shader reload or dimension change. The compute run's
 logs are kept at `M:run/logs/vitrail-metal-validation-{compute,mipmap,history,flip,phase16}.log`; the other runs rotated.
 
 **The font-sheet intensity mapping is a known, reported gap.** `GlyphIntensity` asks the backend for
