@@ -36,10 +36,23 @@ Three things that run proved and no static check could: the Metallum-side mixin'
 `require = 1` injection points all apply; the hook works on the compile-worker threads, not only the
 render thread; and the seam's contract is *called*, not merely installed.
 
-What it did **not** reach: a screenshot-level check of any §36.4 family (MRT, per-attachment blend,
-comparison sampler, mipmap, 3D texture, threadgroup fallback, argument buffer). Those need the
-per-fixture launchers and an F2, so they remain open. The compute run's log is kept at
-`M:run/logs/vitrail-metal-validation-compute.log`; the earlier two runs' logs were rotated.
+**Two family gates were then driven from a framebuffer capture, which needs no F2.** Metallum takes
+its own picture of the main render target when a request file is dropped in `run/metallum`, so an
+unattended session can run a screenshot gate by hand. The **MRT** gate passes on real hardware:
+`MRT screenshot quadrant swatches: [BLUE, WHITE, RED, GREEN]` and `MRT screenshot pixel check:
+PASS` - the attachment location, format, clear and store contract, verified in pixels. The
+**wide-resource** gate could not be *closed* this way, and its failure is not a rendering one: the
+capture includes an open GUI and the client sat at the game menu for the whole run, so the verifier's
+90-per-cent-green rule sees the menu. What the run does show is the contract the fixture names -
+`MAGENTA=0`, so every one of the thirty-three reads resolved, which is exactly what the
+active-resource narrowing now performed on Vitrail's answer has to keep - and Metallum's own line,
+`Wide resource pipeline ... uses Metal Argument Buffers: resources=34, sampledImages=33`. Closing
+that gate unattended needs a capture with no screen open, which this session could not arrange: the
+game opened its menu whether or not `pauseOnLostFocus` was set.
+
+What no run reached: a pixel check of per-attachment blend, comparison sampler, mipmap, 3D texture,
+threadgroup fallback, resize, resource reload, shader reload or dimension change. The compute run's
+log is kept at `M:run/logs/vitrail-metal-validation-compute.log`; the other runs' logs rotated.
 
 **The font-sheet intensity mapping is a known, reported gap.** `GlyphIntensity` asks the backend for
 a view that reads one channel four times and names it once when nothing answers. On this platform the
