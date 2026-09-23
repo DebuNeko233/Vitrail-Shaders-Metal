@@ -66,6 +66,11 @@ this repository has; the fixtures below are its equivalents and are finer graine
       `docs/metallum-port.md`, whose current status says nothing about the layer at all - it records log-level
       `ERROR`/`FATAL` freedom, which is a different instrument - before the task's own "Metal validation with no
       serious errors" line can be answered.
+- [x] The no-shader-pack baseline on the converted tree: a Metal 4 session with no pack selected reaches a
+      600-frame probe window with no Vitrail error, no mixin or class-loading warning and nothing drawn, and its
+      only Metallum ERROR lines are the Metal 4 probe's own designed refusals - which is why "a log with no ERROR
+      line" is not the rule to read it by. What is still owed here is the comparison against the recorded
+      baseline's own pictures and counters, which the companion's harness holds rather than this one.
 
 Evidence: `docs/metallum-port.md`, `.context/STATE.md` (the recipe, the closed gates and the validation
 reading), `tests/fixtures/shaderpacks/`, `tests/Verify*Screenshot.java`.
