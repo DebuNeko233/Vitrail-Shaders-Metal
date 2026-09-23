@@ -114,6 +114,7 @@ jobs:
           python3 tests/test_bridge_census.py
           python3 tests/test_entity_reference_default.py
           python3 tests/test_glsl_builtin_shadowing.py
+          python3 tests/test_geometry_stage_policy.py
           python3 tests/test_native_shared_compute_contract.py
           python3 tests/test_preprocessor_macro_redefinition.py
           python3 tests/test_setup_compute_contract.py
