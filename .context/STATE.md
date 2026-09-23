@@ -125,6 +125,18 @@ Twenty-four are now closed on real hardware, all of them in `新的世界`:
   held opaque item to produce, and an unattended spawn holds nothing. Twenty-four gates are now closed
   on this tree; the sessions are kept as `M:run/logs/vitrail-metal-validation-<fixture>.log`.
 
+**The no-pack baseline was re-run on the converted tree.** With `pack=` and `enabled=false` the session comes up
+on Metal (Metal 4 executing), draws no pack at all, and reaches its own 600-frame probe window:
+`frame-probe 600/600 windowFrames=600 windowMs=7426.67 gpuM4Ms=2779.22 wallP50=8.45 wallP95=17.49
+gpuM4P50=5.32 gpuM4P95=6.35 pipelineIdentities=100 pipelineKeys=100`. No Vitrail or Metallum error appears,
+there is no `Error loading class`, no mixin-application failure and no missing-target warning, and the count of
+packs drawn is nought. **The three Metallum ERROR lines a no-pack log does carry are the Metal 4 probe's own
+refusals** - `sampler s16 [[sampler(16)]]` "must be between 0 and 15" and the two `'id' attribute only applies
+to non-static data members` - which the very next line reports as its verdict ("seventeen direct samplers
+refused, a sampler by resource id refused, a texture by resource id refused, a table asking for twenty sampler
+slots accepted"). So "a log with no ERROR line" is not a usable rule for a Metal 4-preferring session, and a
+reader who applies it will call the probe's designed refusals a fault.
+
 **Apple's Metal API validation layer was run over this tree for the first time, and it splits the answer.**
 Two launches under `MTL_DEBUG_LAYER=1 MTL_SHADER_VALIDATION=1`, both with `-Dmetallum.execution=metal3` so that
 the Metal 4 probe's own trouble under the layer cannot mask anything. `mrt-contract` opens a full frame, its
