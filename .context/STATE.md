@@ -38,7 +38,7 @@ render thread; and the seam's contract is *called*, not merely installed.
 
 **Family gates can be driven from a framebuffer capture, which needs no F2.** Metallum photographs
 its own render target when a request file is dropped in `run/metallum`, so an unattended session can
-run a screenshot gate by hand. Four are now closed on real hardware:
+run a screenshot gate by hand. Five are now closed on real hardware:
 
 - **MRT** - `MRT screenshot quadrant swatches: [BLUE, WHITE, RED, GREEN]`, `MRT screenshot pixel
   check: PASS`. Attachment location, format, clear and store, in pixels.
@@ -54,13 +54,29 @@ run a screenshot gate by hand. Four are now closed on real hardware:
 - **Composite flip** - `PHASE 11 composite flip screenshot check: PASS`, 91.2 per cent blue and no
   failure colour: the within-frame target flip holds on the same terms.
 
-**The capture has two traps, both hit and both worth knowing before the next gate.** It photographs
-the GUI, so a screen on top of the world fails a coverage rule - and `pauseOnLostFocus` does not
-prevent the menu opening. And it photographs the world layer, so the client's own `vignette.png`
-overlay (the player standing inside a block) multiplies the frame radially: the first wide-resource
-captures read `GREEN=88.13%` with `MAGENTA=0` and a smooth radial falloff at exactly `(1-r^2)^2`,
-which is that overlay and not a rendering defect. Loading a world whose spawn is not inside a block
-removed it and the gate passed on the first try.
+- **Per-attachment blending** - the phase16 fixture's BLEND quarter,
+  `PHASE 16 BLEND: GREEN=275679 MAGENTA=0 OTHER=56961 -> PASS`, with the black it paints where no
+  solid terrain covered the pixel. `blend.gbuffers_terrain_solid.colortex3=ONE ZERO` and
+  `.colortex1=ZERO ZERO` resolve to attachment ranks 0 and 1 and land that way.
+
+The same phase16 run reports `NOISE: PASS` and, for the other two quarters, **`MAGENTA=0`** - the
+failure colour of a 3D-volume read and a hardware shadow comparison - with only 73 per cent green,
+which is the radial falloff above and not a wrong value. Those two gates are therefore **not
+closed** despite no failure signature appearing, and neither is mipmap generation.
+
+**The capture has one known trap and one unexplained dimming, and the difference matters.** It
+photographs the GUI, so a screen on top of the world fails a coverage rule, and `pauseOnLostFocus`
+does not reliably keep that screen away.
+
+The unexplained one: four of these captures show a smooth radial falloff at about `(1-r^2)^2`, pure
+green hue with every pixel `(0, g, 0)`, which pushes the *outer* quarters below a ninety-per-cent
+green rule while the middle is untouched. It first appeared on the wide-resource fixture and went
+away when the world changed, which was written here last round as the client's `vignette.png` world
+overlay - the player inside a block - "and not a rendering fault". **That attribution does not
+hold.** The phase16 fixture reproduces the same falloff byte for byte in the other world, with
+`pauseOnLostFocus` false and true alike, and with no block overlay to explain it. So the signature
+is characterised and its cause is NOT established: it is neither a menu nor a rendering fault that
+any check has named, and a gate that fails on it should not be read as a pass.
 
 **The shadow-mipmap gate was reached and not closed.** It read a uniform `BLUE=1327968 MAGENTA=0`:
 no failure colour, but its GREEN region needs the scene the fixture was written for (shadow-casting
@@ -69,7 +85,7 @@ workflow's framing.
 
 What no run reached: a pixel check of per-attachment blend, comparison sampler, mipmap, 3D texture,
 threadgroup fallback, resize, resource reload, shader reload or dimension change. The compute run's
-logs are kept at `M:run/logs/vitrail-metal-validation-{compute,mipmap,history,flip}.log`; the other runs rotated.
+logs are kept at `M:run/logs/vitrail-metal-validation-{compute,mipmap,history,flip,phase16}.log`; the other runs rotated.
 
 **The font-sheet intensity mapping is a known, reported gap.** `GlyphIntensity` asks the backend for
 a view that reads one channel four times and names it once when nothing answers. On this platform the
