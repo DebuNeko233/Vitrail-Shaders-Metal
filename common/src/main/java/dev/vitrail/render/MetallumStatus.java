@@ -3,14 +3,24 @@ package dev.vitrail.render;
 import java.lang.reflect.Method;
 
 /**
- * Reads Metallum's narrow public integration API without putting Metallum on Vitrail's compile
- * classpath.
+ * Whether the backend this build requires is present, compatible and wanted, read without putting
+ * Metallum on Vitrail's compile classpath.
  * <p>
- * A preference is deliberately not treated as proof that Metal works. The runtime path is opened
- * once a compatible API reports "Prefer Metal" and Vitrail's Metal capability provider has run
- * after successful device creation, which is the same three-part answer it has always required;
- * what is gone is the fourth, a system property a developer had to pass to be allowed in at all.
- * Metal is the maintained path, so it turns on where it works and the property is no longer read.
+ * <strong>This is a required-integration probe and not backend detection.</strong> There is one
+ * backend this engine draws through, it is a required runtime dependency named in the mod metadata,
+ * and a session that cannot answer these questions is a session that does not draw - so an absent
+ * mod, an API of another version and a device that never came up are startup failures rather than
+ * branches, and {@link dev.vitrail.HostReport#diagnosis()} names which one it was.
+ * <p>
+ * The reflection survives because the common module is loader-agnostic and must stay so: it may not
+ * be compiled against a mod, on either loader. What the reflection means here is a compatibility
+ * check against a contract this build understands, which is why the version is compared and not
+ * merely the class looked for.
+ * <p>
+ * A preference is deliberately not treated as proof that Metal works. The path is open once a
+ * compatible API reports "Prefer Metal" and Vitrail's Metal capability provider has run after
+ * successful device creation, which is the same three-part answer it has always required; what is
+ * gone is the fourth, a system property a developer had to pass to be allowed in at all.
  */
 public final class MetallumStatus {
 
@@ -79,7 +89,7 @@ public final class MetallumStatus {
 				&& BufferBlending.served();
 	}
 
-	/** Snapshot of the optional API contract. Preference changes require restart, so caching is safe. */
+	/** Snapshot of the integration contract. Preference changes require restart, so caching is safe. */
 	public static Status status() {
 		Status known = status;
 		if (known != null) {

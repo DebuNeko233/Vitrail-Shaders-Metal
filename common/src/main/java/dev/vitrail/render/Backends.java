@@ -3,6 +3,7 @@ package dev.vitrail.render;
 import com.mojang.blaze3d.systems.CommandEncoder;
 import com.mojang.blaze3d.systems.CommandEncoderBackend;
 import dev.vitrail.compat.metallum.MetallumEncoderCapabilities;
+import dev.vitrail.Vitrail;
 import dev.vitrail.compat.metallum.MetallumFrameBridge;
 import dev.vitrail.mixin.access.CommandEncoderAccessor;
 import dev.vitrail.render.compute.ComputeCommands;
@@ -11,7 +12,9 @@ import org.jspecify.annotations.Nullable;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * The backend object behind one of the game's encoder wrappers.
@@ -66,7 +69,28 @@ public final class Backends {
 			return adapterFor(backend);
 		}
 
+		// Neither one of this engine's own carriers nor the backend it draws through. The backend is
+		// still handed back, because a capability query that threw would take a frame down for a
+		// session that is already not drawing packs - but it is named once, which is the difference
+		// between a session that quietly answers no to every capability and one whose log says why.
+		// There is no third backend this engine supports: the one it requires is named in the mod
+		// metadata, and a session without it refuses to read a pack at all.
+		announce(backend);
+
 		return backend;
+	}
+
+	/** Backend classes already named, so a frame does not repeat a line that describes the session. */
+	private static final Set<String> ANNOUNCED = ConcurrentHashMap.newKeySet();
+
+	private static void announce(CommandEncoderBackend backend) {
+		String name = backend.getClass().getName();
+		if (ANNOUNCED.add(name)) {
+			Vitrail.logger().error("The {} encoder is neither one of this engine's capability carriers "
+					+ "nor the backend it draws through, so every capability it is asked for will "
+					+ "answer no: a shader pack's passes would be recorded without mipmaps, storage "
+					+ "images, compute, attachment contents or render scale", name);
+		}
 	}
 
 	private static boolean carriesCapabilities(CommandEncoderBackend backend) {
