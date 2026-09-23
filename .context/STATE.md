@@ -55,7 +55,8 @@ for the capture and put it back afterwards, because of the overlay below; launch
 M:run/metallum/screenshot-request`; read `M:run/metallum/client-screenshot.png`; verify that picture
 with `java tests/Verify<Name>Screenshot.java <png>`. The profile's own window size wins over `--width`
 and `--height`, which is why this round's captures are 3416x1920 where the earlier ones were 1708x960.
-Twenty-four are now closed on real hardware, all of them in `新的世界`:
+Thirty-three are now closed on real hardware, all of them in `新的世界`, and the last nine of them on
+Metal 3 with a staged scene:
 
 - **MRT** - `MRT screenshot quadrant swatches: [BLUE, WHITE, RED, GREEN]`, `MRT screenshot pixel
   check: PASS`. Attachment location, format, clear and store, in pixels.
@@ -149,6 +150,54 @@ the binding system below this repository's seam, so the reading and not the fix 
 fault is the argument-buffer road and not every draw, and a narrow pack draws correctly and quietly under the
 same layer. The layer has to be in the *client's* environment, which means `./gradlew --stop` first, because the
 daemon does not pick up a variable exported after it started.
+
+**A scene with an item on screen kills a Metal 4 session, and the gate recipe now stages one deliberately.**
+`新的世界` is stored as a *spectator* world (`GameType` 3 in `level.dat`, left by the companion's own
+performance harness), and a spectator has no hand at all - so every held-item fixture drew nothing until the
+save gained a datapack that runs `gamemode creative @a` and fills the hotbar every tick. With that staged, a
+**Metal 4** session dies on the first frame: `Metal4FrameEncoder.clearColorAndDepthTextures` throws
+`Metal4ExecutionProvider$Unimplemented` out of Minecraft's `GuiItemAtlas.drawToSlot`, from
+`GuiRenderer.prepareItemElements`, and the client exits 255 with a crash report. Only two operations are
+unimplemented on that encoder - this clear and `writeTimestamp` - and this is the one an item icon needs. The
+same staged scene on **Metal 3** draws, and `hand-contract` PASSES with `GREEN=87198 MAGENTA=0` and the log's
+own `Drawing the hand_item entity pass with gbuffers_hand ... at render stage HAND_SOLID`. So the held-item
+family has to be run on Metal 3, and the Metal 4 gates that passed before did so at a spectator spawn where no
+HUD item was ever drawn: the stored `metal4` preference makes a session fragile in a way none of them could
+show.
+
+**The scene for a family gate is now staged, and staging it taught three things about this save.** The save's
+own datapack is written by `stage-scene.sh` (in this session's notes, not in the repository) from tokens -
+`hand=<item>`, `mobs`, `blocks`, `spider`, `armor`, `rain`, `noon` - and the companion's two scene fixtures are
+copied in beside it. What that had to learn: (1) the companion's **block fixture says its liveness line every
+tick** and 469 chat lines in one capture read as about twelve thousand near-white pixels, which is more than
+`VerifyDepthFinalScreenshot --pre-hand`'s `white < 64` allows, so a copied fixture's unguarded `say` is made to
+say itself once; (2) **a datapack whose function fails to parse is written into `level.dat` as disabled**, and
+every later run that stages the same directory then silently does nothing - measured, two gates ran with no
+scene at all and said nothing, so the staging now rewrites `DataPacks.Enabled` before each launch; (3) the
+`minecraft:enchantments` component refused this build's parser in both spellings tried, so the glint a gate
+needs is asked for with `minecraft:enchantment_glint_override=true`, which the hand gates had already proven.
+The world's pause screen is the other thing that lands in a capture, so `pauseOnLostFocus` is turned off for
+the capture the way the vignette is, and put back after.
+
+**Nine fixtures of the held-item and scene families are closed on Metal 3, and one more is reached and open.**
+`hand-contract` (`GREEN=87198 MAGENTA=0`), `hand-water`, `hand-glint`, `hand-water-glint`, `pre-hand`
+(`GREEN=87198 CYAN=1241566 WHITE=0`), `depth-conversion` (`GREEN=87198 WHITE=251222 BLUE=972744 CYAN=0`),
+`entity-contract` (`RED=1115016 GREEN=27791 MAGENTA=12`, with the log's own `Drawing the cutout entity pass
+with gbuffers_entities ...` and the cow's and experience orb's own textures named), `block-entity-contract` and
+`armor-glint-contract` (`GREEN=1684 MAGENTA=0`, against a verifier floor of 24 - the first attempt passed at
+exactly 24, which is why the staged armour stand now stands at two and a half blocks rather than the
+companion's five and a half). All of them are Metal 3 for the reason above.
+
+`spider-eyes-contract` is **reached and not closed, and it is the mob rather than the format**. The pack's
+program is served - one run logs `Drawing the eyes entity pass with gbuffers_spidereyes of spider-eyes-contract
+at render stage NONE` - and no geometry lands in the pass that opens, so the captured frame is black but for
+the crosshair and the hotbar. Four stagings were tried and each failed for a different, recorded reason: a
+`unless entity` guard that a **persisted** spider satisfied (so nothing was summoned in front of the camera), a
+marker that persisted for the same reason (so the staging's own liveness line never fired again), a
+kill-and-resummon-every-tick mob (which the client never tracks, so the pass opens and draws nothing), and a
+teleported one (which does not open the pass at all). What is left is the road the companion's performance
+harness takes and this recipe has not: pin the camera with `freeze-world.py --at/--yaw/--pitch` and put the mob
+at a world position in front of it, so the frame is composed rather than the player's spawn being hoped for.
 
 **A start-up refusal was driven on the device, and it refuses.** With the companion's integration API
 version bumped for one launch and put back after (the tree was clean before and is clean after,
