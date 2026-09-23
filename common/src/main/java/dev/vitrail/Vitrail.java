@@ -1,6 +1,7 @@
 package dev.vitrail;
 
 import dev.vitrail.compat.metallum.MetallumExecutionChoice;
+import dev.vitrail.compat.metallum.MetallumShaderBridge;
 import dev.vitrail.platform.VitrailPlatform;
 
 import org.slf4j.Logger;
@@ -152,6 +153,11 @@ public final class Vitrail {
 		// loaders and before any settings screen could be built. The stored choice reaches the property only
 		// where the JVM did not name a generation of its own; see MetallumExecutionChoice.apply.
 		MetallumExecutionChoice.apply();
+
+		// This engine's half of a stage compile, handed to the backend before the first pack can be read.
+		// It is installed rather than called, because what it does happens inside a call the backend owns:
+		// nothing compiles before a device exists, and no device exists before this returns.
+		MetallumShaderBridge.install();
 
 		LOGGER.info("Vitrail {} starting on {} {}, Minecraft {}",
 				loaderPlatform.modVersion(),

@@ -8,6 +8,9 @@ PACK_TEXTURES = ROOT / "common/src/main/java/dev/vitrail/pack/texture/PackTextur
 PACK_IMAGES = ROOT / "common/src/main/java/dev/vitrail/render/PackImages.java"
 SAMPLER_REACH = ROOT / "common/src/main/java/dev/vitrail/render/SamplerReach.java"
 WIDE_HANDLING = ROOT / "common/src/main/java/dev/vitrail/render/WideSamplerSets.java"
+# The backend's shader-module seam, which is where a declared-but-unreached sampler is removed
+# from the compiled module. It lives in the companion checkout, which is a required dependency.
+SEAM = (ROOT.parent / "metallum/src/main/java/com/metallum/mixin/render/ShaderModuleHookMixin.java")
 
 
 def text(path: Path) -> str:
@@ -39,8 +42,13 @@ class WideResourcesContract(unittest.TestCase):
         self.assertIn('CUSTOM_PREFIX = "customTexture."', textures)
         self.assertIn("key.startsWith(CUSTOM_PREFIX)", textures)
         self.assertIn("declared.supplied()", images)
-        self.assertIn("samplers.removeIf", reach)
+        # Vitrail owns the semantic half - which declared names the entry point never reaches - and
+        # answers it from the SPIR-V it is handed; the removal from the module is the backend's, on
+        # the other side of the shader-module seam, so the two files are asserted together.
         self.assertIn("spvc_compiler_get_active_interface_variables", reach)
+        self.assertIn("public static List<String> unreached(", reach)
+        self.assertNotIn("removeIf", reach)
+        self.assertIn("removeIf", SEAM.read_text(encoding="utf-8"))
         fixture_text = "\n".join(text(path) for path in (FIXTURE / "final.vsh", FIXTURE / "final.fsh", FIXTURE / "shaders.properties"))
         self.assertNotIn("ArgumentBuffer", fixture_text)
         self.assertNotIn("Metal", fixture_text)

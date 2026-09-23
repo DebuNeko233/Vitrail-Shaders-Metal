@@ -31,10 +31,10 @@ import java.util.BitSet;
  * unwrapped, so that a uniform block's own name and its members' names survive. That type matters
  * as much as the variable: SPIRV-Cross reports an empty name where the {@code OpName} sits on the
  * block type rather than on the instance, which is the shape Complementary's
- * {@code buffer blockDataBuffer { } blockDataSSBO} has, and the engine reads the type's name back
- * for it ({@code render/ComputeShader.java:260-279}, the third fallback at the end of that
- * method). A resource whose name went would come back empty from both, and {@code rebind} then
- * throws rather than binding anything.
+ * {@code buffer blockDataBuffer { } blockDataSSBO} has, and a reading that took only the instance's
+ * name would come back empty for it and then throw rather than binding anything. The name is
+ * resolved where the resource is reflected, and this pass is what leaves the type's name standing
+ * there to be found.
  * <p>
  * Everything else goes: functions, their parameters, module-scope globals a pack declares outside
  * a block, locals, shared variables of a compute, and the plain structs a pack passes between its

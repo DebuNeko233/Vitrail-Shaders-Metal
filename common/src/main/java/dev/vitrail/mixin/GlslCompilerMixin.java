@@ -8,38 +8,35 @@ import com.mojang.blaze3d.vulkan.glsl.GlslCompiler;
 import com.mojang.blaze3d.vulkan.glsl.IntermediaryShaderModule;
 import dev.vitrail.cache.ModuleCache;
 import dev.vitrail.glsl.LoadClock;
-import dev.vitrail.render.PackNames;
 import dev.vitrail.render.RawLocals;
 import dev.vitrail.render.ShaderDebugInfo;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Coerce;
-
-import java.nio.ByteBuffer;
 
 /**
- * The four things this engine has to do to a stage between the pack's text and the module the
- * pipeline is built from, and nothing else.
+ * The disk store this engine keeps around one stage's compile, and the one compiler switch that
+ * decides what that compile costs.
  * <p>
- * <strong>What is left here is what a pack can see, plus the one switch that decides how much the
- * module costs to build.</strong> An earlier shape of this mixin also carried the geometry stage a
- * pack ships: a third shaderc kind, the unit joining the bind group the other two share, the rebind
- * chain running through it, and a device module created behind them. Metal has no stage between the
- * vertex and fragment ones, so that whole road is gone and {@code GeometryStage} now folds such a
- * stage into the fragment one or refuses the program. What survives below is the half that has
- * nothing to do with a third stage:
+ * <strong>What is left here, and what moved.</strong> This mixin used to carry the whole of this
+ * engine's half of a shader compile: the pack's locals zeroed and its debug names attached between
+ * the compiler and the reflection, a 3D sampler let through the bind-group walk, and the store
+ * around the lot. Three of those have gone.
  * <ul>
- * <li>{@link #vitrail$allow3d} - the game's own bind-group walk refuses anything whose SPIR-V
- * dimension is not 2D or Cube, which would take a pack's {@code sampler3D} out. Metal has 3D
- * textures, so the check is relaxed to let them through; the view that is actually bound is the 3D
- * one {@code StorageImages} allocated.</li>
- * <li>{@link #vitrail$zeroLocals} - every variable the pack can read before writing gets the zero it
- * reads under Iris. {@link RawLocals} carries the switch and the why.</li>
- * <li>{@link #vitrail$skipDebugInfo} - whether shaderc writes debug information into every module of
- * the session. {@link ShaderDebugInfo} says what that costs and why the compiler's own constructor is
- * the only place the question can be answered: shaderc turns the option on and has no call that turns
- * it off.</li>
- * <li>{@link #vitrail$module} - the disk store, and the clock that prices it. {@link ModuleCache}</li>
+ * <li><strong>The patch moved to the backend's seam.</strong> Zeroing a pack's bare variables and
+ * naming its resources have to happen between the compiler's output and the reflection that reads
+ * it, which is inside a call the backend owns. The backend now offers exactly that moment
+ * ({@code MetallumShaderModules}), and this engine's half is installed into it by
+ * {@code compat.metallum.MetallumShaderBridge}. The state the patch reads is still taken here,
+ * around the whole compile, which is what makes the key and the bytes agree.</li>
+ * <li><strong>The 3D sampler allowance went with the walk it was in.</strong> It relaxed the game's
+ * own bind-group construction so a pack's {@code sampler3D} would survive it. That construction is
+ * reached only from the game's own pipeline build, and the road this engine draws on builds its own
+ * layout - one that takes 3D dimensions as they come. So the walk this hook stood in was never
+ * reached on a Metal session, and an override of a call nobody makes is worse than no override: it
+ * reads as a capability this engine has exercised when it has not.</li>
+ * <li><strong>The store stays.</strong> It is this engine's own performance feature - a compiled
+ * module written to disk and read back on the next load - and nothing about it belongs to the
+ * backend.</li>
  * </ul>
  * <p>
  * <strong>The store is around the whole method rather than inside it</strong>, and that is the
@@ -59,45 +56,6 @@ import java.nio.ByteBuffer;
  */
 @Mixin(GlslCompiler.class)
 public abstract class GlslCompilerMixin {
-
-	/**
-	 * {@code addToBindGroup} refuses anything whose SPIR-V dimension is not 2D or Cube. SpvDim3D is 2.
-	 * Pretending it is 2D is enough for the check; the view that is actually bound is the 3D one
-	 * {@code StorageImages} allocated.
-	 */
-	@WrapOperation(method = "addToBindGroup", require = 1,
-			at = @At(value = "INVOKE",
-					target = "Lcom/mojang/blaze3d/vulkan/glsl/SpvSampler;dimensions()I"))
-	private static int vitrail$allow3d(@Coerce Object sampler, Operation<Integer> original) {
-		int dimension = original.call(sampler);
-
-		return dimension == 2 ? 1 : dimension;
-	}
-
-	/**
-	 * Between shaderc and SPIRV-Cross, on the copy the game made of the compiler's output: every
-	 * variable the pack can read before writing gets the zero it reads under Iris.
-	 * {@link RawLocals} carries the switch and the why. Inside the wrapped method below, so a module
-	 * served from the cache was zeroed the day it was built and is not walked again, and under the
-	 * state that method took at its head, so the key and the bytes agree.
-	 */
-	@WrapOperation(method = "createIntermediary", require = 1,
-			at = @At(value = "INVOKE",
-					target = "Lcom/mojang/blaze3d/vulkan/glsl/IntermediaryShaderModule;createFromSpirv("
-							+ "Ljava/lang/String;Ljava/nio/ByteBuffer;)"
-							+ "Lcom/mojang/blaze3d/vulkan/glsl/IntermediaryShaderModule;"))
-	private IntermediaryShaderModule vitrail$zeroLocals(String filename, ByteBuffer spirv,
-			Operation<IntermediaryShaderModule> original) {
-		// Two passes over the same output, in this order and not either order. Neither depends on
-		// what the other did to the instructions, the zeroes going by opcode and storage class and
-		// the names by their target, but they are not independent of the HEADER: the zeroes raise
-		// the id bound when they mint ids, and the names pass sizes its tables from that bound, so
-		// each one has to read the bound of the module it is actually handed. Both run BEFORE the
-		// reflection, which has to read the module the driver will read. Each pass frees the buffer
-		// it replaces and neither refuses a module it failed to understand, so one buffer reaches
-		// the module and one only.
-		return original.call(filename, PackNames.patch(filename, RawLocals.patch(filename, spirv)));
-	}
 
 	/**
 	 * Skips the one call that asks shaderc for debug information, unless somebody asked for it back.
@@ -124,6 +82,10 @@ public abstract class GlslCompilerMixin {
 	 * the same thing about every unit and cannot tell two of them apart. The debug name is handed to
 	 * {@link ModuleCache#lookup} so the rebuilt module carries this chain's identifier, and it is not
 	 * hashed: that name carries the load number the disk key must not see.
+	 * <p>
+	 * The state is taken here and read inside, by the patch the backend's seam calls: a compile the
+	 * store serves never reaches that seam at all, so a module read back from disk carries the state
+	 * it was built under rather than this load's.
 	 */
 	@WrapMethod(method = "createIntermediary", require = 1)
 	private IntermediaryShaderModule vitrail$module(String filename, String source, ShaderType type,

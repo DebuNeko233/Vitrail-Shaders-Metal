@@ -29,6 +29,12 @@ METALLUM_SURFACE = (
     # The public API class, which is its own list: it advertises what the backend can do, and it is not a
     # render bridge.
     'com.metallum.api.MetallumApi',
+    # The shader-module seam, and the second public API class rather than a render bridge: the backend
+    # offers the one moment of a stage compile that belongs to a shader pack, and this engine's half is
+    # installed through a proxy implementing the interface nested in it. It is named here for the same
+    # reason the class above is - it advertises a capability, it names no generation, and no native
+    # handle crosses it.
+    'com.metallum.api.MetallumShaderModules',
     # The nine stable flat facades. Each one is the door to a capability whose implementation lives in a
     # generation package, and none of them names a generation.
     'com.metallum.render.MetalBackend',

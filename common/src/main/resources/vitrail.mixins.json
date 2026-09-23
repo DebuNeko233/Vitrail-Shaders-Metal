@@ -28,8 +28,6 @@
 		"DebugScreenEntriesMixin",
 		"DebugScreenEntryListMixin",
 		"GlslCompilerMixin",
-		"access.IntermediaryShaderModuleAccessor",
-		"IntermediaryShaderModuleMixin",
 		"metallum.MetalBackendMixin",
 		"metallum.MetalDeviceMixin",
 		"MinecraftStartupGuardMixin",

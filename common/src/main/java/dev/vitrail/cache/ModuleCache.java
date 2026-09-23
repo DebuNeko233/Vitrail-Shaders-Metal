@@ -2,7 +2,6 @@ package dev.vitrail.cache;
 
 import com.mojang.blaze3d.vulkan.glsl.IntermediaryShaderModule;
 import dev.vitrail.glsl.LocalZeroes;
-import dev.vitrail.mixin.access.IntermediaryShaderModuleAccessor;
 import dev.vitrail.render.PackChain;
 import dev.vitrail.render.PackNames;
 import dev.vitrail.render.RawLocals;
@@ -584,7 +583,6 @@ public final class ModuleCache {
 	/** Everything a module is, in the order {@link #rebuild} reads it back. */
 	private static byte[] describe(IntermediaryShaderModule module)
 			throws IOException, ReflectiveOperationException {
-		IntermediaryShaderModuleAccessor access = (IntermediaryShaderModuleAccessor) (Object) module;
 		ByteArrayOutputStream bytes = new ByteArrayOutputStream();
 
 		try (DataOutputStream out = new DataOutputStream(bytes)) {
@@ -595,14 +593,14 @@ public final class ModuleCache {
 			out.writeInt(words.length);
 			out.write(words);
 
-			List<?> uniformBuffers = access.vitrail$uniformBuffers();
+			List<?> uniformBuffers = module.uniformBuffers();
 			out.writeInt(uniformBuffers.size());
 			for (Object buffer : uniformBuffers) {
 				out.writeUTF(ModuleShape.uniformBufferName(buffer));
 				out.writeInt(ModuleShape.uniformBufferBinding(buffer));
 			}
 
-			List<?> samplers = access.vitrail$samplers();
+			List<?> samplers = module.samplers();
 			out.writeInt(samplers.size());
 			for (Object sampler : samplers) {
 				out.writeUTF(ModuleShape.samplerName(sampler));
@@ -610,8 +608,8 @@ public final class ModuleCache {
 				out.writeInt(ModuleShape.samplerDimensions(sampler));
 			}
 
-			writeVariables(out, access.vitrail$outputs());
-			writeVariables(out, access.vitrail$inputs());
+			writeVariables(out, module.outputs());
+			writeVariables(out, module.inputs());
 		}
 
 		return bytes.toByteArray();

@@ -29,8 +29,18 @@ final class BridgeCensus {
 	static final int TEXTURE = 4;
 	static final int SCALE = 5;
 	static final int ATTACHMENT = 6;
+	/**
+	 * The shader-module seam, counted on the same terms as every other bridge.
+	 * <p>
+	 * It is the one bridge the backend calls rather than this engine, and the one that runs once per
+	 * stage of a compile rather than once a frame, so its numbers read against a load and not against
+	 * a second: a figure here that moved with the frame rate would mean a compile was happening every
+	 * frame.
+	 */
+	static final int SHADER_MODULE = 7;
 
-	private static final String[] NAMES = {"frame", "compute", "depth", "sampler", "texture", "scale", "attachment"};
+	private static final String[] NAMES = {"frame", "compute", "depth", "sampler", "texture", "scale",
+			"attachment", "shader module"};
 	private static final long INTERVAL_NANOS = 1_000_000_000L;
 
 	private static final long[] calls = new long[NAMES.length];
