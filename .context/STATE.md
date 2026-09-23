@@ -55,7 +55,7 @@ for the capture and put it back afterwards, because of the overlay below; launch
 M:run/metallum/screenshot-request`; read `M:run/metallum/client-screenshot.png`; verify that picture
 with `java tests/Verify<Name>Screenshot.java <png>`. The profile's own window size wins over `--width`
 and `--height`, which is why this round's captures are 3416x1920 where the earlier ones were 1708x960.
-Twenty are now closed on real hardware, all of them in `新的世界`:
+Twenty-four are now closed on real hardware, all of them in `新的世界`:
 
 - **MRT** - `MRT screenshot quadrant swatches: [BLUE, WHITE, RED, GREEN]`, `MRT screenshot pixel
   check: PASS`. Attachment location, format, clear and store, in pixels.
@@ -114,6 +114,16 @@ Twenty are now closed on real hardware, all of them in `新的世界`:
   `depthtex0-contract` reads `CYAN=235517 GREEN=1093315 MAGENTA=0`; and `deferred-mrt-contract` reads
   `BLUE=664416 RED=664416 OTHER=0` under `--mrt`. Twenty gates are now closed on this tree, and their logs
   are beside the others as `M:run/logs/vitrail-metal-validation-<fixture>.log`.
+
+- **The depth pair and the shadow pair, closed on Metal 4.** `depthtex1-contract` and
+  `depthtex2-contract` PASS (`depthtex1 depth sampling check`, `depthtex2 depth sampling check`),
+  `shadow-color-contract` reads `YELLOW=396211 RED=928887 MAGENTA=3734` and PASSES, and
+  `shadow-depth-contract` reads `CYAN=1325218 WHITE=3614 MAGENTA=0` and PASSES. `depth-conversion` was
+  reached and **not** closed, and its failure is a scene rather than a value: `GREEN=0 CYAN=0
+  WHITE=524131 BLUE=804701 MAGENTA=0`, where WHITE and BLUE are the far-plane clear and mid-depth the
+  fixture expects and GREEN is the forced near-plane hand - which the fixture's own README asks for a
+  held opaque item to produce, and an unattended spawn holds nothing. Twenty-four gates are now closed
+  on this tree; the sessions are kept as `M:run/logs/vitrail-metal-validation-<fixture>.log`.
 
 **A start-up refusal was driven on the device, and it refuses.** With the companion's integration API
 version bumped for one launch and put back after (the tree was clean before and is clean after,
