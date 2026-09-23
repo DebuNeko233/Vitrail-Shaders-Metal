@@ -53,11 +53,22 @@ this repository has; the fixtures below are its equivalents and are finer graine
 - [ ] The behaviours no fixture covers: threadgroup-memory fallback, geometry fold-or-refuse,
       pipeline eviction and reload, window resize, resource reload, shader reload, and a dimension change
       mid-session.
-- [ ] Metal validation against a serious-error-free session is asserted in `docs/metallum-port.md` but has no
-      artifact of its own in this tree; the companion keeps the validation logs the runs produced.
+- [ ] **Metal API validation: clean on a narrow pack, and fatal on the wide one.** Two launches under
+      `MTL_DEBUG_LAYER=1 MTL_SHADER_VALIDATION=1`, both coming up on Metal 3 (`metal3Family=true
+      metal4=not-probed`). `mrt-contract` opens a full frame, its picture reads
+      `[BLUE, WHITE, RED, GREEN]` and PASSES, and the layer reports **no complaint of any kind** - the only
+      ERROR lines in that session are the client's own offline-account HTTP 401s. `wide-resources-contract`
+      builds its chain (`final ... 35 descriptors`) and then **aborts** the process with
+      `-[MTLDebugArgumentEncoder setBuffer:offset:atIndex:]:483: failed assertion 'Argument Buffer Validation
+      index (0) is outside of the valid index range [66, 66]'`, exit 134. The call is the binding system's own,
+      below this repository's seam, so the fix is the companion's and what this repository owes is the reading:
+      it is the argument-buffer road alone and not every draw. That reading should be carried into
+      `docs/metallum-port.md`, whose current status says nothing about the layer at all - it records log-level
+      `ERROR`/`FATAL` freedom, which is a different instrument - before the task's own "Metal validation with no
+      serious errors" line can be answered.
 
-Evidence: `docs/metallum-port.md`, `.context/STATE.md` (the recipe and the seven closed gates),
-`tests/fixtures/shaderpacks/`, `tests/Verify*Screenshot.java`.
+Evidence: `docs/metallum-port.md`, `.context/STATE.md` (the recipe, the closed gates and the validation
+reading), `tests/fixtures/shaderpacks/`, `tests/Verify*Screenshot.java`.
 
 ## P1 — The reviewed PHASE 17 evidence that was never collected
 

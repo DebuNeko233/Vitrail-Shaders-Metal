@@ -125,6 +125,19 @@ Twenty-four are now closed on real hardware, all of them in `新的世界`:
   held opaque item to produce, and an unattended spawn holds nothing. Twenty-four gates are now closed
   on this tree; the sessions are kept as `M:run/logs/vitrail-metal-validation-<fixture>.log`.
 
+**Apple's Metal API validation layer was run over this tree for the first time, and it splits the answer.**
+Two launches under `MTL_DEBUG_LAYER=1 MTL_SHADER_VALIDATION=1`, both with `-Dmetallum.execution=metal3` so that
+the Metal 4 probe's own trouble under the layer cannot mask anything. `mrt-contract` opens a full frame, its
+picture reads `[BLUE, WHITE, RED, GREEN]` and PASSES, and the layer raises **nothing at all** - the only ERROR
+lines in that session are the client's own offline-account HTTP 401s. `wide-resources-contract` reaches its
+chain's build (`final writes the game's own target, 2 uniforms and 33 samplers, 35 descriptors`) and then the
+process dies on `-[MTLDebugArgumentEncoder setBuffer:offset:atIndex:]:483: failed assertion 'Argument Buffer
+Validation index (0) is outside of the valid index range [66, 66]'`, exit 134 by SIGABRT. That call belongs to
+the binding system below this repository's seam, so the reading and not the fix is what this tree owes: the
+fault is the argument-buffer road and not every draw, and a narrow pack draws correctly and quietly under the
+same layer. The layer has to be in the *client's* environment, which means `./gradlew --stop` first, because the
+daemon does not pick up a variable exported after it started.
+
 **A start-up refusal was driven on the device, and it refuses.** With the companion's integration API
 version bumped for one launch and put back after (the tree was clean before and is clean after,
 checked), the client came up on Metal and Vitrail logged at ERROR: "This game is running the Metal
