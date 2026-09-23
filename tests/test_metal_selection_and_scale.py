@@ -372,7 +372,7 @@ def self_test() -> None:
             "        .setStorageHandler(() -> {})\n"
             "        .setFlags(OptionFlag.REQUIRES_GAME_RESTART);\n"
             "    RenderSystem.getDevice();\n"
-            "\t}\naddOption(metal4(builder))\naddOption(graphicsApi(builder))\n", encoding="utf-8")
+            "\t}\naddOption(metal4(builder))\naddOption(renderScale(builder))\n", encoding="utf-8")
         if not fires(lambda: check_toggle(config)):
             raise SystemExit("metal selection self-test: a toggle that reaches the running device passed")
 
@@ -383,7 +383,7 @@ def self_test() -> None:
             "                () -> MetallumExecutionChoice.read() == METAL4)\n"
             "        .setStorageHandler(() -> {})\n"
             "        .setFlags(OptionFlag.REQUIRES_GAME_RESTART);\n"
-            "\t}\naddOption(metal4(builder))\naddOption(graphicsApi(builder))\n", encoding="utf-8")
+            "\t}\naddOption(metal4(builder))\naddOption(renderScale(builder))\n", encoding="utf-8")
         check_toggle(config)
 
         # And the second write road, which is the one that would make Undo leave a choice on disk.
@@ -394,9 +394,36 @@ def self_test() -> None:
             "                () -> MetallumExecutionChoice.read() == METAL4)\n"
             "        .setStorageHandler(() -> MetallumExecutionChoice.write(dir, METAL4))\n"
             "        .setFlags(OptionFlag.REQUIRES_GAME_RESTART);\n"
-            "\t}\naddOption(metal4(builder))\naddOption(graphicsApi(builder))\n", encoding="utf-8")
+            "\t}\naddOption(metal4(builder))\naddOption(renderScale(builder))\n", encoding="utf-8")
         if not fires(lambda: check_toggle(config)):
             raise SystemExit("metal selection self-test: a second road that writes the choice passed")
+
+        # The two rules about the page itself, each planted on the tree that satisfies the others. They were
+        # the pair the synthetic page had stopped exercising: its tail was the pre-Metal-only one - a
+        # graphics-API selector and no pack-scale row after the generation row - so the check failed the
+        # good tree instead of the planted one, and a self-test that cannot pass says nothing about either.
+        config.write_text(
+            "private static OptionBuilder metal4(ConfigBuilder builder) {\n"
+            "    builder.createBooleanOption(METAL4)\n"
+            "        .setBinding(chosen -> MetallumExecutionChoice.write(dir, chosen),\n"
+            "                () -> MetallumExecutionChoice.read() == METAL4)\n"
+            "        .setStorageHandler(() -> {})\n"
+            "        .setFlags(OptionFlag.REQUIRES_GAME_RESTART);\n"
+            "\t}\naddOption(metal4(builder))\n", encoding="utf-8")
+        if not fires(lambda: check_toggle(config)):
+            raise SystemExit("metal selection self-test: a page with nothing after the generation row passed")
+
+        config.write_text(
+            "private static OptionBuilder metal4(ConfigBuilder builder) {\n"
+            "    builder.createBooleanOption(METAL4)\n"
+            "        .setBinding(chosen -> MetallumExecutionChoice.write(dir, chosen),\n"
+            "                () -> MetallumExecutionChoice.read() == METAL4)\n"
+            "        .setStorageHandler(() -> {})\n"
+            "        .setFlags(OptionFlag.REQUIRES_GAME_RESTART);\n"
+            "\t}\naddOption(metal4(builder))\naddOption(renderScale(builder))\n"
+            "addOption(graphicsApi(builder))\n", encoding="utf-8")
+        if not fires(lambda: check_toggle(config)):
+            raise SystemExit("metal selection self-test: a page offering a backend selector again passed")
 
         # The scale, on a tree where 100 per cent still allocates.
         scale = root / "RenderScale.java"
