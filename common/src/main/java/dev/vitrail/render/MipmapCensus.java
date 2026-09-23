@@ -2,9 +2,11 @@ package dev.vitrail.render;
 
 import dev.vitrail.Vitrail;
 
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * How many mip chains a frame actually reduces, and how big they are.
@@ -38,6 +40,9 @@ final class MipmapCensus {
 	 * program reads at a lod - and cleared with the rest of the interval.
 	 */
 	private static final Map<String, Integer> byTarget = new LinkedHashMap<>();
+
+	/** Images a refusal has been said for. A handful at most, and never cleared: see {@link #refused}. */
+	private static final Set<String> refusedTargets = new HashSet<>();
 
 	private MipmapCensus() {
 	}
@@ -89,5 +94,29 @@ final class MipmapCensus {
 				.sorted((left, right) -> Integer.compare(right.getValue(), left.getValue()))
 				.map(entry -> entry.getKey() + "=" + entry.getValue())
 				.collect(java.util.stream.Collectors.joining(","));
+	}
+
+	/**
+	 * A chain that was asked for and not filled, said once for the image it was asked of.
+	 * <p>
+	 * <strong>Said because the picture cannot say it.</strong> A reader the engine keeps at level nought
+	 * draws the base image where the pack asked for an average of it - a coarser map and not a wrong one -
+	 * so a pack tuned against its chain reads the difference as its own settings being off. While nothing
+	 * said so, the only trace of it was this file's reported totals being zero, which is also exactly what
+	 * an engine whose packs asked for no chains at all reports.
+	 * <p>
+	 * Once per image and not once a frame, because the call is once a frame: the backend is settled when the
+	 * device is, so an answer of no stands for the whole session, and a line a frame would be the log of a
+	 * state rather than of an event. The set is not the interval's - the counters above are cleared every
+	 * second and this one is not.
+	 */
+	static void refused(final String target, final int levelsInChain) {
+		if (!refusedTargets.add(target)) {
+			return;
+		}
+
+		Vitrail.logger().info("Mip chain: this backend did not fill the {} image's {} levels, so every "
+				+ "lookup on it reads level nought and a pack that asked for the chain draws the base image",
+				target, levelsInChain);
 	}
 }

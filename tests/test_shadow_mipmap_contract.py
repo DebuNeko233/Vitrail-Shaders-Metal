@@ -143,6 +143,38 @@ class ShadowMipmapContractTest(unittest.TestCase):
         chain = compact(PACK_CHAIN)
         self.assertIn("MipmapReduction.generate(encoder, surface)", chain)
 
+    def test_a_refused_chain_is_said_once_rather_than_left_to_the_picture(self):
+        """A pack that asked for a chain and did not get one must not have to read that off the image.
+
+        Everything above keeps a reader at level nought when the chain could not be filled, which is safe
+        and, until this test, silent: the frame is a coarser map and not a wrong one, so the difference
+        reads as the pack's own settings being off. Measured on the device, a generation whose encoder does
+        not carry the depth road fills nothing, and the whole shadow-mipmap diagnostic then reads as its
+        matching-depth colour - which is also what it reads when no chain was ever asked for. So the
+        refusal is reported once for the image it was asked of.
+        """
+        reduction = compact(MIPMAP_REDUCTION)
+        census = compact(MIPMAP_CENSUS)
+
+        # Reported on the branch that asked the backend, and not on the branch that declines on purpose:
+        # the probe arm is this engine's own diagnostic and must keep reading as no chain at all.
+        self.assertIn("|| !commands.vitrail$generateMipmaps(texture)) { "
+                      "MipmapCensus.refused(label, texture.getMipLevels()); return false; }", reduction)
+        self.assertIn("if (texture == null || texture.getMipLevels() <= 1 || PROBE_NO_MIP_CHAINS) "
+                      "{ return false; }", reduction)
+        self.assertNotIn("PROBE_NO_MIP_CHAINS) { MipmapCensus.refused", reduction)
+
+        # One road each way, and the counting site stays single.
+        self.assertEqual(reduction.count("MipmapCensus.generated("), 1)
+        self.assertEqual(reduction.count("MipmapCensus.refused("), 1)
+
+        self.assertIn("private static final Set<String> refusedTargets = new HashSet<>();", census)
+        self.assertIn("static void refused(final String target, final int levelsInChain) "
+                      "{ if (!refusedTargets.add(target)) { return; }", census)
+        self.assertIn("Mip chain: this backend did not fill the {} image's {} levels", census)
+        # Once a session and not once an interval: the counters are cleared every second, this is not.
+        self.assertNotIn("refusedTargets.clear()", census)
+
 
 if __name__ == "__main__":
     unittest.main()

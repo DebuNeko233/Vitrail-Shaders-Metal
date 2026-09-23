@@ -24,7 +24,14 @@ import com.mojang.blaze3d.textures.GpuTexture;
  * Backend details stay below this class. A backend fills a colour chain by linear filtering where
  * the format is filterable and by nearest filtering where it is not, which is what the native
  * mipmap-generation rules of the texture format allow. Failure remains explicit: callers keep
- * sampling the base level when a backend cannot safely fill a requested chain.
+ * sampling the base level when a backend cannot safely fill a requested chain, and the refusal is
+ * said once by {@link MipmapCensus#refused} rather than left to be noticed as a picture.
+ * <p>
+ * The one chain the corpus asks for that not every backend fills is the shadow map's depth pair,
+ * which no native blit covers: it is a progressive reduction of its own, and the backend that
+ * carries it is the one whose encoder implements the depth road. Where it does not, the pair keeps
+ * the single level its readers are bounded to and the pack draws the shadow map without its coarse
+ * levels, which is the fallback this class names rather than a silent one.
  */
 final class MipmapReduction {
 
@@ -85,6 +92,8 @@ final class MipmapReduction {
 		GeometryHold.flush(() -> "a mip chain being filled");
 		if (!(Backends.capabilities(encoder) instanceof MipmapCommands commands)
 				|| !commands.vitrail$generateMipmaps(texture)) {
+			MipmapCensus.refused(label, texture.getMipLevels());
+
 			return false;
 		}
 
