@@ -38,7 +38,7 @@ render thread; and the seam's contract is *called*, not merely installed.
 
 **Family gates can be driven from a framebuffer capture, which needs no F2.** Metallum photographs
 its own render target when a request file is dropped in `run/metallum`, so an unattended session can
-run a screenshot gate by hand. Two are now closed on real hardware:
+run a screenshot gate by hand. Four are now closed on real hardware:
 
 - **MRT** - `MRT screenshot quadrant swatches: [BLUE, WHITE, RED, GREEN]`, `MRT screenshot pixel
   check: PASS`. Attachment location, format, clear and store, in pixels.
@@ -46,6 +46,13 @@ run a screenshot gate by hand. Two are now closed on real hardware:
   named sampled images all resolved beyond Metal's sixteen direct slots, and Metallum's own line
   reports `Wide resource pipeline ... uses Metal Argument Buffers: resources=34, sampledImages=33`.
   This is the active-resource narrowing the seam now performs, and its failure signature is absent.
+
+- **Composite history** - `PHASE 11 composite history screenshot check: PASS`, a uniform cyan frame
+  with `OTHER=0`. The pack's composites read the previous frame's target, so this is the cross-frame
+  ordering the deleted barrier helpers used to carry - verified in pixels after their removal, which
+  is the gap the compute rewrite left open and could not close from `common/`.
+- **Composite flip** - `PHASE 11 composite flip screenshot check: PASS`, 91.2 per cent blue and no
+  failure colour: the within-frame target flip holds on the same terms.
 
 **The capture has two traps, both hit and both worth knowing before the next gate.** It photographs
 the GUI, so a screen on top of the world fails a coverage rule - and `pauseOnLostFocus` does not
@@ -62,7 +69,7 @@ workflow's framing.
 
 What no run reached: a pixel check of per-attachment blend, comparison sampler, mipmap, 3D texture,
 threadgroup fallback, resize, resource reload, shader reload or dimension change. The compute run's
-logs are kept at `M:run/logs/vitrail-metal-validation-{compute,mipmap}.log`; the other runs rotated.
+logs are kept at `M:run/logs/vitrail-metal-validation-{compute,mipmap,history,flip}.log`; the other runs rotated.
 
 **The font-sheet intensity mapping is a known, reported gap.** `GlyphIntensity` asks the backend for
 a view that reads one channel four times and names it once when nothing answers. On this platform the
