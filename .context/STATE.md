@@ -78,6 +78,18 @@ hold.** The phase16 fixture reproduces the same falloff byte for byte in the oth
 is characterised and its cause is NOT established: it is neither a menu nor a rendering fault that
 any check has named, and a gate that fails on it should not be read as a pass.
 
+**Two more facts narrow it, and they kill the two cheapest explanations.** It is not a screen that
+comes and goes: four captures taken across five minutes of one session were byte-identical to the
+digit (`VOLUME GREEN=241853 OTHER=90787`, `COMPARE GREEN=245536 OTHER=87104` every time), with
+`pauseOnLostFocus` false throughout. And it is applied *after* the pack's writes, because the
+phase16 fixture's own composite ends in `gl_FragData[0] = diagnostic` with a constant colour per
+quarter - green, magenta, or the black it paints where no solid terrain covered the pixel - so
+nothing the pack emitted carries a gradient. What is left is a static multiply over the finished
+frame. The decisive test is one run: a flat-colour pack captured in the same session and at the same
+player position as a failing one. If the flat pack comes out uniform while the other does not, the
+cause is in the chain; if both carry the falloff, it is in the capture or the present path. Until one
+of those is observed, no gate that fails on this signature may be read as a pass.
+
 **The shadow-mipmap gate was reached and not closed.** It read a uniform `BLUE=1327968 MAGENTA=0`:
 no failure colour, but its GREEN region needs the scene the fixture was written for (shadow-casting
 geometry at the right distance), which an unattended spawn does not produce. It needs its own
