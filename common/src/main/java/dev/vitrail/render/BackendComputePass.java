@@ -121,14 +121,25 @@ final class BackendComputePass implements AutoCloseable {
 	 */
 	private final PackComputeBindings.Scratch scratch = PackComputeBindings.Scratch.of();
 
-	void dispatch(ComputeDeviceBackend deviceBackend, ComputeCommands commands, PackValues values,
+	/**
+	 * Encodes one resolved dispatch.
+	 * <p>
+	 * The answer is whether a dispatch with work in it reached the backend, and it is deliberately
+	 * the same test this class announces its own line on. A refused compile, a resource that could
+	 * not be resolved and a zero-group no-op are the three things a caller must not describe as a
+	 * dispatch, and a caller's line about a whole chain is worth exactly as much as this one.
+	 *
+	 * @return whether the backend accepted a non-zero dispatch, which is the only thing that may be
+	 *         announced; the refusals that are not exceptions answer false
+	 */
+	boolean dispatch(ComputeDeviceBackend deviceBackend, ComputeCommands commands, PackValues values,
 			ColorTargets targets, int width, int height, TargetSchedule.Bound step,
 			GpuTextureView depth, GpuTextureView distant) {
 		if (!this.compiled) {
 			compile(deviceBackend);
 		}
 		if (this.pipeline == null || this.resources == null || this.localSize == null) {
-			return;
+			return false;
 		}
 		if (this.owner != deviceBackend) {
 			throw new IllegalStateException("Compute backend changed after " + this.path + " was compiled");
@@ -161,14 +172,18 @@ final class BackendComputePass implements AutoCloseable {
 			this.block.rotate();
 		}
 		// Acceptance of a zero-sized dispatch is a no-op, not runtime evidence. Announce
-		// each program only after the backend has accepted work with non-zero dimensions.
-		if (!this.announced && groups[0] > 0 && groups[1] > 0 && groups[2] > 0) {
+		// each program only after the backend has accepted work with non-zero dimensions, and hand
+		// the same answer back so the caller's line about the chain can hold to the same rule.
+		boolean encoded = groups[0] > 0 && groups[1] > 0 && groups[2] > 0;
+		if (encoded && !this.announced) {
 			this.announced = true;
 			Vitrail.logger().info("Dispatched compute {} through the active backend: "
 					+ "groups=({}, {}, {}), local=({}, {}, {})", this.path,
 					groups[0], groups[1], groups[2],
 					this.localSize.x(), this.localSize.y(), this.localSize.z());
 		}
+
+		return encoded;
 	}
 
 	private Map<String, GpuBufferSlice> transientBuffers() {

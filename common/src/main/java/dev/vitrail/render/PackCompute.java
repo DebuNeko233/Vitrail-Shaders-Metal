@@ -417,10 +417,13 @@ final class PackCompute implements AutoCloseable {
 		GpuRecording.endPass(encoder);
 		BackendRoute backend = backendRoute(encoder, device,
 				"the " + attached.size() + " compute pass(es) at " + program);
+		int dispatched = 0;
 		for (Pass pass : attached) {
 			try {
-				pass.dispatch(backend.device(), backend.commands(), values, targets, width, height,
-						step, depth, distant);
+				if (pass.dispatch(backend.device(), backend.commands(), values, targets, width,
+						height, step, depth, distant)) {
+					dispatched++;
+				}
 			} catch (GpuDeviceLossException e) {
 				throw e;
 			} catch (RuntimeException e) {
@@ -430,8 +433,13 @@ final class PackCompute implements AutoCloseable {
 			}
 		}
 
-		if (this.announcedChains.add(program)) {
-			Vitrail.logger().info("Dispatched {} compute pass(es) at {}", attached.size(), program);
+		// Only a chain something of which really reached the backend announces, and it says how
+		// many. A compile this engine refused, a binding that could not be resolved and a
+		// zero-group no-op all leave the count at nought, and a success line over one of them would
+		// be the log's one claim that the work ran. The latch is per program and stays shut until a
+		// frame that dispatched, so it is not spent on the first frame the work was not there yet.
+		if (dispatched > 0 && this.announcedChains.add(program)) {
+			Vitrail.logger().info("Dispatched {} compute pass(es) at {}", dispatched, program);
 		}
 	}
 
@@ -474,10 +482,13 @@ final class PackCompute implements AutoCloseable {
 		RenderTarget main = minecraft == null ? null : minecraft.gameRenderer.mainRenderTarget();
 		int width = main == null ? 0 : main.width;
 		int height = main == null ? 0 : main.height;
+		int dispatched = 0;
 		for (Pass pass : this.passes) {
 			try {
-				pass.dispatch(backend.device(), backend.commands(), values, targets, width, height,
-						null, null, null);
+				if (pass.dispatch(backend.device(), backend.commands(), values, targets, width,
+						height, null, null, null)) {
+					dispatched++;
+				}
 			} catch (GpuDeviceLossException e) {
 				throw e;
 			} catch (RuntimeException e) {
@@ -487,10 +498,15 @@ final class PackCompute implements AutoCloseable {
 			}
 		}
 
-		if (!this.announced) {
+		// The same rule as a chain's line and for the same reason, with one more case behind it:
+		// the frame this runs at the head of can have a main render target of nought by nought, and
+		// every shadow compute is then a dispatch of no groups at all, which is the frame the
+		// comment above says the size is asked of the game to get right. A line claiming the
+		// floodfill ran over it would be believed, and the latch would keep it the only one.
+		if (dispatched > 0 && !this.announced) {
 			this.announced = true;
 			Vitrail.logger().info("Dispatched {} shadow compute pass(es) at the head of the frame",
-					this.passes.size());
+					dispatched);
 		}
 	}
 
@@ -503,6 +519,7 @@ final class PackCompute implements AutoCloseable {
 	 * moved into. Every one of those is closed where the pass stands rather than queued for a later
 	 * frame: none of them is a native object this engine made, so the backend that owns each one is
 	 * the only thing that can free it, and it does so on the call.
+	 * <p>
 	 * The ring is the one that could have been deferred, and it is not: this is not a quiet moment
 	 * - every error path of a frame calls {@link PackChain#release} in the middle of one, after the
 	 * chain has dispatched these computes, so a pass is closed while frames that still name its
@@ -609,10 +626,14 @@ final class PackCompute implements AutoCloseable {
 					program, textureStage);
 		}
 
-		private void dispatch(ComputeDeviceBackend deviceBackend, ComputeCommands commands,
+		/**
+		 * @return whether a non-zero dispatch reached the backend, which is what the caller
+		 *         announces and what the per-program latch is allowed to be spent on
+		 */
+		private boolean dispatch(ComputeDeviceBackend deviceBackend, ComputeCommands commands,
 				PackValues values, ColorTargets targets, int width, int height,
 				TargetSchedule.Bound step, GpuTextureView depth, GpuTextureView distant) {
-			this.backendPass.dispatch(deviceBackend, commands, values, targets, width, height,
+			return this.backendPass.dispatch(deviceBackend, commands, values, targets, width, height,
 					step, depth, distant);
 		}
 
