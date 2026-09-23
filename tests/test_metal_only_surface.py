@@ -31,6 +31,13 @@ shader-pack contract rather than a backend detail, there is no API to read the m
 it therefore carries an inline `no-vulkan-contract-allow:` marker with its reason. A marker and not a
 path, because a path exemption outlives the reason it was granted for.
 
+**This file's own name says what it locks and not what it refuses.** The reading below is one of the
+three the tree's own acceptance asks for, and a name for it that spelled the deleted API would be
+refused by the second of those three - the check that no *file name* in the tree carries it - so the
+guard is named for the product it protects. A later session that finds the acceptance's suggested file
+name and renames this file to match breaks that check, which is why the naming is written down here
+rather than left to taste.
+
 **The inventory is a migration counter, and it has reached zero.** It once listed the files that
 still reached the game's shader-compiler package, because the pack-visible half of that integration -
 zeroing locals before the reflection reads them, narrowing a stage's declared samplers to the ones it
