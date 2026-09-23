@@ -65,8 +65,13 @@ class ShadowMipmapContractTest(unittest.TestCase):
         self.assertIn("return this.chainWritten[withoutTranslucents && this.copied ? 1 : 0];", targets)
 
         formats = compact(GPU_FORMATS)
-        self.assertIn("feature(format, VK10.VK_FORMAT_FEATURE_BLIT_SRC_BIT, true)", formats)
-        self.assertIn("feature(format, VK10.VK_FORMAT_FEATURE_BLIT_DST_BIT, true)", formats)
+        # The blit question is answered by the platform rather than read off a device: the two bit
+        # constants and the per-format query they were read from belonged to the deleted backend, and
+        # what survives is the answer plus the safety net that made it safe to assume - the chain's
+        # samplers stay at level zero unless the active capability reports that it filled them.
+        blits = formats.split("static boolean blitsBothWays", 1)[1].split("\n\t}", 1)[0]
+        self.assertIn("return true;", blits)
+        self.assertNotIn("format(", blits)
 
     def test_backend_capability_failure_still_clamps_shadow_sampling_to_base(self):
         reduction = compact(MIPMAP_REDUCTION)

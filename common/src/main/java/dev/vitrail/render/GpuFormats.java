@@ -8,11 +8,6 @@ import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.textures.FilterMode;
-import com.mojang.blaze3d.vulkan.VulkanConst;
-import com.mojang.blaze3d.vulkan.VulkanDevice;
-import org.lwjgl.system.MemoryStack;
-import org.lwjgl.vulkan.VK10;
-import org.lwjgl.vulkan.VkFormatProperties;
 
 /**
  * The one place a pack's colour format becomes a device format.
@@ -84,77 +79,73 @@ final class GpuFormats {
 		};
 	}
 
-	/** An integer format carries no filtering, and asking a sampler for it is invalid on Vulkan. */
+	/**
+	 * An integer format carries no filtering: a sampler asked to blend between two of its texels has
+	 * no defined answer, so the format decides the filter rather than the pack's own request.
+	 */
 	static FilterMode filterFor(TargetFormat format) {
 		return format.integer() ? FilterMode.NEAREST : FilterMode.LINEAR;
 	}
 
 	/**
 	 * Whether this device makes a storage image of that format, which is what a compute writing a
-	 * colour target as {@code colorimgN} needs. A backend with Vitrail's shader-writable texture
-	 * seam owns that contract directly; Vulkan instead answers from the physical-device format
-	 * feature bits. False with neither capability available, because a compute must not be scheduled
-	 * against an image the active backend cannot promise to write.
+	 * colour target as {@code colorimgN} needs.
+	 * <p>
+	 * <strong>The capability owns the answer, and the format is not asked about.</strong> A backend
+	 * that serves Vitrail's shader-writable texture seam has promised the whole of this question by
+	 * implementing it - it allocates the texture and decides what its own format table makes of the
+	 * request - so a second opinion here could only contradict the one that does the work. False with
+	 * no such backend, because a compute must not be scheduled against an image nothing has promised
+	 * to write.
+	 * <p>
+	 * An earlier shape of this fell back to a per-format device query when the seam was absent. That
+	 * query belonged to the deleted backend, whose specification exposes format feature bits and whose
+	 * successor on this platform exposes no per-format query at all, so the fallback could only ever
+	 * have answered for a backend this engine does not draw on. What is left is the seam check, which
+	 * is the whole of the question here.
 	 */
 	static boolean storageCapable(GpuFormat format) {
 		GpuDevice device = RenderSystem.tryGetDevice();
-		if (device != null
-				&& ((GpuDeviceAccessor) device).vitrail$backend() instanceof ShaderWritableTextureBackend) {
-			return true;
-		}
-		return feature(format, VK10.VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT, false);
+
+		return device != null
+				&& ((GpuDeviceAccessor) device).vitrail$backend() instanceof ShaderWritableTextureBackend;
 	}
 
 	/**
 	 * Whether this device blends between two texels of that format, which is what a pack asks for
 	 * every time it leaves blur on.
 	 * <p>
-	 * Asked of the device because the specification only REQUIRES it of some formats. A sixteen bit
-	 * float is one of them; a thirty two bit float is not, and neither is the sixteen bit
-	 * normalised pair, which are two of the four an atlas is allocated as. The thirty two bit float
-	 * is what iterationT's atmosphere table goes up in, and Metal does not filter that width at
-	 * all, so under MoltenVK the answer here is no and the sampler falls back to nearest rather
-	 * than asking for something the driver never promised. GL required it of every one of them,
-	 * which is why Iris asks nothing.
+	 * <strong>Yes, and it is the platform's answer rather than a reading that proves nothing.</strong>
+	 * The question is asked of a device because a graphics API's specification only requires the
+	 * feature of some formats - a sixteen bit float is one of them, a thirty two bit float is not -
+	 * so an engine that assumes it of every format is asking for something never promised. On this
+	 * platform the promise is not per-format and not in doubt: Metal declares the filter in the
+	 * sampler state at the shader's binding, the formats this engine allocates targets in are all
+	 * filterable ones, and the two exceptions are handled where they are known rather than here - an
+	 * integer format takes {@link #filterFor}'s NEAREST, and a pack's own depth comparison takes the
+	 * comparison sampler that {@link ComparisonSamplers} supplies.
 	 * <p>
-	 * Yes with no Vulkan device to ask, which is the opposite default to {@link #storageCapable}
-	 * and for the opposite reason: a storage image the engine cannot prove is a compute it must not
-	 * schedule, where a filter it cannot prove would take linear filtering away from every texture
-	 * of every pack on a reading that proves nothing.
+	 * The parameter is kept rather than dropped: the question is per-format in principle, the callers
+	 * ask it per format, and a signature that stopped taking the format would have to be widened again
+	 * the first time one needed a different answer.
 	 */
 	static boolean filtersLinearly(GpuFormat format) {
-		return feature(format, VK10.VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT, true);
+		return true;
 	}
 
 	/**
-	 * Whether the Vulkan backend can blit this format both ways, or whether a non-Vulkan backend may
-	 * attempt the backend-neutral mipmap capability and report success/failure when it records it.
+	 * Whether the active backend can blit this format both ways, which is what the backend-neutral
+	 * mipmap capability is attempted against.
 	 * <p>
-	 * Vulkan has to answer before allocation because the specification requires neither blit bit of
-	 * a depth format. Other backends do not share Vulkan's format-bit contract: Vitrail allocates the
-	 * requested levels and {@link MipmapReduction} keeps samplers at level zero unless the active
-	 * {@link MipmapCommands} implementation actually fills the chain. That lets Metal use a depth
-	 * render reduction without pretending it is a Vulkan blit.
+	 * Yes, on the same terms as {@link #filtersLinearly} and for a sharper reason: an API has to
+	 * answer this before allocation because its specification requires neither blit bit of a depth
+	 * format, where the blit encoder on this platform takes a depth texture as source and as
+	 * destination. Nothing here has to be answered before allocation either way:
+	 * {@code MipmapReduction} keeps its samplers at level zero unless the active
+	 * {@link MipmapCommands} implementation reports that it really filled the chain, so a backend that
+	 * cannot blit a format costs a level and not a wrong picture.
 	 */
 	static boolean blitsBothWays(GpuFormat format) {
-		return feature(format, VK10.VK_FORMAT_FEATURE_BLIT_SRC_BIT, true)
-				&& feature(format, VK10.VK_FORMAT_FEATURE_BLIT_DST_BIT, true);
-	}
-
-	/** One bit of what this device does with that format, or {@code absent} with no device to ask. */
-	private static boolean feature(GpuFormat format, int bit, boolean absent) {
-		GpuDevice device = RenderSystem.tryGetDevice();
-		if (device == null
-				|| !(((GpuDeviceAccessor) device).vitrail$backend() instanceof VulkanDevice vulkan)) {
-			return absent;
-		}
-
-		try (MemoryStack stack = MemoryStack.stackPush()) {
-			VkFormatProperties properties = VkFormatProperties.calloc(stack);
-			VK10.vkGetPhysicalDeviceFormatProperties(vulkan.vkDevice().getPhysicalDevice(),
-					VulkanConst.toVk(format), properties);
-
-			return (properties.optimalTilingFeatures() & bit) != 0;
-		}
+		return true;
 	}
 }

@@ -83,11 +83,14 @@ class ComputeStorageContract(unittest.TestCase):
         writable = text(SHADER_WRITABLE)
         self.assertIn("interface ShaderWritableTextureBackend", writable)
         self.assertIn("instanceof ShaderWritableTextureBackend", formats)
-        self.assertIn("VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT", formats)
-        self.assertLess(
-            formats.index("instanceof ShaderWritableTextureBackend"),
-            formats.index("VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT"),
-        )
+        # The seam decides, and the format is not asked about: this platform has no per-format query
+        # to ask, so a fallback that tried to would be answering for a backend this engine does not
+        # draw on. What must hold is that the capability is the whole of the question.
+        self.assertIn("instanceof ShaderWritableTextureBackend", formats)
+        storage = formats.split("static boolean storageCapable", 1)[1].split("\n\t}", 1)[0]
+        self.assertIn("instanceof ShaderWritableTextureBackend", storage)
+        self.assertIn("return", storage)
+        self.assertNotIn("format(", storage)
 
 
 if __name__ == "__main__":

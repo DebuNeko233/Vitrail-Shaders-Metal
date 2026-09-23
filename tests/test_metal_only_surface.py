@@ -99,22 +99,20 @@ MARKER = "no-vulkan-contract-allow:"
 
 # Files still reaching the game's shader-compiler package, each with why. This list is a migration
 # counter and the goal is for it to be empty. It was eight files when this contract was written and
-# is four now: the pack's SPIR-V patch and its unused-sampler narrowing both crossed to the backend's
+# is one file now. The pack's SPIR-V patch and its unused-sampler narrowing crossed to the backend's
 # own shader-module seam, which took the two mixins, their accessor, the module reader and the
-# storage-resource appender with them.
+# storage-resource appender with them; the per-format device query turned out to have no answer this
+# platform can be asked for, so it became the policy it already was; the module store now takes the
+# module type from its caller and derives everything else from that type's own record components; and
+# the font-sheet intensity mapping became a capability the backend answers, with the unserved case
+# said out loud rather than passed over.
 INVENTORY = {
-    "common/src/main/java/dev/vitrail/cache/ModuleCache.java":
-        "stores the game's compiled module on disk and rebuilds it on the next load, which is this "
-        "engine's own cache format and the last place a Minecraft implementation record is constructed",
-    "common/src/main/java/dev/vitrail/render/GpuFormats.java":
-        "asks the device which formats can be stored to, filtered and blitted, which the backend does "
-        "not publish yet",
     "common/src/main/java/dev/vitrail/mixin/GlslCompilerMixin.java":
-        "keeps the compiled-module disk store around the game's compile, so it still names the "
-        "compiler and the module it wraps",
-    "common/src/main/java/dev/vitrail/render/GlyphIntensity.java":
-        "the font-sheet intensity swizzle, which is a texture-view request the backend cannot serve "
-        "yet, so the view it wants is described here",
+        "wraps the game's stage compile for this engine's compiled-module disk store and turns off "
+        "shaderc's debug information, so it names the compiler and the module record. Both duties "
+        "are performance rather than pack semantics and both would have to move behind the backend's "
+        "shader-module seam - which needs a hook pair the seam does not have yet - for this file to "
+        "go. Nothing else in the tree names either type.",
 }
 
 # Vendored, generated or historical paths that are not this repository's own surface. Empty on

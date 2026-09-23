@@ -94,10 +94,13 @@ public abstract class GlslCompilerMixin {
 		// The state the key is hashed under is the state the bytes are patched under, taken once
 		// here: a load flipping the switch while this thread is between the two would otherwise
 		// store one state's module under the other's key.
+		// The cache may not name the module type and cannot obtain it on its own: a hit happens before
+		// any module exists in a session. The one caller that has the type hands it over, once.
+		ModuleCache.attachModuleType(IntermediaryShaderModule.class);
 		RawLocals.begin();
 		try {
 			String key = ModuleCache.keyOf(source, type.name());
-			IntermediaryShaderModule served = ModuleCache.lookup(key, filename);
+			IntermediaryShaderModule served = (IntermediaryShaderModule) ModuleCache.lookup(key, filename);
 			if (served != null) {
 				return served;
 			}

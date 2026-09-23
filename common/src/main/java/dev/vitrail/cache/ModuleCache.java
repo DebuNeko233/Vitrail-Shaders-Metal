@@ -1,6 +1,5 @@
 package dev.vitrail.cache;
 
-import com.mojang.blaze3d.vulkan.glsl.IntermediaryShaderModule;
 import dev.vitrail.glsl.LocalZeroes;
 import dev.vitrail.render.PackChain;
 import dev.vitrail.render.PackNames;
@@ -20,6 +19,8 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.RecordComponent;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
@@ -36,8 +37,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
@@ -367,6 +370,15 @@ public final class ModuleCache {
 	}
 
 	/**
+	 * Hands the cache the module type, which it may not name and cannot obtain on its own: a cache hit
+	 * is asked for before any module of the session exists. Called by the caller that has one, and
+	 * idempotent, so every compile may say it without cost.
+	 */
+	public static void attachModuleType(Class<?> moduleType) {
+		ModuleShape.attach(moduleType);
+	}
+
+	/**
 	 * The module the compiler would have built for this unit, or null when it has to build one.
 	 * <p>
 	 * A hit costs a file read, one allocation and a handful of small records; nothing native runs.
@@ -374,7 +386,8 @@ public final class ModuleCache {
 	 * {@code close}, and holding bytes of its own so that the {@code rebind} that follows rewrites
 	 * nobody else's.
 	 */
-	public static @Nullable IntermediaryShaderModule lookup(@Nullable String key, String filename) {
+
+	public static @Nullable Object lookup(@Nullable String key, String filename) {
 		Path root = directory();
 		if (key == null || root == null) {
 			return null;
@@ -409,7 +422,7 @@ public final class ModuleCache {
 			return null;
 		}
 
-		IntermediaryShaderModule module = rebuild(filename, raw, length);
+		Object module = rebuild(filename, raw, length);
 		if (module == null) {
 			return null;
 		}
@@ -445,7 +458,7 @@ public final class ModuleCache {
 	 * less pass over bytes that are all written anyway. It is freed here, and only here, when the
 	 * build gives up part way through: nothing else has been handed it yet.
 	 */
-	private static @Nullable IntermediaryShaderModule rebuild(String filename, byte[] raw,
+	private static @Nullable Object rebuild(String filename, byte[] raw,
 			int length) {
 		ByteBuffer spirv = null;
 		try (DataInputStream in = new DataInputStream(new ByteArrayInputStream(raw, 0, length))) {
@@ -537,9 +550,9 @@ public final class ModuleCache {
 	 * Called with the module the caller is about to receive and before anything has been done to
 	 * it, which is the one instant at which it is both finished and untouched.
 	 */
-	public static void store(@Nullable String key, IntermediaryShaderModule module) {
+	public static void store(@Nullable String key, Object module) {
 		Path root = directory();
-		if (key == null || root == null || module.spirv() == null) {
+		if (key == null || root == null || ModuleShape.spirv(module) == null) {
 			return;
 		}
 
@@ -581,26 +594,26 @@ public final class ModuleCache {
 	}
 
 	/** Everything a module is, in the order {@link #rebuild} reads it back. */
-	private static byte[] describe(IntermediaryShaderModule module)
+	private static byte[] describe(Object module)
 			throws IOException, ReflectiveOperationException {
 		ByteArrayOutputStream bytes = new ByteArrayOutputStream();
 
 		try (DataOutputStream out = new DataOutputStream(bytes)) {
 			// A view of its own, so the caller's position and limit are left where they were.
-			ByteBuffer view = module.spirv().duplicate();
+			ByteBuffer view = ModuleShape.spirv(module).duplicate();
 			byte[] words = new byte[view.remaining()];
 			view.get(words);
 			out.writeInt(words.length);
 			out.write(words);
 
-			List<?> uniformBuffers = module.uniformBuffers();
+			List<?> uniformBuffers = ModuleShape.uniformBuffers(module);
 			out.writeInt(uniformBuffers.size());
 			for (Object buffer : uniformBuffers) {
 				out.writeUTF(ModuleShape.uniformBufferName(buffer));
 				out.writeInt(ModuleShape.uniformBufferBinding(buffer));
 			}
 
-			List<?> samplers = module.samplers();
+			List<?> samplers = ModuleShape.samplers(module);
 			out.writeInt(samplers.size());
 			for (Object sampler : samplers) {
 				out.writeUTF(ModuleShape.samplerName(sampler));
@@ -608,8 +621,8 @@ public final class ModuleCache {
 				out.writeInt(ModuleShape.samplerDimensions(sampler));
 			}
 
-			writeVariables(out, module.outputs());
-			writeVariables(out, module.inputs());
+			writeVariables(out, ModuleShape.outputs(module));
+			writeVariables(out, ModuleShape.inputs(module));
 		}
 
 		return bytes.toByteArray();
@@ -1017,42 +1030,74 @@ public final class ModuleCache {
 	 */
 	private static final class ModuleShape {
 
-		private static final @Nullable Constructor<?> UNIFORM_BUFFER;
-		private static final @Nullable Constructor<?> SAMPLER;
-		private static final @Nullable Constructor<?> VARIABLE;
-		private static final @Nullable Constructor<?> MODULE;
-		private static final @Nullable Method UNIFORM_BUFFER_NAME;
-		private static final @Nullable Method UNIFORM_BUFFER_BINDING;
-		private static final @Nullable Method SAMPLER_NAME;
-		private static final @Nullable Method SAMPLER_BINDING;
-		private static final @Nullable Method SAMPLER_DIMENSIONS;
-		private static final @Nullable Method VARIABLE_NAME;
-		private static final @Nullable Method VARIABLE_LOCATION;
+		private static @Nullable Constructor<?> uniformBuffer;
+		private static @Nullable Constructor<?> sampler;
+		private static @Nullable Constructor<?> variable;
+		private static @Nullable Constructor<?> module;
+		private static @Nullable Method uniformBufferName;
+		private static @Nullable Method uniformBufferBinding;
+		private static @Nullable Method samplerName;
+		private static @Nullable Method samplerBinding;
+		private static @Nullable Method samplerDimensions;
+		private static @Nullable Method variableName;
+		private static @Nullable Method variableLocation;
 
-		static {
+		/**
+		 * The module's own accessors, by component name, read off its record components for the same
+		 * reason the element types are: this class may not spell them, and a component carries its
+		 * own accessor so nothing has to be guessed from a name.
+		 */
+		private static Map<String, Method> accessors = Map.of();
+
+		private static boolean attached;
+
+		private ModuleShape() {
+		}
+
+		/**
+		 * Takes the module type off the caller's hands, once, and reads the rest of the shape out of
+		 * it.
+		 * <p>
+		 * <strong>The type is handed in rather than looked up, and the parts are derived rather than
+		 * named.</strong> This class may not spell any of these types: they live in a package the
+		 * engine is not allowed to reference, and the names used to be written out as strings, which
+		 * is the same coupling with none of the compiler's help. The one thing this class cannot
+		 * obtain on its own is the module class itself - a cache hit happens before any module exists
+		 * in a session - so the caller that has one hands it over, and everything else is read off it:
+		 * the module's own record components say which list holds what, and each list's element type
+		 * is the type the reflection has to rebuild.
+		 * <p>
+		 * A shape this build does not recognise is not fatal and never throws: the cache turns itself
+		 * off for the session and the compiler does exactly what it did before the store existed. Said
+		 * at WARN, because a quiet cache is a load that costs what it used to and nothing on screen
+		 * would ever point at it.
+		 */
+		static synchronized void attach(Class<?> moduleType) {
+			if (attached) {
+				return;
+			}
+
+			attached = true;
 			Shape shape;
 			try {
-				shape = find();
+				shape = find(moduleType);
 			} catch (ReflectiveOperationException | RuntimeException e) {
 				Vitrail.logger().warn("No module cache this run, because a shader module is not the "
 						+ "shape this build expects: {}", e.toString());
 				shape = new Shape(null, null, null, null, null, null, null, null, null, null, null);
 			}
 
-			UNIFORM_BUFFER = shape.uniformBuffer();
-			SAMPLER = shape.sampler();
-			VARIABLE = shape.variable();
-			MODULE = shape.module();
-			UNIFORM_BUFFER_NAME = shape.uniformBufferName();
-			UNIFORM_BUFFER_BINDING = shape.uniformBufferBinding();
-			SAMPLER_NAME = shape.samplerName();
-			SAMPLER_BINDING = shape.samplerBinding();
-			SAMPLER_DIMENSIONS = shape.samplerDimensions();
-			VARIABLE_NAME = shape.variableName();
-			VARIABLE_LOCATION = shape.variableLocation();
-		}
-
-		private ModuleShape() {
+			uniformBuffer = shape.uniformBuffer();
+			sampler = shape.sampler();
+			variable = shape.variable();
+			module = shape.module();
+			uniformBufferName = shape.uniformBufferName();
+			uniformBufferBinding = shape.uniformBufferBinding();
+			samplerName = shape.samplerName();
+			samplerBinding = shape.samplerBinding();
+			samplerDimensions = shape.samplerDimensions();
+			variableName = shape.variableName();
+			variableLocation = shape.variableLocation();
 		}
 
 		/** Everything reached in one go, so that a half found shape can never be a usable one. */
@@ -1064,16 +1109,22 @@ public final class ModuleCache {
 				@Nullable Method variableLocation) {
 		}
 
-		private static Shape find() throws ReflectiveOperationException {
-			Class<?> buffers = Class.forName("com.mojang.blaze3d.vulkan.glsl.SpvUniformBuffer");
-			Class<?> samplers = Class.forName("com.mojang.blaze3d.vulkan.glsl.SpvSampler");
-			Class<?> variables = Class.forName("com.mojang.blaze3d.vulkan.glsl.SpvVariable");
+		private static Shape find(Class<?> moduleType) throws ReflectiveOperationException {
+			Class<?> buffers = element(moduleType, "uniformBuffers");
+			Class<?> samplers = element(moduleType, "samplers");
+			Class<?> variables = element(moduleType, "outputs");
+
+			Map<String, Method> found = new LinkedHashMap<>();
+			for (RecordComponent component : moduleType.getRecordComponents()) {
+				found.put(component.getName(), component.getAccessor());
+			}
+			accessors = Map.copyOf(found);
 
 			return new Shape(
 					make(buffers, String.class, int.class),
 					make(samplers, String.class, int.class, int.class),
 					make(variables, String.class, int.class),
-					make(IntermediaryShaderModule.class, String.class, ByteBuffer.class, List.class,
+					make(moduleType, String.class, ByteBuffer.class, List.class,
 							List.class, List.class, List.class),
 					open(buffers, "name"), open(buffers, "bindingOffset"),
 					open(samplers, "name"), open(samplers, "bindingOffset"),
@@ -1089,6 +1140,81 @@ public final class ModuleCache {
 			return constructor;
 		}
 
+		/**
+		 * The type of one of the module's list components, taken from the component's own generic
+		 * type.
+		 * <p>
+		 * This is the whole of how the cache avoids naming a type it may not name: the module says
+		 * which list is which, and each list says what it holds. A module that is not a record, or a
+		 * component that is not a parameterised list, leaves the cache off for the session rather
+		 * than guessing.
+		 */
+		private static Class<?> element(Class<?> moduleType, String component)
+				throws ReflectiveOperationException {
+			RecordComponent[] components = moduleType.getRecordComponents();
+			if (components == null) {
+				throw new NoSuchMethodException(moduleType.getName() + " is not a record");
+			}
+
+			for (RecordComponent candidate : components) {
+				if (!candidate.getName().equals(component)) {
+					continue;
+				}
+
+				if (candidate.getGenericType() instanceof ParameterizedType list
+						&& list.getActualTypeArguments()[0] instanceof Class<?> held) {
+					return held;
+				}
+
+				throw new IllegalStateException(component + " is not a list of one type");
+			}
+
+			throw new NoSuchMethodException(component + " on " + moduleType.getName());
+		}
+
+		/**
+		 * One component of a module, or null where this build cannot read it.
+		 * <p>
+		 * Null rather than a throw, because the one caller that has to survive a module it cannot
+		 * read is the store: a unit whose bytes cannot be described is a unit that is not kept, and
+		 * the compiler has already produced it either way.
+		 */
+		private static Object read(Object module, String component) {
+			Method accessor = accessors.get(component);
+			if (accessor == null) {
+				return null;
+			}
+
+			try {
+				return accessor.invoke(module);
+			} catch (ReflectiveOperationException | RuntimeException e) {
+				Vitrail.logger().warn("A shader module's {} could not be read, so this unit is not "
+						+ "kept on disk: {}", component, e.toString());
+
+				return null;
+			}
+		}
+
+		static ByteBuffer spirv(Object module) {
+			return (ByteBuffer) read(module, "spirv");
+		}
+
+		static List<?> uniformBuffers(Object module) {
+			return (List<?>) read(module, "uniformBuffers");
+		}
+
+		static List<?> samplers(Object module) {
+			return (List<?>) read(module, "samplers");
+		}
+
+		static List<?> outputs(Object module) {
+			return (List<?>) read(module, "outputs");
+		}
+
+		static List<?> inputs(Object module) {
+			return (List<?>) read(module, "inputs");
+		}
+
 		private static Method open(Class<?> owner, String component)
 				throws ReflectiveOperationException {
 			Method method = owner.getDeclaredMethod(component);
@@ -1098,56 +1224,55 @@ public final class ModuleCache {
 		}
 
 		static boolean available() {
-			return MODULE != null;
+			return attached && module != null;
 		}
 
 		static Object uniformBuffer(String name, int bindingOffset)
 				throws ReflectiveOperationException {
-			return require(UNIFORM_BUFFER).newInstance(name, bindingOffset);
+			return require(uniformBuffer).newInstance(name, bindingOffset);
 		}
 
 		static Object sampler(String name, int bindingOffset, int dimensions)
 				throws ReflectiveOperationException {
-			return require(SAMPLER).newInstance(name, bindingOffset, dimensions);
+			return require(sampler).newInstance(name, bindingOffset, dimensions);
 		}
 
 		static Object variable(String name, int locationOffset) throws ReflectiveOperationException {
-			return require(VARIABLE).newInstance(name, locationOffset);
+			return require(variable).newInstance(name, locationOffset);
 		}
 
-		static IntermediaryShaderModule module(String name, ByteBuffer spirv,
+		static Object module(String name, ByteBuffer spirv,
 				List<?> uniformBuffers, List<?> samplers, List<?> outputs, List<?> inputs)
 				throws ReflectiveOperationException {
-			return (IntermediaryShaderModule) require(MODULE)
-					.newInstance(name, spirv, uniformBuffers, samplers, outputs, inputs);
+			return require(module).newInstance(name, spirv, uniformBuffers, samplers, outputs, inputs);
 		}
 
 		static String uniformBufferName(Object entry) throws ReflectiveOperationException {
-			return (String) require(UNIFORM_BUFFER_NAME).invoke(entry);
+			return (String) require(uniformBufferName).invoke(entry);
 		}
 
 		static int uniformBufferBinding(Object entry) throws ReflectiveOperationException {
-			return (Integer) require(UNIFORM_BUFFER_BINDING).invoke(entry);
+			return (Integer) require(uniformBufferBinding).invoke(entry);
 		}
 
 		static String samplerName(Object entry) throws ReflectiveOperationException {
-			return (String) require(SAMPLER_NAME).invoke(entry);
+			return (String) require(samplerName).invoke(entry);
 		}
 
 		static int samplerBinding(Object entry) throws ReflectiveOperationException {
-			return (Integer) require(SAMPLER_BINDING).invoke(entry);
+			return (Integer) require(samplerBinding).invoke(entry);
 		}
 
 		static int samplerDimensions(Object entry) throws ReflectiveOperationException {
-			return (Integer) require(SAMPLER_DIMENSIONS).invoke(entry);
+			return (Integer) require(samplerDimensions).invoke(entry);
 		}
 
 		static String variableName(Object entry) throws ReflectiveOperationException {
-			return (String) require(VARIABLE_NAME).invoke(entry);
+			return (String) require(variableName).invoke(entry);
 		}
 
 		static int variableLocation(Object entry) throws ReflectiveOperationException {
-			return (Integer) require(VARIABLE_LOCATION).invoke(entry);
+			return (Integer) require(variableLocation).invoke(entry);
 		}
 
 		private static Constructor<?> require(@Nullable Constructor<?> constructor)
