@@ -55,7 +55,7 @@ for the capture and put it back afterwards, because of the overlay below; launch
 M:run/metallum/screenshot-request`; read `M:run/metallum/client-screenshot.png`; verify that picture
 with `java tests/Verify<Name>Screenshot.java <png>`. The profile's own window size wins over `--width`
 and `--height`, which is why this round's captures are 3416x1920 where the earlier ones were 1708x960.
-Eight are now closed on real hardware, all of them in `新的世界`:
+Fourteen are now closed on real hardware, all of them in `新的世界`:
 
 - **MRT** - `MRT screenshot quadrant swatches: [BLUE, WHITE, RED, GREEN]`, `MRT screenshot pixel
   check: PASS`. Attachment location, format, clear and store, in pixels.
@@ -98,6 +98,14 @@ Eight are now closed on real hardware, all of them in `新的世界`:
   colortex0=385, Vitrail colortex0 alt=385`. So mipmap generation is closed on both halves and the
   generation is the variable rather than the feature: a **colour** chain is filled on Metal 4 and Metal
   3 alike, a **depth** chain on Metal 3 only.
+
+- **The six GBuffer attachment gates, all closed on Metal 4 in one batch.** `gbuffer-location`,
+  `gbuffer-format`, `gbuffer-clear`, `gbuffer-write`, `gbuffer-sampling` and `gbuffer-pingpong` each
+  read `MRT screenshot quadrant swatches: [BLUE, WHITE, RED, GREEN]` and PASS, which pins fragment-output
+  location against directive rank, the formats, the clear, the write, sampling and the ping-pong in
+  pixels. Their session logs are kept beside the others as
+  `M:run/logs/vitrail-metal-validation-gbuffer-{location,format,clear,write,sampling,pingpong}.log`.
+  Fourteen gates are now closed on this tree.
 
 **A start-up refusal was driven on the device, and it refuses.** With the companion's integration API
 version bumped for one launch and put back after (the tree was clean before and is clean after,

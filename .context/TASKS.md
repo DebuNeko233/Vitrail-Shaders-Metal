@@ -27,21 +27,20 @@ Status: waiting on the owner, not on engineering.
 
 Status: open, and it is the one place where this branch's evidence is thinner than `dev`'s was. Every gate the
 port's phases closed was closed on `dev`, before the other backend's implementation was deleted, so none of it
-validates this tree. What has been driven on the converted build is eight fixtures, each through the framebuffer
+validates this tree. What has been driven on the converted build is fourteen fixtures, each through the framebuffer
 capture recipe in `.context/STATE.md` (which also says why the client's vignette option must be off for one):
-`mrt-contract`, `wide-resources-contract`, `composite-history-contract`, `composite-flip-contract`,
-`compute-storage-contract`, `phase16-advanced-contract`, `shadow-mipmap-contract` (Metal 3, whose depth road the
-Metal 4 encoder does not carry) and `deferred-mipmap-contract` (Metal 4, colour chains). The task's own smoke list
-(`00-basic-color` through `15-compute`) names no artifact this repository has; the fixtures below are its
-equivalents and are finer grained.
+`mrt-contract`, the six `gbuffer-*` fixtures, `wide-resources-contract`, `composite-history-contract`,
+`composite-flip-contract`, `compute-storage-contract`, `phase16-advanced-contract`, `shadow-mipmap-contract` (Metal 3,
+whose depth road the Metal 4 encoder does not carry) and `deferred-mipmap-contract` (Metal 4, colour chains). The
+task's own smoke list (`00-basic-color` through `15-compute`) names no artifact this repository has; the fixtures
+below are its equivalents and are finer grained.
 
 - [ ] The rest of the fixture corpus, one gate each: `terrain`, `sky`, `clouds`, `weather`,
       `particles-opaque`, `particles-translucent`, `entity`, `block-entity`, `spider-eyes`, `armor-glint`,
-      `hand`, `hand-water`, `hand-glint`, `hand-water-glint`, `pre-hand`, `pre-translucent`, the six
-      `gbuffer-*` fixtures, `depth-conversion`, `depthtex0/1/2`, `shadow-depth`, `shadow-color`,
-      `shadow-terrain`, `shadow-entities`, `deferred`, `deferred-depth`, `deferred-mrt`, `deferred-tail`,
-      `final-chain`, `final-direct`, `phase16-pbr`, `dimension-convention`, `dimension-properties`,
-      `attachment-traffic`.
+      `hand`, `hand-water`, `hand-glint`, `hand-water-glint`, `pre-hand`, `pre-translucent`,
+      `depth-conversion`, `depthtex0/1/2`, `shadow-depth`, `shadow-color`, `shadow-terrain`,
+      `shadow-entities`, `deferred`, `deferred-depth`, `deferred-mrt`, `deferred-tail`, `final-chain`,
+      `final-direct`, `phase16-pbr`, `dimension-convention`, `dimension-properties`, `attachment-traffic`.
 - [x] The start-up refusal for an API of another version: driven on the device by bumping the companion's
       API version for one launch, which came up on Metal, logged the clause naming both versions at ERROR and
       drew no pack. The other two remain, and the reason they are not drivable here is recorded in
