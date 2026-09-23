@@ -55,7 +55,7 @@ for the capture and put it back afterwards, because of the overlay below; launch
 M:run/metallum/screenshot-request`; read `M:run/metallum/client-screenshot.png`; verify that picture
 with `java tests/Verify<Name>Screenshot.java <png>`. The profile's own window size wins over `--width`
 and `--height`, which is why this round's captures are 3416x1920 where the earlier ones were 1708x960.
-Seven are now closed on real hardware, all of them in `新的世界`:
+Eight are now closed on real hardware, all of them in `新的世界`:
 
 - **MRT** - `MRT screenshot quadrant swatches: [BLUE, WHITE, RED, GREEN]`, `MRT screenshot pixel
   check: PASS`. Attachment location, format, clear and store, in pixels.
@@ -91,6 +91,25 @@ Seven are now closed on real hardware, all of them in `新的世界`:
   signature the fixture's own README calls "mip generation failed or both samplers remain clamped".
   That is a fact about the frozen Metal 4 line and not about this engine's seam: the depth road is the
   encoder's, and the encoder that implements it is the Metal 3 one.
+
+- **Deferred colour-chain mipmaps, closed on Metal 4.** `deferred-mipmap-contract` PASSES on a session
+  whose probe line reads `executingGeneration=metal4`: `CYAN=1328832 MAGENTA=0 OTHER=0`, a uniform cyan
+  frame, with the census reporting `Mip chains: 770 reduced over 1000 ms ... by target Vitrail
+  colortex0=385, Vitrail colortex0 alt=385`. So mipmap generation is closed on both halves and the
+  generation is the variable rather than the feature: a **colour** chain is filled on Metal 4 and Metal
+  3 alike, a **depth** chain on Metal 3 only.
+
+**A start-up refusal was driven on the device, and it refuses.** With the companion's integration API
+version bumped for one launch and put back after (the tree was clean before and is clean after,
+checked), the client came up on Metal and Vitrail logged at ERROR: "This game is running the Metal
+backend, and Vitrail's programs are translated for Metal alone. A pack it is asked for is neither read
+nor drawn: the game keeps its own image. Metallum answers API v2 and this build of Vitrail understands
+v1, so the two cannot talk to each other". No pack drew and the game kept its own image. The other two
+refusals cannot be produced through this harness, which is a fact about the harness rather than a gap
+in the code: its client *is* Metallum, so an absent Metallum cannot arise there, and no switch makes a
+Metal device fail to come up. Both are covered where they can be - the metadata's required dependency,
+and `tests/test_metallum_status.py`, which runs the real `MetallumStatus` in a JVM against synthetic API
+shapes for missing, wrong-version, malformed and preference-off.
 
 **The capture has one known trap and one dimming that is now named, and the difference matters.** It
 photographs the GUI, so a screen on top of the world fails a coverage rule, and `pauseOnLostFocus`

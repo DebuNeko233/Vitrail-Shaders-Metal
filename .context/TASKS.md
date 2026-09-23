@@ -27,23 +27,27 @@ Status: waiting on the owner, not on engineering.
 
 Status: open, and it is the one place where this branch's evidence is thinner than `dev`'s was. Every gate the
 port's phases closed was closed on `dev`, before the other backend's implementation was deleted, so none of it
-validates this tree. What has been driven on the converted build is seven fixtures, each through the framebuffer
+validates this tree. What has been driven on the converted build is eight fixtures, each through the framebuffer
 capture recipe in `.context/STATE.md` (which also says why the client's vignette option must be off for one):
 `mrt-contract`, `wide-resources-contract`, `composite-history-contract`, `composite-flip-contract`,
-`compute-storage-contract`, `phase16-advanced-contract` and `shadow-mipmap-contract` - the last on Metal 3 only.
-The task's own smoke list (`00-basic-color` through `15-compute`) names no artifact this repository has; the
-fixtures below are its equivalents and are finer grained.
+`compute-storage-contract`, `phase16-advanced-contract`, `shadow-mipmap-contract` (Metal 3, whose depth road the
+Metal 4 encoder does not carry) and `deferred-mipmap-contract` (Metal 4, colour chains). The task's own smoke list
+(`00-basic-color` through `15-compute`) names no artifact this repository has; the fixtures below are its
+equivalents and are finer grained.
 
 - [ ] The rest of the fixture corpus, one gate each: `terrain`, `sky`, `clouds`, `weather`,
       `particles-opaque`, `particles-translucent`, `entity`, `block-entity`, `spider-eyes`, `armor-glint`,
       `hand`, `hand-water`, `hand-glint`, `hand-water-glint`, `pre-hand`, `pre-translucent`, the six
       `gbuffer-*` fixtures, `depth-conversion`, `depthtex0/1/2`, `shadow-depth`, `shadow-color`,
       `shadow-terrain`, `shadow-entities`, `deferred`, `deferred-depth`, `deferred-mrt`, `deferred-tail`,
-      `deferred-mipmap`, `final-chain`, `final-direct`, `phase16-pbr`, `dimension-convention`,
-      `dimension-properties`, `attachment-traffic`.
-- [ ] The startup refusals, none of which has ever been run: Metallum absent, Metallum's API version
-      incompatible, and Metal device creation failing. Each has to refuse early and say which one it was, and
-      none of them may reach a world.
+      `final-chain`, `final-direct`, `phase16-pbr`, `dimension-convention`, `dimension-properties`,
+      `attachment-traffic`.
+- [x] The start-up refusal for an API of another version: driven on the device by bumping the companion's
+      API version for one launch, which came up on Metal, logged the clause naming both versions at ERROR and
+      drew no pack. The other two remain, and the reason they are not drivable here is recorded in
+      `.context/STATE.md`: this harness's client *is* the backend, and no switch makes a Metal device fail.
+- [ ] Metallum absent and a failed Metal device creation, each refusing early and saying which one it was,
+      neither reaching a world - by whatever means can produce them, since the smoke client cannot.
 - [ ] The behaviours no fixture covers: threadgroup-memory fallback, geometry fold-or-refuse,
       pipeline eviction and reload, window resize, resource reload, shader reload, and a dimension change
       mid-session.
