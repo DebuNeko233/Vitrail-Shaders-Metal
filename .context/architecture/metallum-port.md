@@ -34,11 +34,10 @@ Vitrail owns shader-pack semantics and scheduling. Metallum owns native Metal ex
 - Prefer Minecraft `GpuDevice`, `CommandEncoder`, `RenderPass`, `RenderPipeline`, `GpuTexture`, `GpuTextureView`, `GpuBuffer`, and `GpuSampler` across the seam.
 - A missing public operation should normally become one narrow semantic capability, not a general-purpose backend facade.
 - Backend-neutral interfaces describe the needed GPU effect, not Vulkan/Metal vocabulary. Native handles, descriptor indices, image layouts, access masks, and encoder objects stay backend-side.
-- Optional Metallum integration should remain a soft dependency where practical; current bridges use optional Mixin targets rather than placing Metallum on Vitrail's common compile classpath.
+- Optional Metallum integration should remain a soft dependency where practical: today that is two optional Mixin targets (`metallum.MetalBackendMixin`, `metallum.MetalDeviceMixin`) plus the capability resolvers, and Metallum is still not on Vitrail's common compile classpath. The encoder Mixin was deleted once the adapter answered the same question, which is the direction this invariant points.
 - Indexed nullable MRT slots are semantic. Never compact an attachment array: an unused middle slot must keep later fragment outputs at their original indices.
 - Do not translate Vulkan barriers literally into Metal. Preserve the dependency using Metal encoder lifetime/ordering/fences.
-- Vulkan behavior is the migration baseline. A Metal implementation must not force a Vulkan semantic rewrite unless the shared semantic model itself was wrong.
-- Unsupported or unvalidated Metal behavior must remain explicit. Do not advertise completeness because the screen contains a plausible image.
+- **Vulkan is not a preservation target.** Metal is the maintained path and the Vulkan path's removal is scheduled work (`docs/performance.md`, phase P7), so a Vulkan-only behaviour is not kept merely because it exists. What does survive is the semantic model Vitrail owns: a Metal implementation may not give a pack a different meaning, and an unsupported or unvalidated behaviour stays explicit rather than being advertised as complete because the screen contains a plausible image.
 
 ## Reference vertex-ABI discipline
 
@@ -63,6 +62,18 @@ Shader-storage buffers show the intended shape: Vitrail owns the name/policy and
 
 Storage images should follow the same ownership rule. Vitrail decides allocation lifetime, clears, resize, persistence, and reanchor behavior; the backend provides shader-writable texture allocation plus exact clear/copy commands and native binding.
 
+## Instrumentation the engine carries
+
+The long-term performance programme left counting in the engine, each census owning one log line a second, so a
+question about the frame is answered by reading a line rather than by attaching a profiler: `render.ShadowCensus`
+("Shadow walk:", "Shadow casters:", "Shadow map: ... drawn into it N times in the last 600 frames",
+"Feedback copies:"), `render.MipmapCensus` ("Mip chains:", counted per target so a chain names the image it was
+filled for), `render.TargetCopyCensus` ("N targets are copied back from their far half" - computed from the pack's
+**declaration text**, so it over-counts; see `docs/phase17-compatibility.md`), `render.ComputeDispatchCensus`
+("Compute dispatches:") and `compat.metallum.BridgeCensus` ("Vitrail bridge:"). The removal and interval probes that
+priced them are default-off switches rather than shipped behaviour, and `docs/performance-report.md` is where their
+results are read together.
+
 ## Evidence
 
 Verify this model against current repository evidence before extending it:
@@ -80,4 +91,4 @@ Verify this model against current repository evidence before extending it:
 - Iris 26.1 `common/src/main/java/net/irisshaders/iris/pipeline/programs/ShaderKey.java`
 - Iris 26.1 `common/src/main/java/net/irisshaders/iris/gl/state/ShaderAttributeInputs.java`
 - Iris 26.1 `common/src/main/java/net/irisshaders/iris/pipeline/transform/transformer/VanillaCoreTransformer.java`
-- companion repository `DebuNeko233/metallum`, draft PR #1
+- companion repository `DebuNeko233/metallum` - its `master` carries the backend half of the long-term performance programme, and `docs/long-term-performance-summary.md` there is that programme's result

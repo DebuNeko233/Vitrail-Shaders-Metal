@@ -228,6 +228,16 @@ presented and the screen holds it. That is worth knowing before anyone changes t
 page is not standing where it was designed to stand, and a frame that arrives a second earlier would
 replace it with the empty world.
 
+**What the page draws, and what was paid for it.** The bar is `LevelLoadingScreen.drawProgressBar`'s,
+carried to the pixel: 200 by 2 at `centreX - 100`, black track, green fill, and the bar's top at the
+sentence's top plus the font's line height plus three - so the page is the game's own loading screen's
+geometry rather than a new design, and a change to it is a change to that geometry. The page is gated
+on `warming()` alone rather than riding the corner's own guard, which is the state-defect the review
+found first. Adversarial review of the first cut found three state defects and one geometry error, all
+fixed and each now pinned by `tests/test_load_page_contract.py` with a test that fails without the fix.
+It has never been judged as a picture: the durations behind it come from a log rather than from a
+measured page, and the device review is still owed.
+
 **What a Metal trace cannot say, and what that costs.** There is no per-pass attribution in it. The
 GPU activity intervals are keyed by driver objects (`0xcb0a...`, 63 of them in one recording) that
 intersect none of the 80986 labelled objects and none of the encoders; the encoder table carries only
