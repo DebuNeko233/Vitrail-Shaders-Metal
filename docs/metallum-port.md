@@ -110,7 +110,7 @@ The caller-side migration uses three backend-neutral pieces:
 
 `PackCompute` routes shadow, chained and standalone computes through this path when both device and command capabilities are present. Pass teardown closes the backend-owned pipeline and uniform ring. Backend dispatch diagnostics name each program and its group/local dimensions only after an accepted non-zero dispatch. Compile refusal, binding failure, encoder rejection and zero-group no-ops do not produce a success line; acceptance still does not prove GPU completion or correct output.
 
-The optional Metallum adapter resolves all three bridge methods inside a normal call and caches them only after every lookup succeeds. A missing class or incompatible signature raises a catchable exception without poisoning class initialization; backend runtime exceptions and fatal errors retain their original type.
+The Metallum adapter resolves all three bridge methods inside a normal call and caches them only after every lookup succeeds. A missing class or incompatible signature raises a catchable exception without poisoning class initialization; backend runtime exceptions and fatal errors retain their original type. The bridge is reached reflectively because the common module is loader-agnostic and stays so - it may not compile against a mod on either loader - not because the backend is optional: a session without it fails at start-up by name.
 
 This split is deliberate: Vitrail decides what a resource name means; the backend decides how that already-resolved facade object is bound natively.
 

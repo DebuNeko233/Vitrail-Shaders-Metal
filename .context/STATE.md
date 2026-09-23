@@ -55,7 +55,7 @@ for the capture and put it back afterwards, because of the overlay below; launch
 M:run/metallum/screenshot-request`; read `M:run/metallum/client-screenshot.png`; verify that picture
 with `java tests/Verify<Name>Screenshot.java <png>`. The profile's own window size wins over `--width`
 and `--height`, which is why this round's captures are 3416x1920 where the earlier ones were 1708x960.
-Fourteen are now closed on real hardware, all of them in `新的世界`:
+Twenty are now closed on real hardware, all of them in `新的世界`:
 
 - **MRT** - `MRT screenshot quadrant swatches: [BLUE, WHITE, RED, GREEN]`, `MRT screenshot pixel
   check: PASS`. Attachment location, format, clear and store, in pixels.
@@ -106,6 +106,14 @@ Fourteen are now closed on real hardware, all of them in `新的世界`:
   pixels. Their session logs are kept beside the others as
   `M:run/logs/vitrail-metal-validation-gbuffer-{location,format,clear,write,sampling,pingpong}.log`.
   Fourteen gates are now closed on this tree.
+
+- **The final and deferred families, closed on Metal 4.** In one batch, with the mode each verifier wants:
+  `final-direct-contract` reads `GREEN=1328832 ... mode=--direct` and `final-chain-contract` reads
+  `BLUE=664416 YELLOW=664416 ... mode=--chain`, both PASS; `deferred-contract` reads
+  `BLUE=1328832 OTHER=0`; `deferred-depth-contract` reads `RED=323656 YELLOW=1005176 MAGENTA=0 OTHER=0`;
+  `depthtex0-contract` reads `CYAN=235517 GREEN=1093315 MAGENTA=0`; and `deferred-mrt-contract` reads
+  `BLUE=664416 RED=664416 OTHER=0` under `--mrt`. Twenty gates are now closed on this tree, and their logs
+  are beside the others as `M:run/logs/vitrail-metal-validation-<fixture>.log`.
 
 **A start-up refusal was driven on the device, and it refuses.** With the companion's integration API
 version bumped for one launch and put back after (the tree was clean before and is clean after,
